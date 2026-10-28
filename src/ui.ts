@@ -217,7 +217,8 @@ function buildingInfoHtml(b: Building): string {
     : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
   return (
     `<strong>Selected building</strong>` +
-    `<span class="detail"><br>${source}<br>` +
+    `<br>${source}` +
+    `<span class="detail"><br>` +
     `Height: ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})` +
     levels +
     `</span>`

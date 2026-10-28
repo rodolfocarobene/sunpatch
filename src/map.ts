@@ -49,7 +49,7 @@ export function createMapView(
   const form = document.createElement('form')
   form.id = 'search'
   form.innerHTML = `
-    <input name="q" type="search" placeholder="Search a place or address" aria-label="Search a place or address">
+    <input name="q" type="search" placeholder="Address or place" aria-label="Search a place or address">
     <button type="submit">Search</button>
     <ul id="results" hidden></ul>`
   searchHost.appendChild(form)
