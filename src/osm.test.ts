@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildingHeights,
+  hiddenOutlines,
   parseLength,
   parseOverpass,
+  partsOf,
   pickBuilding,
   pointInPolygon,
   project,
@@ -134,5 +136,19 @@ describe('parseOverpass', () => {
     const inSolid = project(0.00105, 0.00105, origin)
     expect(pickBuilding(buildings, inHole)).toBeUndefined()
     expect(pickBuilding(buildings, inSolid)?.id).toBe(rel.id)
+  })
+})
+
+describe('hiddenOutlines', () => {
+  const els: OverpassElement[] = [
+    { type: 'way', id: 1, tags: { building: 'yes' }, geometry: square(0, 0, 0.001) },
+    { type: 'way', id: 2, tags: { 'building:part': 'yes' }, geometry: square(0, 0, 0.0004) },
+    { type: 'way', id: 3, tags: { building: 'yes' }, geometry: square(0.01, 0.01, 0.0004) },
+  ]
+  const { buildings } = parseOverpass(els, ll(0, 0))
+
+  it('hides only outlines that contain parts', () => {
+    expect([...hiddenOutlines(buildings)]).toEqual(['way/1'])
+    expect(partsOf(buildings[0], buildings).map((b) => b.id)).toEqual(['way/2'])
   })
 })

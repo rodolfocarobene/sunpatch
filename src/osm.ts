@@ -88,6 +88,23 @@ export function pickBuilding(buildings: Building[], p: Point): Building | undefi
   return hits[0]
 }
 
+const isPart = (b: Building) => 'building:part' in b.tags
+
+/** Parts of `outline`: `building:part` pieces whose centroid lies inside it. */
+export function partsOf(outline: Building, buildings: Building[]): Building[] {
+  return buildings.filter((b) => isPart(b) && buildingContains(outline, ringCentroid(b.outer)))
+}
+
+/**
+ * OSM Simple 3D Buildings: an outline that has parts is only a footprint and must not be
+ * rendered, otherwise it overlaps (z-fights with) its parts.
+ */
+export function hiddenOutlines(buildings: Building[]): Set<string> {
+  return new Set(
+    buildings.filter((b) => !isPart(b) && partsOf(b, buildings).length > 0).map((b) => b.id),
+  )
+}
+
 export function ringArea(ring: Point[]): number {
   let s = 0
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

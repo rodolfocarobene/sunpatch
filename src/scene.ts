@@ -17,7 +17,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { buildingGeometry } from './footprint'
-import { ringCentroid, type Building } from './osm'
+import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
 import type { SunDirection } from './sun'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
@@ -161,10 +161,15 @@ export function createScene(container: HTMLElement): SunScene {
   function setBuildings(buildings: Building[], selectedId: string) {
     clearWorld()
     setExtent(DATA_EXTENT)
-    let selected: Building | undefined
+    const selected = buildings.find((b) => b.id === selectedId)
+    const hidden = hiddenOutlines(buildings)
+    const highlighted = new Set([selectedId])
+    if (selected && hidden.has(selected.id)) {
+      for (const p of partsOf(selected, buildings)) highlighted.add(p.id)
+    }
     for (const b of buildings) {
-      const isSelected = b.id === selectedId
-      if (isSelected) selected = b
+      if (hidden.has(b.id)) continue
+      const isSelected = highlighted.has(b.id)
       const mesh = new Mesh(
         buildingGeometry(b),
         new MeshStandardMaterial({ color: isSelected ? SELECTED_COLOR : OTHER_COLOR }),
