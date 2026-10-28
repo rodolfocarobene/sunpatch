@@ -1,2 +1,13 @@
 html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
 #app { position: fixed; inset: 0; }
+#panel {
+  position: fixed; top: 12px; left: 12px; width: 230px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(255, 255, 255, 0.88); border-radius: 6px; font-size: 13px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+#panel label { display: flex; flex-direction: column; gap: 2px; }
+#panel input { font: inherit; }
+#panel button { font: inherit; padding: 4px; cursor: pointer; }
+#panel small { color: #555; }
+#readout { margin: 0; font-size: 12px; }
