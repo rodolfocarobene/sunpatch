@@ -18,6 +18,30 @@ export interface Plan {
   outline: { outer: Point[]; holes: Point[][] }
   walls: InteriorWall[]
   windows: Window[]
+  /** Where "Walk inside" drops you; computed from the plan when absent. */
+  viewpoint?: Viewpoint
+  /** Manual fixes to the selected building's volume (missing balconies, protruding wall parts). */
+  edits?: BuildingEdit[]
+}
+
+export interface Viewpoint {
+  x: number
+  z: number
+  /** Look direction, radians counter-clockwise from north (three.js rotation.y; see walk-geom yawOf). */
+  yaw: number
+}
+
+/**
+ * A prism added to (`add`) or carved out of (`cut`) the selected building, from `bottom` to `top`
+ * metres above the ground. Edits apply to the building outside the apartment storey too, so they
+ * cast shadows like the rest of it.
+ */
+export interface BuildingEdit {
+  kind: 'add' | 'cut'
+  /** Footprint, scene metres, no closing point. */
+  outline: Point[]
+  bottom: number
+  top: number
 }
 
 export interface InteriorWall {
@@ -91,5 +115,7 @@ export function rebasePlan(plan: Plan, origin: Origin): Plan {
     origin,
     outline: { outer: plan.outline.outer.map(move), holes: plan.outline.holes.map((h) => h.map(move)) },
     walls: plan.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
+    ...(plan.viewpoint && { viewpoint: { ...plan.viewpoint, ...move(plan.viewpoint) } }),
+    ...(plan.edits && { edits: plan.edits.map((e) => ({ ...e, outline: e.outline.map(move) })) }),
   }
 }
