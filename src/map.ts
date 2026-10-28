@@ -1,5 +1,10 @@
-import { Map as MapLibreMap, NavigationControl } from 'maplibre-gl'
+import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+
+// MapLibre looks for its worker next to its own module, but Vite bundles that module
+// elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
+setWorkerUrl(workerUrl)
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
