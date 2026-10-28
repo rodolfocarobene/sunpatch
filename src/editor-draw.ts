@@ -1,7 +1,9 @@
+import { ringCentroid } from './osm'
 import type { Building, Point } from './osm'
-import type { Plan } from './plan'
-import { ringOf } from './plan'
+import type { Plan, Viewpoint } from './plan'
+import { floorBase, ringOf } from './plan'
 import type { Snap } from './editor-geom'
+import { startPosition, windowYaw } from './walk-geom'
 
 export interface View {
   /** Scene point shown at the centre of the SVG. */
@@ -14,8 +16,41 @@ export interface View {
 }
 
 export interface Selection {
-  kind: 'window' | 'wall'
+  kind: 'window' | 'wall' | 'edit' | 'viewpoint'
+  /** Unused (0) for the viewpoint. */
   index: number
+}
+
+export const VIEW_LENGTH = 2.5
+const VIEW_FOV = (70 * Math.PI) / 180
+
+/** Unit look direction in (x, z) for a yaw (see walk-geom yawOf). */
+export const viewDirection = (yaw: number): Point => ({ x: -Math.sin(yaw), z: -Math.cos(yaw) })
+
+/** The wedge tip, which doubles as the rotate handle. */
+export function viewTip(vp: Viewpoint): Point {
+  const d = viewDirection(vp.yaw)
+  return { x: vp.x + d.x * VIEW_LENGTH, z: vp.z + d.z * VIEW_LENGTH }
+}
+
+let autoKey = ''
+let autoValue: Viewpoint = { x: 0, z: 0, yaw: 0 }
+
+/** Where "Walk inside" puts you: the fixed viewpoint, else the computed start (cached; the search can be slow). */
+export function effectiveViewpoint(plan: Plan): Viewpoint & { auto: boolean } {
+  if (plan.viewpoint) return { ...plan.viewpoint, auto: false }
+  const key = JSON.stringify([plan.outline, plan.walls, plan.windows])
+  if (key !== autoKey) {
+    const pos = startPosition(plan)
+    autoValue = { ...pos, yaw: windowYaw(plan, pos) }
+    autoKey = key
+  }
+  return { ...autoValue, auto: true }
+}
+
+/** True when the edit's height range overlaps the plan's floor (floor surface to next floor surface). */
+export function editOnFloor(plan: Plan, base: number, e: { bottom: number; top: number }): boolean {
+  return e.bottom < base + plan.floorHeight && e.top > base
 }
 
 export interface Draft {
@@ -110,6 +145,7 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     'stroke-width': 1.5 * px,
     'stroke-dasharray': `${6 * px} ${4 * px}`,
   })
+  drawEdits(root, s, px)
   svgEl(root, 'path', {
     d: pathOf([plan.outline.outer, ...plan.outline.holes]),
     'fill-rule': 'evenodd',
@@ -143,8 +179,72 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     }
   }
 
+  drawViewpoint(root, s, px)
   drawDraft(root, s, px)
   drawOverlay(svg, v)
+}
+
+function drawEdits(root: SVGElement, s: Scene, px: number): void {
+  const { plan } = s
+  if (!plan.edits?.length) return
+  const defs = svgEl(root, 'defs', {})
+  const hatch = svgEl(defs, 'pattern', {
+    id: 'edit-hatch', patternUnits: 'userSpaceOnUse', width: 6 * px, height: 6 * px, patternTransform: 'rotate(45)',
+  })
+  svgEl(hatch, 'line', { x1: 0, y1: 0, x2: 0, y2: 6 * px, stroke: '#7048e8', 'stroke-width': 2 * px })
+  const base = floorBase(s.building, plan)
+  plan.edits.forEach((e, i) => {
+    const sel = s.selection?.kind === 'edit' && s.selection.index === i
+    const g = svgEl(root, 'g', { opacity: editOnFloor(plan, base, e) ? 1 : 0.35 })
+    const d = pathOf([e.outline])
+    if (sel) svgEl(g, 'path', { d, fill: 'none', stroke: '#ff7a00', 'stroke-width': 8 * px, opacity: 0.5, 'stroke-linejoin': 'round' })
+    if (e.kind === 'add') {
+      svgEl(g, 'path', { d, fill: 'rgba(112, 72, 232, 0.2)', stroke: 'none' })
+      svgEl(g, 'path', { d, fill: 'url(#edit-hatch)', stroke: '#3b2a8c', 'stroke-width': 2 * px, 'stroke-linejoin': 'round' })
+    } else {
+      svgEl(g, 'path', {
+        d, fill: 'rgba(224, 49, 49, 0.14)', stroke: '#c92a2a', 'stroke-width': 2 * px,
+        'stroke-dasharray': `${6 * px} ${4 * px}`, 'stroke-linejoin': 'round',
+      })
+    }
+    const c = ringCentroid(e.outline)
+    const range = `${e.bottom.toFixed(1)}\u2013${e.top.toFixed(1)} m`
+    const t = svgEl(g, 'text', {
+      x: c.x, y: c.z, 'font-size': 11 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      fill: e.kind === 'add' ? '#3b2a8c' : '#a61e1e', stroke: '#fff', 'stroke-width': 3 * px, 'paint-order': 'stroke',
+    })
+    t.textContent = e.kind === 'add' ? `+${range}` : `cut ${range}`
+    if (sel) {
+      for (const p of e.outline) {
+        svgEl(g, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: '#fff', stroke: '#ff7a00', 'stroke-width': 2 * px })
+      }
+    }
+  })
+}
+
+function drawViewpoint(root: SVGElement, s: Scene, px: number): void {
+  const vp = effectiveViewpoint(s.plan)
+  const sel = s.selection?.kind === 'viewpoint'
+  const color = vp.auto ? '#6c9bd1' : '#1864ab'
+  const g = svgEl(root, 'g', { opacity: vp.auto ? 0.8 : 1 })
+  const title = svgEl(g, 'title', {})
+  title.textContent = `This is where Walk inside puts you${vp.auto ? ' (automatic: drag to fix it)' : ''}`
+  const a0 = vp.yaw - VIEW_FOV / 2
+  const a1 = vp.yaw + VIEW_FOV / 2
+  const at = (a: number): string => `${vp.x - Math.sin(a) * VIEW_LENGTH} ${vp.z - Math.cos(a) * VIEW_LENGTH}`
+  svgEl(g, 'path', {
+    d: `M${vp.x} ${vp.z}L${at(a0)}A${VIEW_LENGTH} ${VIEW_LENGTH} 0 0 0 ${at(a1)}Z`,
+    fill: vp.auto ? 'rgba(108, 155, 209, 0.22)' : 'rgba(24, 100, 171, 0.25)',
+    stroke: color, 'stroke-width': 1.5 * px, 'stroke-dasharray': vp.auto ? `${4 * px} ${3 * px}` : 'none', 'stroke-linejoin': 'round',
+  })
+  const tip = viewTip(vp)
+  if (sel) svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 14 * px, fill: 'none', stroke: '#ff7a00', 'stroke-width': 3 * px, opacity: 0.6 })
+  svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 10 * px, fill: color, stroke: '#fff', 'stroke-width': 2 * px })
+  // camera glyph: body, viewfinder bump, lens
+  svgEl(g, 'rect', { x: vp.x - 6 * px, y: vp.z - 3.5 * px, width: 12 * px, height: 8 * px, rx: 1.5 * px, fill: '#fff' })
+  svgEl(g, 'rect', { x: vp.x - 3 * px, y: vp.z - 5.5 * px, width: 6 * px, height: 3 * px, rx: px, fill: '#fff' })
+  svgEl(g, 'circle', { cx: vp.x, cy: vp.z + 0.5 * px, r: 2.5 * px, fill: color })
+  svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: '#fff', stroke: color, 'stroke-width': 2 * px })
 }
 
 function drawDraft(root: SVGElement, s: Scene, px: number): void {
