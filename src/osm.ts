@@ -8,7 +8,7 @@ export interface Origin {
   lon: number
 }
 
-export type HeightSource = 'tag' | 'levels' | 'default'
+export type HeightSource = 'tag' | 'levels' | 'default' | 'tile'
 
 export interface Building {
   /** e.g. "way/123", "relation/45" or "relation/45#2" when a relation has several outer rings. */
@@ -86,6 +86,37 @@ export function pickBuilding(buildings: Building[], p: Point): Building | undefi
       ringArea(a.outer) - ringArea(b.outer),
   )
   return hits[0]
+}
+
+/** Distance from p to the closest edge of the ring. */
+export function distanceToRing(ring: Point[], p: Point): number {
+  let d = Infinity
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[j]
+    const b = ring[i]
+    const len2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / len2)) : 0
+    d = Math.min(d, Math.hypot(a.x + t * (b.x - a.x) - p.x, a.z + t * (b.z - a.z) - p.z))
+  }
+  return d
+}
+
+export const MAX_SNAP_M = 20
+
+/** The building containing p (see pickBuilding), else the nearest one within MAX_SNAP_M. */
+export function snapBuilding(buildings: Building[], p: Point): Building | undefined {
+  const inside = pickBuilding(buildings, p)
+  if (inside) return inside
+  let best: Building | undefined
+  let bestDist = MAX_SNAP_M
+  for (const b of buildings) {
+    const d = distanceToRing(b.outer, p)
+    if (d < bestDist) {
+      best = b
+      bestDist = d
+    }
+  }
+  return best
 }
 
 const isPart = (b: Building) => 'building:part' in b.tags

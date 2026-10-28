@@ -113,15 +113,19 @@ const HEIGHT_SOURCE = {
   tag: 'from height tag',
   levels: 'from levels x 3 m',
   default: 'default, no data',
+  tile: 'from map tiles',
 }
 
 function buildingInfoHtml(b: Building): string {
   const osmPath = b.id.split('#')[0]
   const min = b.minHeight > 0 ? `, starts at ${b.minHeight.toFixed(1)} m` : ''
   const levels = b.levels !== undefined ? `<br>Levels: ${b.levels}` : '<br>Levels: unknown'
+  const source = b.id.startsWith('tile/')
+    ? 'Map-tile outline, not an OSM object'
+    : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
   return (
     `<strong>Selected building</strong><br>` +
-    `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a><br>` +
+    `${source}<br>` +
     `Height: ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})` +
     levels
   )

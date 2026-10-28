@@ -1,4 +1,4 @@
-import { pointInPolygon, project, ringArea, type Point } from './osm'
+import { distanceToRing, MAX_SNAP_M, pointInPolygon, project, ringArea } from './osm'
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 
@@ -75,21 +75,6 @@ export interface BuildingHit {
   minHeight: number
 }
 
-const MAX_SNAP_M = 20
-
-/** Distance from the local origin to the closest edge of the ring. */
-function distanceToRing(ring: Point[]): number {
-  let d = Infinity
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const a = ring[j]
-    const b = ring[i]
-    const len2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2
-    const t = len2 ? Math.max(0, Math.min(1, -(a.x * (b.x - a.x) + a.z * (b.z - a.z)) / len2)) : 0
-    d = Math.min(d, Math.hypot(a.x + t * (b.x - a.x), a.z + t * (b.z - a.z)))
-  }
-  return d
-}
-
 /**
  * The tile building containing [lon, lat], else the nearest one within MAX_SNAP_M (address
  * points often sit on the facade or the street). OpenMapTiles merges neighbouring buildings
@@ -107,7 +92,7 @@ export function buildingAt(features: TileBuilding[], lon: number, lat: number): 
       const outer = local(polygon[0])
       const inside =
         pointInPolygon({ x: 0, z: 0 }, outer) && !polygon.slice(1).some((h) => pointInPolygon({ x: 0, z: 0 }, local(h)))
-      const dist = inside ? 0 : distanceToRing(outer)
+      const dist = inside ? 0 : distanceToRing(outer, { x: 0, z: 0 })
       const area = ringArea(outer)
       if (dist > MAX_SNAP_M) continue
       if (best && (dist > best.dist || (dist === best.dist && area >= best.area))) continue
