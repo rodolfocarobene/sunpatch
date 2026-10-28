@@ -1,4 +1,5 @@
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   ArrowHelper,
   BoxGeometry,
@@ -13,7 +14,9 @@ import {
   PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
+  Raycaster,
   Scene,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three'
@@ -23,6 +26,8 @@ import { buildingGeometry } from './footprint'
 import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
 import { floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
+import { createWalkControls, type WalkHandlers } from './walk'
+import { insideOutline, resolvePosition, startPosition, windowYaw } from './walk-geom'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
@@ -35,6 +40,12 @@ const GLASS_COLOR = 0x9ecfe8
 const APARTMENT_SHADOW_MAP = 2048
 const SKY_DAY = new Color(0x9ec9ee)
 const SKY_NIGHT = new Color(0x0b1020)
+// Stand-in for indirect light: the apartment surfaces glow by this fraction of their colour in daylight.
+const INTERIOR_GLOW = 0.18
+const ORBIT_FOV = 50
+const ORBIT_NEAR = 0.5
+const WALK_FOV = 70
+const WALK_NEAR = 0.05
 
 // Boxes: [centre x (east), centre z (south), width (x), depth (z), height]; metres.
 const HOUSE: [number, number, number, number, number] = [0, 0, 10, 9, 9]
@@ -52,6 +63,11 @@ export interface SunScene {
   setPlan(plan: Plan | null): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
   setCutaway(on: boolean): void
+  /** Enters first person in the apartment at scene point `at` (default: a clear spot near the middle); false without a plan. */
+  startWalk(at?: { x: number; z: number }): boolean
+  stopWalk(): void
+  /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
+  setWalkHandlers(handlers: WalkHandlers & { change(walking: boolean): void }): void
   resize(): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
@@ -73,12 +89,14 @@ export function createScene(container: HTMLElement): SunScene {
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFShadowMap
+  renderer.toneMapping = ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.3
   container.appendChild(renderer.domElement)
 
   const scene = new Scene()
   scene.background = SKY_DAY.clone()
 
-  const camera = new PerspectiveCamera(50, 1, 0.5, 3000)
+  const camera = new PerspectiveCamera(ORBIT_FOV, 1, ORBIT_NEAR, 3000)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.maxPolarAngle = Math.PI / 2 - 0.02
 
@@ -127,6 +145,7 @@ export function createScene(container: HTMLElement): SunScene {
   let sunDistance = TEST_EXTENT.sunDistance
   let lastSun: SunDirection | undefined
   let sunUp = true
+  let daylight = 1
 
   function update(sun: SunDirection) {
     lastSun = sun
@@ -138,6 +157,8 @@ export function createScene(container: HTMLElement): SunScene {
     // Fade the sky and fill light through twilight (0 to -6 deg) rather than snapping.
     const t = Math.min(1, Math.max(0, (sun.altitudeDeg + 6) / 6))
     scene.background = SKY_NIGHT.clone().lerp(SKY_DAY, t)
+    daylight = t
+    applyGlow()
     hemi.intensity = 0.05 + 0.3 * t
     sunLight.intensity = aptLight.intensity = 3 * Math.min(1, sun.altitudeDeg / 5)
   }
@@ -195,6 +216,9 @@ export function createScene(container: HTMLElement): SunScene {
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
+  let glowMaterials: MeshStandardMaterial[] = []
+  let floorMesh: Mesh | undefined
+  let solidMeshes: Mesh[] = []
 
   function apartmentMesh(geometry: BufferGeometry, material: MeshStandardMaterial): Mesh {
     const mesh = new Mesh(geometry, material)
@@ -216,8 +240,12 @@ export function createScene(container: HTMLElement): SunScene {
     })
     for (const geometry of g.shell) apartmentMesh(geometry, shellMaterial)
     for (const geometry of g.ceiling) apartmentMesh(geometry, ceilingMaterial)
-    apartmentMesh(g.floor, floorMaterial)
-    for (const geometry of g.walls) apartmentMesh(geometry, wallMaterial)
+    floorMesh = apartmentMesh(g.floor, floorMaterial)
+    const wallMeshes = g.walls.map((geometry) => apartmentMesh(geometry, wallMaterial))
+    solidMeshes = [floorMesh, ...wallMeshes]
+    glowMaterials = [floorMaterial, wallMaterial]
+    for (const m of glowMaterials) m.emissive.copy(m.color)
+    applyGlow()
     glassMeshes = g.glass.map((geometry) => {
       const mesh = new Mesh(geometry, glassMaterial)
       world.add(mesh)
@@ -226,10 +254,22 @@ export function createScene(container: HTMLElement): SunScene {
     applyCutaway()
   }
 
+  function applyGlow() {
+    for (const m of glowMaterials) m.emissiveIntensity = INTERIOR_GLOW * daylight
+    if (ceilingMaterial) {
+      // Seen from inside the block above is the ceiling: paint it like a wall; outside it keeps the building colour.
+      const colour = walking ? WALL_COLOR : SELECTED_COLOR
+      ceilingMaterial.color.set(colour)
+      ceilingMaterial.emissive.set(walking ? WALL_COLOR : 0x000000)
+      ceilingMaterial.emissiveIntensity = INTERIOR_GLOW * daylight
+    }
+  }
+
   function applyCutaway() {
     if (!ceilingMaterial) return
     // Still drawn into the shadow map (the depth pass ignores the material), but invisible to the camera.
-    ceilingMaterial.colorWrite = ceilingMaterial.depthWrite = !cutaway
+    // Walking needs the ceiling whatever the user chose.
+    ceilingMaterial.colorWrite = ceilingMaterial.depthWrite = !cutaway || walking
   }
 
   function apartmentBounds(b: Building, p: Plan) {
@@ -240,10 +280,14 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   function populate() {
+    stopWalk()
     clearWorld()
     apartmentMeshes = new Set()
     glassMeshes = []
     ceilingMaterial = undefined
+    glowMaterials = []
+    floorMesh = undefined
+    solidMeshes = []
     const selected = buildings.find((b) => b.id === selectedId)
     const hidden = hiddenOutlines(buildings)
     const highlighted = new Set([selectedId])
@@ -332,6 +376,66 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
+  let walking = false
+  let walkHandlers: (WalkHandlers & { change(walking: boolean): void }) | undefined
+  const saved = { position: new Vector3(), target: new Vector3() }
+  const walk = createWalkControls(camera, renderer.domElement, {
+    exit: () => walkHandlers?.exit(),
+    stepTime: (m) => walkHandlers?.stepTime(m),
+    togglePlay: () => walkHandlers?.togglePlay(),
+  })
+
+  function startWalk(at?: { x: number; z: number }): boolean {
+    const selected = buildings.find((b) => b.id === selectedId)
+    if (!plan || !selected) return false
+    if (!walking) {
+      saved.position.copy(camera.position)
+      saved.target.copy(controls.target)
+    }
+    const spot = at ?? startPosition(plan)
+    const resolved = resolvePosition(plan, spot) ?? startPosition(plan)
+    walking = true
+    controls.enabled = false
+    camera.fov = WALK_FOV
+    camera.near = WALK_NEAR
+    camera.updateProjectionMatrix()
+    walk.start(plan, floorBase(selected, plan), resolved, windowYaw(plan, resolved))
+    applyCutaway()
+    applyGlow()
+    renderer.domElement.style.cursor = 'grab'
+    walkHandlers?.change(true)
+    return true
+  }
+
+  function stopWalk() {
+    if (!walking) return
+    walking = false
+    walk.stop()
+    controls.enabled = true
+    camera.fov = ORBIT_FOV
+    camera.near = ORBIT_NEAR
+    camera.updateProjectionMatrix()
+    camera.position.copy(saved.position)
+    controls.target.copy(saved.target)
+    controls.update()
+    renderer.domElement.style.cursor = ''
+    applyCutaway()
+    applyGlow()
+    walkHandlers?.change(false)
+  }
+
+  // Double-click on the apartment floor (not through a wall) stands there.
+  const raycaster = new Raycaster()
+  renderer.domElement.addEventListener('dblclick', (e) => {
+    if (walking || !plan || !floorMesh) return
+    const rect = renderer.domElement.getBoundingClientRect()
+    const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+    raycaster.setFromCamera(ndc, camera)
+    const hit = raycaster.intersectObjects(solidMeshes, false)[0]
+    if (hit?.object !== floorMesh || !insideOutline(plan, { x: hit.point.x, z: hit.point.z })) return
+    startWalk({ x: hit.point.x, z: hit.point.z })
+  })
+
   function setCutaway(on: boolean) {
     cutaway = on
     applyCutaway()
@@ -374,8 +478,12 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
+  let lastFrame = performance.now()
   function render() {
-    controls.update()
+    const now = performance.now()
+    if (walking) walk.update((now - lastFrame) / 1000)
+    else controls.update()
+    lastFrame = now
     const twoPass = plan !== null && sunUp
     for (const g of glassMeshes) g.visible = !twoPass
     renderer.render(scene, camera)
@@ -389,8 +497,14 @@ export function createScene(container: HTMLElement): SunScene {
     setBuildings,
     setPlan,
     setCutaway,
+    startWalk,
+    stopWalk,
+    setWalkHandlers(handlers) {
+      walkHandlers = handlers
+    },
     resize,
     setActive(active) {
+      if (!active) stopWalk()
       renderer.setAnimationLoop(active ? render : null)
     },
     dispose() {
