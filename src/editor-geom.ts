@@ -177,3 +177,33 @@ export function validatePlan(value: unknown): { plan: Plan } | { error: string }
   }
   return { plan: p }
 }
+
+export interface FitRect {
+  /** Pixels of the SVG covered by the panels on each side (the map area is what is left). */
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+/** View centre and scale (pixels per metre) that frame `points` inside the free area of a w x h canvas. */
+export function fitBounds(
+  points: Point[],
+  w: number,
+  h: number,
+  free: FitRect,
+  limits: { min: number; max: number },
+  fill = 0.85,
+): { cx: number; cz: number; scale: number } {
+  const xs = points.map((p) => p.x)
+  const zs = points.map((p) => p.z)
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
+  const areaW = Math.max(w - free.left - free.right, 1)
+  const areaH = Math.max(h - free.top - free.bottom, 1)
+  const raw = Math.min(areaW / Math.max(x1 - x0, 1), areaH / Math.max(z1 - z0, 1)) * fill
+  const scale = Math.max(limits.min, Math.min(limits.max, raw))
+  // The bounds' centre lands on the centre of the free area, not of the canvas.
+  const dx = free.left + areaW / 2 - w / 2
+  const dy = free.top + areaH / 2 - h / 2
+  return { cx: (x0 + x1) / 2 - dx / scale, cz: (z0 + z1) / 2 - dy / scale, scale }
+}

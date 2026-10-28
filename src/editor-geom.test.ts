@@ -3,6 +3,7 @@ import {
   clampWindowT,
   constrainToDirections,
   distanceToSegment,
+  fitBounds,
   nearestEdge,
   projectOnSegment,
   ringSegments,
@@ -130,5 +131,33 @@ describe('validatePlan', () => {
     expect(validatePlan({ ...plan, edits: [{ ...e, outline: sq.slice(0, 2) }] })).toHaveProperty('error')
     expect(validatePlan({ ...plan, edits: [{ ...e, bottom: 3 }] })).toHaveProperty('error')
     expect(validatePlan({ ...plan, edits: [{ ...e, top: Infinity }] })).toHaveProperty('error')
+  })
+})
+
+describe('fitBounds', () => {
+  const square = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }]
+  const limits = { min: 1, max: 400 }
+
+  it('centres the bounds in the free area', () => {
+    const free = { left: 300, right: 300, top: 50, bottom: 50 }
+    const v = fitBounds(square, 1400, 900, free, limits)
+    // symmetric margins: the view centre is the bounds' centre
+    expect(v.cx).toBeCloseTo(5)
+    expect(v.cz).toBeCloseTo(5)
+    // limited by height: 800 px * 0.85 / 10 m
+    expect(v.scale).toBeCloseTo(68)
+  })
+
+  it('shifts the centre when the free area is off-centre', () => {
+    const v = fitBounds(square, 1000, 800, { left: 400, right: 0, top: 0, bottom: 0 }, limits)
+    // the bounds' centre sits at x = 700 px, i.e. 200 px right of the canvas centre
+    expect(5 - v.cx).toBeCloseTo(200 / v.scale)
+  })
+
+  it('clamps the scale to the limits', () => {
+    const tiny = [{ x: 0, z: 0 }, { x: 0.1, z: 0.1 }]
+    expect(fitBounds(tiny, 1000, 800, { left: 0, right: 0, top: 0, bottom: 0 }, limits).scale).toBeLessThanOrEqual(400)
+    const huge = [{ x: 0, z: 0 }, { x: 5000, z: 5000 }]
+    expect(fitBounds(huge, 1000, 800, { left: 0, right: 0, top: 0, bottom: 0 }, limits).scale).toBe(1)
   })
 })

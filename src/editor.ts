@@ -7,6 +7,7 @@ import {
   clampWindowT,
   constrainToDirections,
   distanceToSegment,
+  fitBounds,
   nearestEdge,
   projectOnSegment,
   ringSegments,
@@ -16,6 +17,8 @@ import {
   validatePlan,
 } from './editor-geom'
 import type { Segment, Snap } from './editor-geom'
+import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
+import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
 import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
@@ -27,21 +30,21 @@ export interface PlanEditor {
   getPlan(): Plan
 }
 
-type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix'
-
 const SNAP_PX = 10
 const HIT_PX = 8
 const MIN_SCALE = 1
 const MAX_SCALE = 400
 const MAX_HISTORY = 100
+// Space the side column and the status line take in the Plan view; the drawing is framed in what is left.
+const FREE_AREA = { top: 40, bottom: 80 }
 const storageKey = (buildingId: string): string => `sun-in-house:plan:${buildingId}`
 
 const HELP: Record<Tool, string> = {
-  select: 'Select: click a window or wall; drag a window along its edge or a wall end to move it. Drag empty space to pan.',
-  outline: 'Outline: click points; double-click or click the first point to close; Esc cancels. Replaces the outline and clears windows.',
-  wall: 'Wall: click start, click end (Shift = 0/90 deg to the nearest outline edge); Esc cancels.',
-  window: 'Window: click near an outline edge to add a window; click an existing one to select it.',
-  fix: 'Building fix: click points of a balcony or wall part (Shift = 90 deg); double-click or click the first point to close; Esc cancels.',
+  select: 'Click a window or wall to select it; drag a window along its edge. Drag empty space to pan.',
+  outline: 'Click the corners of your apartment; click the first point or double-click to close. Esc cancels.',
+  wall: 'Click where the wall starts, then where it ends. Shift snaps to 0 or 90 degrees. Esc cancels.',
+  window: 'Click near an outline edge to add a window, or click a window to select it.',
+  fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees.',
 }
 const VIEWPOINT_HELP = 'Walk start: this is where Walk inside puts you. Drag the camera to move it, the white dot to turn it.'
 const VIEWPOINT_CLEARANCE = 0.25
@@ -114,6 +117,8 @@ export function createPlanEditor(
   root.className = 'editor'
   root.hidden = true
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  const side = document.createElement('div')
+  side.className = 'editor-side'
   const toolbar = document.createElement('div')
   toolbar.className = 'editor-box editor-toolbar'
   const props = document.createElement('div')
@@ -121,9 +126,11 @@ export function createPlanEditor(
   props.hidden = true
   const statusLine = document.createElement('div')
   statusLine.className = 'editor-status'
+  statusLine.setAttribute('role', 'status')
   const statusText = document.createElement('span')
   statusLine.appendChild(statusText)
-  root.append(svg, toolbar, props, statusLine)
+  side.append(toolbar, props)
+  root.append(svg, side, statusLine)
   container.appendChild(root)
 
   let building: Building | undefined
@@ -141,19 +148,35 @@ export function createPlanEditor(
   let message: { text: string; kind: 'info' | 'error' } | undefined
   let newKind: BuildingEdit['kind'] = 'add'
 
-  // --- toolbar ---
+  // --- toolbar: Tools, Floor, File ---
+  function cluster(name: string, ...children: HTMLElement[]): HTMLElement {
+    const section = document.createElement('section')
+    section.className = 'editor-cluster'
+    section.setAttribute('aria-label', name)
+    section.append(Object.assign(document.createElement('h3'), { textContent: name }), ...children)
+    return section
+  }
+  const keyHint = (key: string): HTMLElement =>
+    Object.assign(document.createElement('span'), { className: 'key', textContent: key, ariaHidden: 'true' })
+
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
   for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Building fix']] as const) {
-    const b = button(label, `${label} tool`, () => setTool(t))
+    const b = button(label, `${label} tool (${TOOL_KEYS[t]})`, () => setTool(t))
+    b.append(keyHint(TOOL_KEYS[t]))
     toolButtons.set(t, b)
     toolRow.appendChild(b)
   }
-  const kindRow = document.createElement('div')
-  kindRow.className = 'editor-row'
-  kindRow.hidden = true
+  // One reserved row under the tools: the Add/Cut choice for fixes, what the Outline tool replaces, else empty.
+  // It keeps its height so nothing below it moves when the tool changes.
+  const optionsRow = document.createElement('div')
+  optionsRow.className = 'editor-row editor-options'
+  const optionNote = document.createElement('small')
   const kindButtons = new Map<BuildingEdit['kind'], HTMLButtonElement>()
+  const kindGroup = document.createElement('div')
+  kindGroup.className = 'editor-row'
+  kindGroup.hidden = true
   for (const [k, label, tip] of [
     ['add', 'Add', 'New fixes add volume (balcony, bay)'],
     ['cut', 'Cut', 'New fixes remove volume (recess, loggia)'],
@@ -163,55 +186,79 @@ export function createPlanEditor(
       updateKindRow()
     })
     kindButtons.set(k, b)
-    kindRow.appendChild(b)
+    kindGroup.appendChild(b)
   }
-  kindRow.prepend(Object.assign(document.createElement('small'), { textContent: 'New fix is a:' }))
+  kindGroup.prepend(Object.assign(document.createElement('small'), { textContent: 'New fix is a:' }))
   const updateKindRow = (): void => {
     for (const [k, b] of kindButtons) b.setAttribute('aria-pressed', String(k === newKind))
   }
   updateKindRow()
-  const actionRow = document.createElement('div')
-  actionRow.className = 'editor-row'
+  optionsRow.append(kindGroup, optionNote)
+  const editRow = document.createElement('div')
+  editRow.className = 'editor-row'
+  editRow.append(
+    button('Undo', 'Undo (Ctrl+Z)', undo),
+    button('Delete', 'Delete selected (Del)', deleteSelected),
+    button('Fit', `Zoom to the apartment (${FIT_KEY})`, fitView),
+  )
+  editRow.lastElementChild!.append(keyHint(FIT_KEY))
+
+  const floorFields = document.createElement('div')
+  floorFields.className = 'editor-fields'
+  const wholeFloorButton = button('Whole floor', '', wholeFloor)
+  const wholeFloorNote = document.createElement('small')
+  const wholeFloorRow = document.createElement('div')
+  wholeFloorRow.className = 'editor-row editor-options'
+  wholeFloorRow.append(wholeFloorButton, wholeFloorNote)
+
   const fileInput = document.createElement('input')
   fileInput.type = 'file'
   fileInput.accept = 'application/json,.json'
   fileInput.hidden = true
   fileInput.addEventListener('change', () => void importFile())
-  actionRow.append(
-    button('Whole floor', 'Reset the outline to the building footprint (clears windows)', wholeFloor),
-    button('Undo', 'Undo (Ctrl+Z)', undo),
-    button('Delete', 'Delete selected (Del)', deleteSelected),
+  const fileRow = document.createElement('div')
+  fileRow.className = 'editor-row'
+  fileRow.append(
     button('Export JSON', 'Download the plan as a JSON file', exportJson),
     button('Import JSON', 'Load a plan from a JSON file', () => fileInput.click()),
     fileInput,
   )
-  const floorBox = document.createElement('div')
-  floorBox.className = 'editor-row'
-  floorBox.style.flexDirection = 'column'
-  toolbar.append(toolRow, kindRow, actionRow, floorBox)
+  toolbar.append(
+    cluster('Tools', toolRow, editRow, optionsRow),
+    cluster('Floor', floorFields, wholeFloorRow),
+    cluster('File', fileRow),
+  )
 
   function setTool(t: Tool): void {
     tool = t
     draft = { outline: [] }
     root.dataset.tool = t
-    kindRow.hidden = t !== 'fix'
     for (const [name, b] of toolButtons) b.setAttribute('aria-pressed', String(name === t))
     message = undefined
     render()
   }
 
+  let floorKey = ''
   function updateFloorBox(): void {
     if (!building || !plan) return
     const b = building
     const levels = levelCount(b)
+    const lost = clearsNote(plan.windows.length)
+    wholeFloorNote.textContent = lost
+    wholeFloorButton.title = `Reset the outline to the building footprint${lost ? `. ${lost}; Ctrl+Z undoes it` : ''}`
+    optionNote.textContent = tool === 'outline' ? `Replaces the outline${lost ? `. ${lost}` : ''}` : ''
+    kindGroup.hidden = tool !== 'fix'
+    // Rebuilt only when it changes, so a focused field keeps its focus while the drawing redraws.
+    const key = `${plan.floor} ${plan.floorHeight} ${levels} ${b.height} ${b.minHeight}`
+    if (key === floorKey) return
+    floorKey = key
     const info = document.createElement('small')
     info.textContent = `Building: ${levels} levels, ${(b.height - b.minHeight).toFixed(1)} m`
-    floorBox.replaceChildren(
+    floorFields.replaceChildren(
       field('Floor (0 = ground)', numberInput(plan.floor, 1, 0, (v) => commit({ ...clone(plan!), floor: Math.round(v) }), levels - 1)),
       field('Floor height (m)', numberInput(plan.floorHeight, 0.1, 0.1, (v) => commit({ ...clone(plan!), floorHeight: v }))),
       info,
     )
-    props.style.setProperty('--props-top', `${toolbar.offsetHeight + 24}px`)
   }
 
   // --- properties ---
@@ -338,15 +385,24 @@ export function createPlanEditor(
     return true
   }
 
+  /** "Outline replaced, 3 windows removed. Ctrl+Z to undo." */
+  function replacedMessage(what: string, removedWindows: number, droppedViewpoint: boolean): string {
+    const parts = [what]
+    if (removedWindows) parts.push(`${windowCount(removedWindows)} removed`)
+    if (droppedViewpoint) parts.push('walk start is automatic again')
+    return `${parts.join(', ')}. Ctrl+Z to undo.`
+  }
+
   function wholeFloor(): void {
     if (!plan || !building) return
     const next = clone(plan)
+    const removed = next.windows.length
     next.outline = { outer: clone(building.outer), holes: clone(building.holes) }
     next.windows = []
     const dropped = dropStaleViewpoint(next)
     selection = null
     commit(next)
-    setMessage(`Outline reset to the building footprint; windows cleared${dropped ? '; walk start is automatic again' : ''}`)
+    setMessage(replacedMessage('Outline reset to the building footprint', removed, dropped))
   }
 
   function deleteSelected(): void {
@@ -605,17 +661,14 @@ export function createPlanEditor(
     if (pts.length < 3) return setMessage('An outline needs at least 3 points', 'error')
     if (selfIntersects(pts)) return setMessage('Outline crosses itself; adjust the points', 'error')
     const next = clone(plan)
-    const hadWindows = next.windows.length > 0
+    const removed = next.windows.length
     next.outline = { outer: clone(pts), holes: [] }
     next.windows = []
     const dropped = dropStaleViewpoint(next)
     selection = null
     draft = { outline: [] }
     commit(next)
-    setMessage(
-      (hadWindows ? 'Outline replaced; its windows were cleared' : 'Outline replaced') +
-        (dropped ? '; the walk start was off the floor, so it is automatic again' : ''),
-    )
+    setMessage(replacedMessage('Outline replaced', removed, dropped))
   }
 
   function outlineClick(e: MouseEvent): void {
@@ -821,7 +874,8 @@ export function createPlanEditor(
 
   svg.addEventListener('auxclick', (e) => e.preventDefault())
 
-  const isTyping = (e: KeyboardEvent): boolean => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+  const isTyping = (e: KeyboardEvent): boolean =>
+    e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement
   window.addEventListener('keydown', (e) => {
     if (!visible || isTyping(e)) return
     if (e.code === 'Space') {
@@ -839,6 +893,12 @@ export function createPlanEditor(
       if ((tool === 'outline' || tool === 'fix') && draft.outline.length) draft.outline.pop()
       else deleteSelected()
       render()
+    } else {
+      const shortcut = shortcutFor(e)
+      if (!shortcut) return
+      e.preventDefault()
+      if ('tool' in shortcut) setTool(shortcut.tool)
+      else fitView()
     }
   })
   window.addEventListener('keyup', (e) => {
@@ -853,20 +913,19 @@ export function createPlanEditor(
     return r.width > 0 && r.height > 0
   }
 
+  /** Frames the apartment outline, or the building when the outline is missing. */
   function fit(): void {
-    if (!building || !measure()) return
-    const xs = building.outer.map((p) => p.x)
-    const zs = building.outer.map((p) => p.z)
-    const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
-    // usable area: right of the 280 px panel column, left of the 290 px toolbar column
-    const left = Math.min(300, view.w * 0.25)
-    const right = Math.min(310, view.w * 0.25)
-    const areaW = view.w - left - right
-    const areaH = view.h - 100
-    view.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min(areaW / Math.max(x1 - x0, 1), areaH / Math.max(z1 - z0, 1)) * 0.85))
-    view.cx = (x0 + x1) / 2 - (left + areaW / 2 - view.w / 2) / view.scale
-    view.cz = (z0 + z1) / 2
+    if (!building || !plan || !measure()) return
+    const points = plan.outline.outer.length >= 3 ? plan.outline.outer : building.outer
+    // right of the 280 px panel column, left of the 290 px side column
+    const free = { left: Math.min(300, view.w * 0.25), right: Math.min(310, view.w * 0.25), ...FREE_AREA }
+    Object.assign(view, fitBounds(points, view.w, view.h, free, { min: MIN_SCALE, max: MAX_SCALE }))
     needsFit = false
+  }
+
+  function fitView(): void {
+    needsFit = true
+    render()
   }
 
   function render(): void {
