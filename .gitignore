@@ -5,3 +5,5 @@ dist/
 *.local
 .browsers/
 shots/
+out/
+CLAUDE.md

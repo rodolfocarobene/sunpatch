@@ -39,7 +39,7 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
 You need [Node.js](https://nodejs.org/) 22.12 or newer.
 
 ```sh
-git clone <this repository>
+git clone https://github.com/rodolfocarobene/sunpatch.git
 cd sunpatch
 npm install
 npm run dev
