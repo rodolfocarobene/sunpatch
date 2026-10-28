@@ -138,7 +138,7 @@ try {
 
   segments: {
   // ---- 1. map: search, pick -----------------------------------------------------------------
-  await page.goto('http://localhost:5183/')
+  await page.goto('http://localhost:5183/app/')
   await setDate('2026-12-21')
   await page.waitForTimeout(6000)
   await caption('1 · Find your building')

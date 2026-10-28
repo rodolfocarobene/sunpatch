@@ -27,7 +27,7 @@ try {
     page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()) })
     page.on('pageerror', (e) => console.log('pageerror:', e.message))
     await page.route(/\/api\/interpreter$/, overpass) // the three Overpass mirrors
-    await page.goto('http://localhost:5179/')
+    await page.goto('http://localhost:5179/app/')
     return page
   }
   const setTime = (page, min) =>

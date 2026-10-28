@@ -9,7 +9,8 @@ npm install
 npm run dev
 ```
 
-Node.js 22.12 or newer is required. For visual checks, run `npm run shots:install` once to download a headless
+Node.js 22.12 or newer is required. The landing page is `/` and the app is `/app/` (`/app/?example=milan` for the
+built-in sample). For visual checks, run `npm run shots:install` once to download a headless
 Chromium into `.browsers/` (git-ignored).
 
 ## Before opening a pull request
