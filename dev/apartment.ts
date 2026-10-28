@@ -1,5 +1,6 @@
 // Dev page: a 12 x 10 m, 4 x 3 m test building with an apartment on floor 1 (3 windows south, 1 east).
-// /dev/apartment.html?date=2026-12-21&time=13:00&cutaway=1&half=1 (half: apartment covers only the west part).
+// /dev/apartment.html?date=2026-12-21&time=13:00&cutaway=1&half=1 (half: apartment covers only the west part),
+// &walk=1 (stand inside, looking at the windows; &at=x,z picks the spot).
 import { createScene } from '../src/scene'
 import type { Building, Point } from '../src/osm'
 import type { Plan } from '../src/plan'
@@ -10,6 +11,7 @@ const date = params.get('date') ?? '2026-12-21'
 const time = params.get('time') ?? '13:00'
 const cutaway = params.get('cutaway') !== '0'
 const half = params.get('half') === '1'
+const walk = params.get('walk') === '1'
 const origin = { lat: 45.4642, lon: 9.19 }
 
 const box = (id: string, x0: number, z0: number, x1: number, z1: number, height: number): Building => ({
@@ -51,5 +53,7 @@ sunScene.setBuildings(buildings, house.id)
 sunScene.setPlan(plan)
 sunScene.setCutaway(cutaway)
 const offset = Number(date.slice(5, 7)) >= 4 && Number(date.slice(5, 7)) <= 10 ? '+02:00' : '+01:00'
+const [atX, atZ] = (params.get('at') ?? '').split(',').map(Number)
+if (walk) sunScene.startWalk(Number.isFinite(atX) && Number.isFinite(atZ) ? { x: atX, z: atZ } : undefined)
 sunScene.update(sunDirection(new Date(`${date}T${time}:00${offset}`), origin.lat, origin.lon))
 ;(window as unknown as { __ready: boolean }).__ready = true
