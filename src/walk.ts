@@ -149,7 +149,14 @@ export function createWalkHud(container: HTMLElement, onExit: () => void): WalkH
   hud.hidden = true
   hud.innerHTML = `
     <div class="walkStatus"></div>
-    <div class="walkHelp">Drag to look · WASD/arrows to walk · Shift faster · [ ] time -/+ 15 min · P play/pause · Esc exit</div>
+    <div class="walkHelp">
+      <span><kbd>Drag</kbd> look</span>
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
+      <span><kbd>Shift</kbd> faster</span>
+      <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
+      <span><kbd>P</kbd> play</span>
+      <span><kbd>Esc</kbd> exit</span>
+    </div>
     <button type="button">Exit walk</button>`
   hud.querySelector('button')!.addEventListener('click', onExit)
   container.appendChild(hud)

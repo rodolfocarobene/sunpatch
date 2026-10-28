@@ -17,9 +17,8 @@ import {
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
-import { compassName } from './sun'
 import { tileBuildings } from './tiles'
-import { createUI, TIME_FORMAT, type View } from './ui'
+import { createUI, sunSentence, TIME_FORMAT, type View } from './ui'
 import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -39,11 +38,8 @@ sunScene.setWalkHandlers({
 })
 ui.onChange((when, sun) =>
   hud.setStatus(
-    `${when.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} ` +
-      `${when.toLocaleTimeString([], TIME_FORMAT)} · ` +
-      (sun.altitudeDeg > 0
-        ? `sun: ${compassName(sun.azimuthDeg)}, ${sun.altitudeDeg.toFixed(0)}° high (azimuth ${sun.azimuthDeg.toFixed(0)}°)`
-        : 'sun below the horizon'),
+    `${when.getDate()} ${when.toLocaleDateString('en-GB', { month: 'short' })} ` +
+      `${when.toLocaleTimeString([], TIME_FORMAT)} \u00b7 ${sunSentence(sun, 'up')}`,
   ),
 )
 const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
