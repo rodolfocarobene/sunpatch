@@ -1,4 +1,4 @@
-import type { Building, Origin, Point } from './osm'
+import { project, unproject, type Building, type Origin, type Point } from './osm'
 
 /**
  * An apartment on one floor of the selected building, in scene metres (x = east, z = south)
@@ -73,5 +73,23 @@ export function defaultPlan(b: Building, origin: Origin, floor = 0): Plan {
     outline: { outer: b.outer.map((p) => ({ ...p })), holes: b.holes.map((h) => h.map((p) => ({ ...p }))) },
     walls: [],
     windows: [],
+  }
+}
+
+/**
+ * The same plan expressed around another scene origin (the origin changes when a building
+ * is re-picked, or between the tile preview and the OSM data).
+ */
+export function rebasePlan(plan: Plan, origin: Origin): Plan {
+  if (plan.origin.lat === origin.lat && plan.origin.lon === origin.lon) return plan
+  const move = (p: Point): Point => {
+    const ll = unproject(p, plan.origin)
+    return project(ll.lat, ll.lon, origin)
+  }
+  return {
+    ...plan,
+    origin,
+    outline: { outer: plan.outline.outer.map(move), holes: plan.outline.holes.map((h) => h.map(move)) },
+    walls: plan.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
   }
 }
