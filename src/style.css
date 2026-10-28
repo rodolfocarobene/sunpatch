@@ -61,7 +61,7 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
 #views button.active { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
 #panel label.row { flex-direction: row; align-items: center; gap: 6px; }
 #panel #aptTools { display: flex; flex-direction: column; gap: 8px; }
-#aptTools[hidden] { display: none; }
+#panel #aptTools[hidden] { display: none; }
 #walkHud {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
