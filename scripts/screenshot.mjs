@@ -1,5 +1,5 @@
 // Headless visual check: renders the test scene, the map, and a picked OSM building
-// (Overpass answered from a fixture) at 11:00, saving PNGs to the output dir.
+// (Overpass answered from a fixture, or failing) at 11:00, saving PNGs to the output dir.
 // Usage: npm run shots -- [outDir]   (Chromium from `npm run shots:install`)
 import { readFileSync, mkdirSync } from 'node:fs'
 import { chromium } from 'playwright'
@@ -14,31 +14,55 @@ await server.listen()
 // SwiftShader gives headless Chromium a software WebGL implementation.
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
-  page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()) })
-  page.on('pageerror', (e) => console.log('pageerror:', e.message))
-  await page.route('**/overpass-api.de/**', (r) => r.fulfill({ contentType: 'application/json', body: fixture }))
-  await page.goto('http://localhost:5179/')
-
-  const setTime = (min) =>
+  // The map starts on the Duomo square; try a few points until one hits a building.
+  async function clickBuilding(page) {
+    for (const [dx, dy] of [[60, -60], [0, -40], [40, 0], [-40, 0], [0, 40], [80, 30], [-80, -30]]) {
+      await page.mouse.click(640 + dx, 400 + dy)
+      await page.waitForTimeout(500)
+      if (!(await page.$eval('#app', (el) => el.hidden))) return
+    }
+  }
+  const newPage = async (overpass) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()) })
+    page.on('pageerror', (e) => console.log('pageerror:', e.message))
+    await page.route(/\/api\/interpreter$/, overpass) // the three Overpass mirrors
+    await page.goto('http://localhost:5179/')
+    return page
+  }
+  const setTime = (page, min) =>
     page.$eval('#time', (el, v) => { el.value = String(v); el.dispatchEvent(new Event('input')) }, min)
-  await setTime(11 * 60)
+
+  // Normal run: Overpass answers from the fixture once released, so the tile preview is visible first.
+  let release
+  const released = new Promise((done) => { release = done })
+  let page = await newPage(async (r) => {
+    await released
+    await r.fulfill({ contentType: 'application/json', body: fixture })
+  })
+  await setTime(page, 11 * 60)
   await page.waitForTimeout(1500)
   await page.screenshot({ path: `${out}/test-scene.png` })
-
   await page.click('#viewToggle')
   await page.waitForTimeout(5000)
   await page.screenshot({ path: `${out}/map.png` })
-
-  // The map starts on the Duomo square; try a few points until one hits a building.
-  for (const [dx, dy] of [[60, -60], [0, -40], [40, 0], [-40, 0], [0, 40], [80, 30], [-80, -30]]) {
-    await page.mouse.click(640 + dx, 400 + dy)
-    await page.waitForTimeout(1500)
-    if (!(await page.$eval('#app', (el) => el.hidden))) break
-  }
-  await setTime(11 * 60)
-  await page.waitForTimeout(1500)
+  await clickBuilding(page)
+  await setTime(page, 11 * 60)
+  await page.waitForTimeout(1000)
+  await page.screenshot({ path: `${out}/osm-scene-instant.png` })
+  release()
+  await page.waitForFunction(() => document.querySelector('#statusChip:not([hidden])')?.dataset.kind === 'done', null, { polling: 50 })
   await page.screenshot({ path: `${out}/osm-scene.png` })
+  await page.close()
+
+  // Every Overpass mirror fails: the tile scene stays and the chip offers a retry.
+  page = await newPage((r) => r.fulfill({ status: 504, body: 'Gateway Timeout' }))
+  await page.click('#viewToggle')
+  await page.waitForTimeout(5000)
+  await clickBuilding(page)
+  await setTime(page, 11 * 60)
+  await page.waitForTimeout(1500)
+  await page.screenshot({ path: `${out}/osm-scene-tiles-only.png` })
   console.log(`saved to ${out}/`)
 } finally {
   await browser.close()
