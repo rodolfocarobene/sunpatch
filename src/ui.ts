@@ -1,6 +1,7 @@
 import SunCalc from 'suncalc'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
+import { activePreset, dateValue, daylight, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 
 /** One 24-hour HH:MM format for every time shown in the app. */
@@ -59,11 +60,18 @@ export function createUI(
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
         <button id="walk" class="primary" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
-      <label>Date <input id="date" type="date" value="${toDateValue(now)}"></label>
-      <label>
-        <span class="split">Time <span id="timeLabel"></span></span>
-        <input id="time" type="range" min="0" max="1435" step="5" value="${now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5}">
-      </label>
+      <div class="field">
+        <label for="date">Date</label>
+        <div id="presets" role="group" aria-label="Date presets"></div>
+        <input id="date" type="date" value="${dateValue(now)}">
+      </div>
+      <div class="field">
+        <label class="split" for="time">Time <span id="timeLabel"></span></label>
+        <div id="timeTrack">
+          <div id="dayStrip" aria-hidden="true"></div>
+          <input id="time" type="range" min="0" max="${DAY_MAX}" step="${STEP}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
+        </div>
+      </div>
       <button id="play" type="button">Play</button>
       <div id="sunSummary"></div>
       <details id="location">
@@ -82,6 +90,14 @@ export function createUI(
   const time = $<HTMLInputElement>('time')
   const play = $<HTMLButtonElement>('play')
   const summary = $('sunSummary')
+  const presetBox = $('presets')
+  const strip = $('dayStrip')
+  presetBox.addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-date]')
+    if (!chip) return
+    date.value = chip.dataset.date!
+    refresh()
+  })
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const cutaway = $<HTMLInputElement>('cutaway')
@@ -97,6 +113,10 @@ export function createUI(
     return new Date(y, m - 1, d, Math.floor(minutes / 60), minutes % 60)
   }
 
+  /** Daylight of the shown day; recomputed only when the day or place changes. */
+  let day: { key: string; info: Daylight } | undefined
+  let chipKey = ''
+
   function refresh() {
     const when = currentDate()
     const la = lat.valueAsNumber
@@ -107,30 +127,64 @@ export function createUI(
       summary.removeAttribute('title')
       return
     }
+    const key = `${date.value} ${la} ${lo}`
+    if (day?.key !== key) {
+      day = { key, info: daylight(when, la, lo) }
+      strip.style.background = stripGradient(day.info.segments)
+    }
+    updatePresets(when.getFullYear(), la)
     const sun = sunDirection(when, la, lo)
     onSun(sun)
     listener?.(when, sun)
-    const times = SunCalc.getTimes(when, la, lo)
+    const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = formatTime(times.sunrise)
     const set = formatTime(times.sunset)
+    strip.title = day.info.polar === 'day' ? 'Sun up all day' : day.info.polar === 'night' ? 'Sun below the horizon all day' : `Daylight ${rise} to ${set}`
     summary.title = `Azimuth ${sun.azimuthDeg.toFixed(1)} deg from north, altitude ${sun.altitudeDeg.toFixed(1)} deg`
     summary.innerHTML =
       `<strong>${sunSentence(sun)}</strong>` +
       `<span>${rise && set ? `Sunrise ${rise} \u00b7 Sunset ${set}` : 'No sunrise or sunset on this date'}</span>`
   }
 
+  /** Rebuilds the chips when the year or hemisphere changes, and marks the one matching the date. */
+  function updatePresets(year: number, la: number) {
+    const presets = presetDates(year, la, new Date())
+    const key = `${year} ${la < 0}`
+    if (key !== chipKey) {
+      chipKey = key
+      presetBox.innerHTML = ''
+      for (const p of presets) {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.dataset.id = p.id
+        b.dataset.date = p.date
+        b.title = p.title
+        b.textContent = p.label
+        presetBox.appendChild(b)
+      }
+    }
+    const active = activePreset(presets, date.value)
+    for (const b of presetBox.querySelectorAll('button')) {
+      b.dataset.date = presets.find((p) => p.id === b.dataset.id)!.date
+      b.setAttribute('aria-pressed', String(b.dataset.id === active))
+    }
+  }
+
   let timer: number | undefined
+  /** One Play step: inside the daylight window, looping from sunset back to sunrise. */
+  function playStep() {
+    if (!day) return
+    time.value = String(nextPlayMinute(Number(time.value), day.info))
+    refresh()
+  }
   play.addEventListener('click', () => {
     if (timer !== undefined) {
       stop()
       return
     }
     play.textContent = 'Pause'
-    timer = window.setInterval(() => {
-      const next = Number(time.value) + 5
-      time.value = String(next > 1435 ? 0 : next)
-      refresh()
-    }, 50)
+    playStep()
+    timer = window.setInterval(playStep, 50)
   })
   function stop() {
     window.clearInterval(timer)
@@ -225,11 +279,6 @@ function buildingInfoHtml(b: Building): string {
   )
 }
 
-function toDateValue(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
 function formatMinutes(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
@@ -241,8 +290,9 @@ function formatTime(d: Date | null): string {
 
 const WORDS: Record<string, string> = { N: 'north', E: 'east', S: 'south', W: 'west' }
 
-function sunSentence(sun: SunDirection): string {
+/** Plain-language sun position; `tail` ends the sentence after the altitude in degrees. */
+export function sunSentence(sun: SunDirection, tail = 'above the horizon'): string {
   if (sun.altitudeDeg <= 0) return 'Sun below the horizon'
   const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
-  return `Sun in the ${dir}, ${sun.altitudeDeg.toFixed(0)}\u00b0 above the horizon`
+  return `Sun in the ${dir}, ${sun.altitudeDeg.toFixed(0)}\u00b0 ${tail}`
 }

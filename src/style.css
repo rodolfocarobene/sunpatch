@@ -12,6 +12,10 @@
   --disabled: #7d7159;
   --danger-bg: #fde8e8;
   --danger: #8a1c1c;
+  --strip-night: #3b4457;
+  --strip-twilight: #8a7f9a;
+  --strip-golden: #f2b24a;
+  --strip-day: #fbd77a;
   --shadow: 0 6px 20px rgba(120, 80, 10, 0.18);
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   color-scheme: light;
@@ -44,7 +48,6 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 input[type='number'], input[type='date'], input[type='search'], .editor-box select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
 }
-input[type='range'] { width: 100%; margin: 4px 0 0; }
 .tabular, #timeLabel, input[type='number'], input[type='date'], #sunSummary, #walkHud, .editor-box output { font-variant-numeric: tabular-nums; }
 
 #panel {
@@ -58,7 +61,24 @@ input[type='range'] { width: 100%; margin: 4px 0 0; }
 #panel h2 { margin: 0; font-size: 16px; font-weight: 650; }
 #panel label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); }
 #panel label.row { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
-#panel .split { display: flex; justify-content: space-between; }
+#panel .split { flex-direction: row; justify-content: space-between; }
+#panel .field { display: flex; flex-direction: column; gap: 4px; }
+#presets { display: flex; gap: 4px; }
+#panel #presets button { flex: 1; padding: 3px 2px; font-size: 13px; }
+#panel #presets button[aria-pressed='true'], #panel #presets button[aria-pressed='true']:hover {
+  background: var(--text); border-color: var(--text); color: var(--surface);
+}
+/* The strip spans the thumb's centre travel (thumb width 16px), so a minute lines up with the thumb. */
+#timeTrack { position: relative; height: 22px; }
+#dayStrip { position: absolute; left: 8px; right: 8px; top: 8px; height: 6px; border-radius: 3px; border: 1px solid var(--line); box-sizing: content-box; margin-top: -1px; }
+#time { position: absolute; inset: 0; width: 100%; height: 22px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
+#time::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+#time::-moz-range-track { height: 22px; background: transparent; }
+#time::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 22px; border-radius: 4px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--text);
+}
+#time::-moz-range-thumb { width: 16px; height: 22px; border-radius: 4px; box-sizing: border-box; background: var(--surface); border: 2px solid var(--text); }
 #timeLabel { color: var(--text); font-weight: 600; }
 #panel a { color: var(--link); }
 #panel #about { font-size: 13px; color: var(--muted); text-decoration: none; align-self: flex-start; }
@@ -125,6 +145,11 @@ input[type='range'] { width: 100%; margin: 4px 0 0; }
   max-width: calc(100% - 300px);
 }
 #walkHud .walkStatus { font-weight: 600; }
-#walkHud .walkHelp { font-size: 12px; }
+#walkHud .walkHelp { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: 12px; }
+#walkHud kbd {
+  display: inline-block; min-width: 1.4em; margin-right: 2px; padding: 0 5px; box-sizing: border-box;
+  font: inherit; font-weight: 600; text-align: center; color: var(--text); background: var(--surface); border-radius: 4px;
+}
+#walkHud kbd + kbd { margin-left: 1px; }
 #walkHud button { padding: 2px 10px; }
 #walkHud :focus-visible { outline-color: var(--accent); }
