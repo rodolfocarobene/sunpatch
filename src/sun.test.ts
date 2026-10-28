@@ -1,6 +1,6 @@
 import SunCalc from 'suncalc'
 import { describe, expect, it } from 'vitest'
-import { sunDirection } from './sun'
+import { compassName, sunDirection } from './sun'
 
 const LAT = 45.4642
 const LON = 9.19
@@ -40,5 +40,15 @@ describe('sunDirection', () => {
   it('returns a unit vector', () => {
     const { vector: v } = sunDirection(new Date(Date.UTC(2026, 8, 1, 8)), LAT, LON)
     expect(Math.hypot(v.x, v.y, v.z)).toBeCloseTo(1, 10)
+  })
+})
+
+describe('compassName', () => {
+  it('names the 16 points and wraps around', () => {
+    expect(compassName(0)).toBe('N')
+    expect(compassName(359)).toBe('N')
+    expect(compassName(203)).toBe('SSW')
+    expect(compassName(90)).toBe('E')
+    expect(compassName(-90)).toBe('W')
   })
 })

@@ -24,3 +24,10 @@ export function sunDirection(date: Date, lat: number, lon: number): SunDirection
   const azimuthDeg = (((azimuth / RAD + 180) % 360) + 360) % 360
   return { azimuthDeg, altitudeDeg: altitude / RAD, vector }
 }
+
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+
+/** 16-point compass name of an azimuth in degrees clockwise from north. */
+export function compassName(azimuthDeg: number): string {
+  return COMPASS[Math.round((((azimuthDeg % 360) + 360) % 360) / 22.5) % 16]
+}
