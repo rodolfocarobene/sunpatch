@@ -56,3 +56,7 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
 #statusChip[data-kind='failed'] { background: #fff4e0; color: #7a4a00; }
 #statusChip button { font: inherit; padding: 2px 8px; cursor: pointer; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
+#views { display: flex; gap: 4px; }
+#views button { flex: 1; }
+#views button.active { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
+#panel label.row { flex-direction: row; align-items: center; gap: 6px; }

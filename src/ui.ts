@@ -5,24 +5,34 @@ import { sunDirection } from './sun'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
-export type View = 'map' | '3d'
+export type View = 'map' | 'plan' | '3d'
 
 export interface UI {
   setLocation(lat: number, lon: number): void
   setBuildingInfo(building: Building | null): void
   setView(view: View): void
+  /** Enables the Plan view once a building is selected. */
+  setPlanAvailable(available: boolean): void
+  /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
+  setPlanActive(active: boolean): void
 }
 
 export function createUI(
   onSun: (sun: SunDirection) => void,
-  onToggleView: () => void,
+  onView: (view: View) => void,
+  onCutaway: (on: boolean) => void,
 ): UI {
   const now = new Date()
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
-    <button id="viewToggle" type="button"></button>
+    <nav id="views">
+      <button type="button" data-view="map">Map</button>
+      <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
+      <button type="button" data-view="3d">3D</button>
+    </nav>
     <div id="building"></div>
+    <label id="cutawayRow" class="row" hidden><input id="cutaway" type="checkbox" checked> Cutaway (hide floors above)</label>
     <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
     <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
     <label>Date <input id="date" type="date" value="${toDateValue(now)}"></label>
@@ -40,8 +50,10 @@ export function createUI(
   const date = $<HTMLInputElement>('date')
   const time = $<HTMLInputElement>('time')
   const play = $<HTMLButtonElement>('play')
-  const viewToggle = $<HTMLButtonElement>('viewToggle')
-  viewToggle.addEventListener('click', onToggleView)
+  const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
+  for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
+  const cutaway = $<HTMLInputElement>('cutaway')
+  cutaway.addEventListener('change', () => onCutaway(cutaway.checked))
 
   function currentDate(): Date | null {
     if (!date.value) return null
@@ -104,7 +116,16 @@ export function createUI(
       if (b) el.innerHTML = buildingInfoHtml(b)
     },
     setView(view) {
-      viewToggle.textContent = view === 'map' ? 'Show 3D' : 'Show map'
+      for (const b of viewButtons) b.classList.toggle('active', b.dataset.view === view)
+    },
+    setPlanAvailable(available) {
+      const plan = viewButtons.find((b) => b.dataset.view === 'plan')!
+      plan.disabled = !available
+      plan.title = available ? 'Draw your apartment on this building' : 'Pick a building first'
+    },
+    setPlanActive(active) {
+      $('cutawayRow').hidden = !active
+      if (active) onCutaway(cutaway.checked)
     },
   }
 }
