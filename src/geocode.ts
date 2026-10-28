@@ -1,3 +1,5 @@
+import { pointInPolygon, project, ringArea, type Point } from './osm'
+
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 
 export interface PolygonFeature {
@@ -58,4 +60,61 @@ export function polygonFeature(hit: GeoHit): PolygonFeature | null {
 
 export function hitLabel(hit: GeoHit): string {
   return [hit.category, hit.type].filter(Boolean).join(' / ')
+}
+
+type Ring = [number, number][]
+
+export interface TileBuilding {
+  geometry: { type: string; coordinates: unknown }
+  properties: Record<string, unknown>
+}
+
+export interface BuildingHit {
+  polygon: Ring[]
+  height: number
+  minHeight: number
+}
+
+const MAX_SNAP_M = 20
+
+/** Distance from the local origin to the closest edge of the ring. */
+function distanceToRing(ring: Point[]): number {
+  let d = Infinity
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[j]
+    const b = ring[i]
+    const len2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2
+    const t = len2 ? Math.max(0, Math.min(1, -(a.x * (b.x - a.x) + a.z * (b.z - a.z)) / len2)) : 0
+    d = Math.min(d, Math.hypot(a.x + t * (b.x - a.x), a.z + t * (b.z - a.z)))
+  }
+  return d
+}
+
+/**
+ * The tile building containing [lon, lat], else the nearest one within MAX_SNAP_M (address
+ * points often sit on the facade or the street). OpenMapTiles merges neighbouring buildings
+ * into one MultiPolygon, so polygons are tested one by one.
+ */
+export function buildingAt(features: TileBuilding[], lon: number, lat: number): BuildingHit | null {
+  const origin = { lat, lon }
+  const local = (ring: Ring) => ring.map(([x, y]) => project(y, x, origin))
+  let best: { hit: BuildingHit; dist: number; area: number } | null = null
+  for (const f of features) {
+    const g = f.geometry
+    const polygons =
+      g.type === 'Polygon' ? [g.coordinates as Ring[]] : g.type === 'MultiPolygon' ? (g.coordinates as Ring[][]) : []
+    for (const polygon of polygons) {
+      const outer = local(polygon[0])
+      const inside =
+        pointInPolygon({ x: 0, z: 0 }, outer) && !polygon.slice(1).some((h) => pointInPolygon({ x: 0, z: 0 }, local(h)))
+      const dist = inside ? 0 : distanceToRing(outer)
+      const area = ringArea(outer)
+      if (dist > MAX_SNAP_M) continue
+      if (best && (dist > best.dist || (dist === best.dist && area >= best.area))) continue
+      const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+      const height = num(f.properties.render_height, 9)
+      best = { hit: { polygon, height, minHeight: num(f.properties.render_min_height, 0) }, dist, area }
+    }
+  }
+  return best?.hit ?? null
 }
