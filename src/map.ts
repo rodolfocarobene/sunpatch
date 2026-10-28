@@ -1,7 +1,7 @@
 import { type GeoJSONSource, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import { buildingAt, hitLabel, isBuildingLike, polygonFeature, searchUrl, viewFor, type GeoHit } from './geocode'
+import { buildingAt, hitLabel, isBuildingLike, polygonFeature, searchUrl, viewFor, type GeoHit, type TileBuilding } from './geocode'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
 // elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
@@ -15,6 +15,8 @@ export interface MapView {
   /** Shows a status line; pass '' to clear. */
   setStatus(text: string, kind?: 'info' | 'error'): void
   setLoading(loading: boolean): void
+  /** `building` features of the vector tiles loaded so far (empty before the map has loaded). */
+  getTileBuildings(): TileBuilding[]
 }
 
 export function createMapView(
@@ -110,14 +112,18 @@ export function createMapView(
     return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(button)
   }
 
+  function getTileBuildings(): TileBuilding[] {
+    if (!map.getSource('openmaptiles')) return []
+    return map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' })
+  }
+
   function highlightBuildingUnder(lngLat: [number, number], token: number, fallback: object | null) {
     // After the move, wait for idle so the zoom-18 building tiles are loaded.
     map.once('moveend', () => map.once('idle', () => {
       if (token !== found) return
       // Query the tile data rather than rendered pixels: in a pitched view the pixel at the
       // address can belong to a taller building in front of it.
-      const tiles = map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' })
-      const b = buildingAt(tiles, lngLat[0], lngLat[1])
+      const b = buildingAt(getTileBuildings(), lngLat[0], lngLat[1])
       if (b) {
         setHighlight({
           type: 'Feature',
@@ -201,6 +207,7 @@ export function createMapView(
       if (visible) map.resize()
     },
     setStatus,
+    getTileBuildings,
     setLoading(loading) {
       root.classList.toggle('loading', loading)
       if (loading) setStatus('Loading buildings from OpenStreetMap...')
