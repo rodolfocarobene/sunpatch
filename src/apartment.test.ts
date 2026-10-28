@@ -221,4 +221,20 @@ describe('apartmentGeometry', () => {
     expect(g.ceiling).toHaveLength(1)
     expect(g.walls).toHaveLength(4)
   })
+
+  it('applies edits: adds below/above the ceiling, cuts through the blocks and the rest of the floor', () => {
+    const plan = floorPlan(rect(0, 0, 5, 6))
+    plan.edits = [
+      { kind: 'add', outline: rect(5, 0, 7, 3), bottom: 3, top: 3.3 },
+      { kind: 'add', outline: rect(5, 3, 7, 6), bottom: 6, top: 6.3 },
+      { kind: 'cut', outline: rect(6, 0, 10, 6), bottom: 4, top: 8 },
+    ]
+    const g = apartmentGeometry(b, plan)
+    expect(g.added).toHaveLength(1)
+    expect(g.addedAbove).toHaveLength(1)
+    expect(bounds(g.addedAbove[0]).min.y).toBeCloseTo(6)
+    // lower block 0..2.98 (whole), rest of floor 3..5.7 split at 4 and 5.7, upper block 5.7..9 split at 8
+    expect(g.shell).toHaveLength(1 + 2)
+    expect(g.ceiling).toHaveLength(2)
+  })
 })

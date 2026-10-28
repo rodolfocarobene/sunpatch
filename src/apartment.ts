@@ -1,13 +1,12 @@
-import polygonClipping, { type Pair, type Polygon } from 'polygon-clipping'
+import polygonClipping, { type Polygon } from 'polygon-clipping'
 import { BoxGeometry, ExtrudeGeometry, Matrix4, Path, PlaneGeometry, Shape, Vector3, type BufferGeometry } from 'three'
+import { addsOf, carve, cutsOf, polygonsOf, sparing, toPairs, type Piece } from './edits'
 import { extrudeRings } from './footprint'
-import { ringArea } from './osm'
 import type { Building, Point } from './osm'
 import { FACADE_THICKNESS, SLAB_THICKNESS, floorBase, ringOf, type Plan } from './plan'
 
 const EPS = 1e-6
 const MARGIN = 0.01
-const MIN_SLIVER_AREA = 0.05
 /** The apartment floor sits on top of the lower block; this is the gap that avoids coplanar faces. */
 const FLOOR_SKIN = 0.02
 
@@ -160,27 +159,11 @@ export function interiorWalls(plan: Plan, b: Building): BufferGeometry[] {
   return geometries
 }
 
-const toPairs = (ring: Point[]): Pair[] => ring.map((p) => [p.x, p.z])
-
-function fromPairs(ring: Pair[]): Point[] {
-  const points = ring.map(([x, z]) => ({ x, z }))
-  const first = points[0]
-  const last = points[points.length - 1]
-  if (last.x === first.x && last.z === first.z) points.pop()
-  return points
-}
-
 /** Footprint minus apartment outline: what remains of the floor, as outer rings with holes. */
 export function restOfFloorPolygons(b: Building, plan: Plan): { outer: Point[]; holes: Point[][] }[] {
   const footprint: Polygon = [toPairs(b.outer), ...b.holes.map(toPairs)]
   const apartment: Polygon = [toPairs(plan.outline.outer), ...plan.outline.holes.map(toPairs)]
-  const result: { outer: Point[]; holes: Point[][] }[] = []
-  for (const [outer, ...holes] of polygonClipping.difference(footprint, apartment)) {
-    const polygon = { outer: fromPairs(outer), holes: holes.map(fromPairs) }
-    const area = ringArea(polygon.outer) - polygon.holes.reduce((sum, h) => sum + ringArea(h), 0)
-    if (area >= MIN_SLIVER_AREA) result.push(polygon)
-  }
-  return result
+  return polygonsOf(polygonClipping.difference(footprint, apartment))
 }
 
 export interface ApartmentGeometry {
@@ -192,6 +175,10 @@ export interface ApartmentGeometry {
   floor: BufferGeometry
   walls: BufferGeometry[]
   glass: BufferGeometry[]
+  /** Added prisms (`edits`) reaching below the apartment ceiling slab's underside: always visible. */
+  added: BufferGeometry[]
+  /** Added prisms entirely above it: hidden from the camera in cutaway, like `ceiling`. */
+  addedAbove: BufferGeometry[]
 }
 
 /** Vertical extents of the lower block and the upper block around the apartment storey. */
@@ -206,20 +193,33 @@ export function remainderRanges(b: Building, plan: Plan): { lower: [number, numb
   }
 }
 
-/** All geometry of the selected building with the apartment carved out; scene coordinates. */
+const extrudePiece = (p: Piece) => extrudeRings(p.outer, p.holes, p.bottom, p.top)
+
+/** All geometry of the selected building with the apartment carved out and the plan's edits applied; scene coordinates. */
 export function apartmentGeometry(b: Building, plan: Plan): ApartmentGeometry {
   const base = floorBase(b, plan)
   const top = base + plan.floorHeight
   const { lower, upper } = remainderRanges(b, plan)
-  const block = ([y0, y1]: [number, number]) => extrudeRings(b.outer, b.holes, y0, y1)
-  const shell = [block(lower)]
-  for (const p of restOfFloorPolygons(b, plan)) shell.push(extrudeRings(p.outer, p.holes, base, top - SLAB_THICKNESS))
+  const cuts = cutsOf(plan.edits)
+  // Cuts through the apartment storey spare the apartment's own footprint (its walls follow the outline).
+  const apartment: Polygon = [toPairs(plan.outline.outer), ...plan.outline.holes.map(toPairs)]
+  const blockCuts = sparing(cuts, apartment, base, top)
+  const block = ([y0, y1]: [number, number]) => carve(b.outer, b.holes, y0, y1, blockCuts).map(extrudePiece)
+  const shell = block(lower)
+  for (const p of restOfFloorPolygons(b, plan)) {
+    shell.push(...carve(p.outer, p.holes, base, top - SLAB_THICKNESS, cuts).map(extrudePiece))
+  }
   const { walls, glass } = facadeWalls(plan, b)
+  const ceilingBottom = top - SLAB_THICKNESS
+  const adds = addsOf(plan.edits)
+  const prism = (e: (typeof adds)[number]) => extrudeRings(e.outline, [], e.bottom, e.top)
   return {
     shell,
-    ceiling: upper ? [block(upper)] : [],
+    ceiling: upper ? block(upper) : [],
     floor: extrudeRings(plan.outline.outer, plan.outline.holes, base - FLOOR_SKIN, base),
     walls: [...walls, ...interiorWalls(plan, b)],
     glass,
+    added: adds.filter((e) => e.bottom < ceilingBottom - EPS).map(prism),
+    addedAbove: adds.filter((e) => e.bottom >= ceilingBottom - EPS).map(prism),
   }
 }
