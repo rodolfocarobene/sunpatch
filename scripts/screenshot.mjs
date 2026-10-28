@@ -1,5 +1,5 @@
-// Headless visual check: renders the test scene, the map, and a picked OSM building
-// (Overpass answered from a fixture, or failing) at 11:00, saving PNGs to the output dir.
+// Headless visual check: renders the test scene, the map, a picked OSM building
+// (Overpass answered from a fixture, or failing) at 11:00, and a walk through the apartment, saving PNGs to the output dir.
 // Usage: npm run shots -- [outDir]   (Chromium from `npm run shots:install`)
 import { readFileSync, mkdirSync } from 'node:fs'
 import { chromium } from 'playwright'
@@ -74,7 +74,41 @@ try {
   await setTime(page, 11 * 60)
   await page.waitForTimeout(2000)
   await page.screenshot({ path: `${out}/plan-3d.png` })
+
+  // Walk inside: start, turn ~90 degrees by dragging, walk forward, step the time forward.
+  await page.getByRole('button', { name: 'Walk inside' }).click()
+  await page.waitForTimeout(1500)
+  await page.screenshot({ path: `${out}/walk-1.png` })
+  await page.mouse.move(640, 400)
+  await page.mouse.down()
+  await page.mouse.move(640 + 393, 400, { steps: 10 })
+  await page.mouse.up()
+  await page.waitForTimeout(1000)
+  await page.screenshot({ path: `${out}/walk-2.png` })
+  await page.keyboard.down('w')
+  await page.waitForTimeout(1500)
+  await page.keyboard.up('w')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `${out}/walk-3.png` })
+  for (let i = 0; i < 4; i++) await page.keyboard.press(']')
+  await page.waitForTimeout(1000)
+  await page.screenshot({ path: `${out}/walk-4.png` })
   await page.close()
+
+  // Dev page: standing 8 m from the south windows, looking down a little (winter and summer, 13:00).
+  for (const [name, date] of [['winter', '2026-12-21'], ['summer', '2026-06-21']]) {
+    page = await newPage((r) => r.abort())
+    await page.goto(`http://localhost:5179/dev/apartment.html?date=${date}&time=13:00&walk=1&at=3,-3`)
+    await page.waitForFunction(() => window.__ready)
+    await page.waitForTimeout(1500)
+    await page.mouse.move(640, 300)
+    await page.mouse.down()
+    await page.mouse.move(640, 380, { steps: 5 })
+    await page.mouse.up()
+    await page.waitForTimeout(1500)
+    await page.screenshot({ path: `${out}/walk-dev-${name}.png` })
+    await page.close()
+  }
 
   // Every Overpass mirror fails: the tile scene stays and the chip offers a retry.
   page = await newPage((r) => r.fulfill({ status: 504, body: 'Gateway Timeout' }))
