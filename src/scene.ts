@@ -5,6 +5,9 @@ import {
   BoxGeometry,
   Color,
   DoubleSide,
+  EdgesGeometry,
+  LineBasicMaterial,
+  LineSegments,
   Group,
   DirectionalLight,
   HemisphereLight,
@@ -36,8 +39,12 @@ const SELECTED_COLOR = 0xe8a15a
 // Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
 const ADDED_COLOR = 0xf2bd84
 const OTHER_COLOR = 0xb8b8c0
-const FLOOR_COLOR = 0xd8cfc0
+const FLOOR_COLOR = 0xc9ad88
 const WALL_COLOR = 0xf2efe9
+const CEILING_COLOR = 0xe2e8f0
+const EDGE_COLOR = 0x2b2b30
+const EDGE_OPACITY = 0.6
+const EDGE_ANGLE_DEG = 25
 const GLASS_COLOR = 0x9ecfe8
 const APARTMENT_SHADOW_MAP = 2048
 const SKY_DAY = new Color(0x9ec9ee)
@@ -179,7 +186,7 @@ export function createScene(container: HTMLElement): SunScene {
 
   function clearWorld() {
     for (const child of world.children) {
-      if (child instanceof Mesh) {
+      if (child instanceof Mesh || child instanceof LineSegments) {
         child.geometry.dispose()
         child.material.dispose()
       }
@@ -217,13 +224,27 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
+  let aptLines: { line: LineSegments; ceiling: boolean }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
   let floorMesh: Mesh | undefined
   let solidMeshes: Mesh[] = []
 
-  function apartmentMesh(geometry: BufferGeometry, material: MeshStandardMaterial): Mesh {
+  // Faces sit a hair behind their own edge lines so the lines do not flicker.
+  function offsetFaces<T extends MeshStandardMaterial>(material: T): T {
+    material.polygonOffset = true
+    material.polygonOffsetFactor = material.polygonOffsetUnits = 1
+    return material
+  }
+
+  function apartmentMesh(geometry: BufferGeometry, material: MeshStandardMaterial, edges?: LineBasicMaterial): Mesh {
+    if (edges) {
+      const line = new LineSegments(new EdgesGeometry(geometry, EDGE_ANGLE_DEG), edges)
+      line.renderOrder = 1
+      aptLines.push({ line, ceiling: material === ceilingMaterial })
+      world.add(line)
+    }
     const mesh = new Mesh(geometry, material)
     mesh.castShadow = true
     mesh.receiveShadow = true
@@ -235,20 +256,22 @@ export function createScene(container: HTMLElement): SunScene {
   function addApartment(b: Building, p: Plan) {
     const g = apartmentGeometry(b, p)
     const shellMaterial = new MeshStandardMaterial({ color: SELECTED_COLOR })
-    ceilingMaterial = new MeshStandardMaterial({ color: SELECTED_COLOR })
-    const floorMaterial = new MeshStandardMaterial({ color: FLOOR_COLOR })
-    const wallMaterial = new MeshStandardMaterial({ color: WALL_COLOR })
+    ceilingMaterial = offsetFaces(new MeshStandardMaterial({ color: SELECTED_COLOR }))
+    const floorMaterial = offsetFaces(new MeshStandardMaterial({ color: FLOOR_COLOR }))
+    const wallMaterial = offsetFaces(new MeshStandardMaterial({ color: WALL_COLOR }))
+    // Drawn on top of the faces without writing depth; render() places them in the right pass.
+    const edges = new LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: EDGE_OPACITY, depthWrite: false })
     const glassMaterial = new MeshStandardMaterial({
       color: GLASS_COLOR, transparent: true, opacity: 0.15, depthWrite: false, side: DoubleSide,
     })
     for (const geometry of g.shell) apartmentMesh(geometry, shellMaterial)
-    for (const geometry of g.ceiling) apartmentMesh(geometry, ceilingMaterial)
+    for (const geometry of g.ceiling) apartmentMesh(geometry, ceilingMaterial, edges)
     const addedMaterial = new MeshStandardMaterial({ color: ADDED_COLOR })
     addedAboveMaterial = new MeshStandardMaterial({ color: ADDED_COLOR })
     for (const geometry of g.added) apartmentMesh(geometry, addedMaterial)
     for (const geometry of g.addedAbove) apartmentMesh(geometry, addedAboveMaterial)
-    floorMesh = apartmentMesh(g.floor, floorMaterial)
-    const wallMeshes = g.walls.map((geometry) => apartmentMesh(geometry, wallMaterial))
+    floorMesh = apartmentMesh(g.floor, floorMaterial, edges)
+    const wallMeshes = g.walls.map((geometry) => apartmentMesh(geometry, wallMaterial, edges))
     solidMeshes = [floorMesh, ...wallMeshes]
     glowMaterials = [floorMaterial, wallMaterial]
     for (const m of glowMaterials) m.emissive.copy(m.color)
@@ -264,10 +287,10 @@ export function createScene(container: HTMLElement): SunScene {
   function applyGlow() {
     for (const m of glowMaterials) m.emissiveIntensity = INTERIOR_GLOW * daylight
     if (ceilingMaterial) {
-      // Seen from inside the block above is the ceiling: paint it like a wall; outside it keeps the building colour.
-      const colour = walking ? WALL_COLOR : SELECTED_COLOR
+      // Seen from inside the block above is the ceiling: paint it as a ceiling; outside it keeps the building colour.
+      const colour = walking ? CEILING_COLOR : SELECTED_COLOR
       ceilingMaterial.color.set(colour)
-      ceilingMaterial.emissive.set(walking ? WALL_COLOR : 0x000000)
+      ceilingMaterial.emissive.set(walking ? CEILING_COLOR : 0x000000)
       ceilingMaterial.emissiveIntensity = INTERIOR_GLOW * daylight
     }
   }
@@ -278,6 +301,11 @@ export function createScene(container: HTMLElement): SunScene {
     for (const m of [ceilingMaterial, addedAboveMaterial]) {
       if (m) m.colorWrite = m.depthWrite = !cutaway || walking
     }
+  }
+
+  /** Edge lines of the apartment; the ceiling's follow the ceiling (hidden by cutaway). */
+  function showAptLines(on: boolean) {
+    for (const { line, ceiling } of aptLines) line.visible = on && (!ceiling || !cutaway || walking)
   }
 
   function apartmentBounds(b: Building, p: Plan) {
@@ -291,6 +319,7 @@ export function createScene(container: HTMLElement): SunScene {
     stopWalk()
     clearWorld()
     apartmentMeshes = new Set()
+    aptLines = []
     glassMeshes = []
     ceilingMaterial = addedAboveMaterial = undefined
     glowMaterials = []
@@ -468,6 +497,7 @@ export function createScene(container: HTMLElement): SunScene {
     })
     for (const m of hidden.keys() as Iterable<MeshStandardMaterial>) m.colorWrite = m.depthWrite = false
     for (const g of glassMeshes) g.visible = true
+    showAptLines(true)
     sunLight.visible = false
     aptLight.visible = true
     // A colour background clears the frame even with autoClear off, so take it away for this pass.
@@ -493,6 +523,8 @@ export function createScene(container: HTMLElement): SunScene {
     lastFrame = now
     const twoPass = plan !== null && sunUp
     for (const g of glassMeshes) g.visible = !twoPass
+    // The second pass repaints the apartment surfaces, so their edge lines are drawn there instead.
+    showAptLines(!twoPass)
     renderer.render(scene, camera)
     if (twoPass) renderApartmentPass()
     for (const g of glassMeshes) g.visible = true
