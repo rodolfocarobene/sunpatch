@@ -47,11 +47,11 @@ const SELECTED_COLOR = 0xe8a15a
 // Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
 const ADDED_COLOR = 0xf2bd84
 const OTHER_COLOR = 0xb8b8c0
-const FLOOR_COLOR = 0xc9ad88
-const WALL_COLOR = 0xf2efe9
-const CEILING_COLOR = 0xe2e8f0
+const FLOOR_COLOR = 0xcfae82
+const WALL_COLOR = 0xf7eddd
+const CEILING_COLOR = 0xd0def2
 const EDGE_COLOR = 0x2b2b30
-const EDGE_OPACITY = 0.6
+const EDGE_OPACITY = 0.75
 const EDGE_ANGLE_DEG = 25
 const GLASS_COLOR = 0x9ecfe8
 const APARTMENT_SHADOW_MAP = 2048
