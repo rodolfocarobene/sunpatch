@@ -1,6 +1,7 @@
 # Architecture
 
-Sunpatch is a single-page app with no backend: Vite + TypeScript, three.js for the 3D scene, MapLibre GL JS
+Sunpatch is a static site with no backend: a landing page at `/` (`index.html`) and the app at `/app/`
+(`app/index.html` loads `src/main.ts`), both built by Vite (`vite.config.ts`, multi-page). The app is a single-page app: Vite + TypeScript, three.js for the 3D scene, MapLibre GL JS
 for the map, plain DOM/SVG for the UI. Modules are small; geometry and parsing live in pure functions with Vitest
 tests next to them (`*.test.ts`).
 
@@ -33,6 +34,7 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 |---|---|
 | `main.ts` | App state and wiring: views (Map / Plan / 3D), picking, OSM refinement, plan loading. |
 | `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play), status chip. |
+| `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search results, found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview. |
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
@@ -55,7 +57,8 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
 - Windows reference an outline edge (`ring`, `edge`) and a position `t` along it, so they move with the outline.
 - `edits` are building-level prisms (`add` or `cut`) with absolute heights above the ground.
 - Plans are saved in `localStorage` under `sun-in-house:plan:<buildingId>` and carry their own `origin`;
-  `rebasePlan` moves them to the current scene origin.
+  `rebasePlan` moves them to the current scene origin. In example mode (`?example=milan`) nothing is loaded from or
+  saved to `localStorage` until the user picks a building on the map.
 
 ## Rendering and shadows
 

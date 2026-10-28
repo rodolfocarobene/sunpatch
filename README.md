@@ -45,9 +45,12 @@ npm install
 npm run dev
 ```
 
-Then open the address Vite prints (normally <http://localhost:5173>).
+Then open the address Vite prints (normally <http://localhost:5173>). That is the landing page; the app is at
+`/app/`, and `/app/?example=milan` opens a bundled sample apartment in 3D without any map click or network request
+for buildings.
 
-To build a static site, run `npm run build`. The output in `dist/` can be served by any static host.
+To build a static site, run `npm run build` (add `-- --base=./` to host it under a sub-path, as GitHub Pages does).
+The output in `dist/` can be served by any static host; the app is at `dist/app/`.
 
 ## How to use it
 
@@ -113,6 +116,10 @@ npm run shots:install   # once: download a headless Chromium into .browsers/
 npm run shots -- out/   # render the main flow to PNGs (uses a recorded Overpass response)
 npm run demo      # re-record the demo video and screenshots in docs/ (needs ffmpeg)
 ```
+
+The landing page (`index.html`, `src/landing.css`, media in `public/media/`) and the app (`app/index.html`) are
+separate pages of one Vite multi-page build (`vite.config.ts`). `src/example.ts` builds the Milan example from the
+bundled fixture; its edits are never autosaved.
 
 `npm run dev` also serves two pages that are handy while working on one part in isolation:
 `/dev/editor.html` (plan editor on a test building) and `/dev/apartment.html` (a test apartment; try
