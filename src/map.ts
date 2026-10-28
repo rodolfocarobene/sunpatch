@@ -1,12 +1,13 @@
-import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl'
+import { type GeoJSONSource, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import { hitLabel, searchUrl, viewFor, type GeoHit } from './geocode'
+import { hitLabel, polygonFeature, searchUrl, viewFor, type GeoHit } from './geocode'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
 // elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
 setWorkerUrl(workerUrl)
 
+const FOUND = 'found'
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 export interface MapView {
@@ -41,7 +42,10 @@ export function createMapView(
     pitch: 45,
   })
   map.addControl(new NavigationControl(), 'bottom-right')
-  map.on('click', (e) => onPick(e.lngLat.lat, e.lngLat.lng))
+  map.on('click', (e) => {
+    clearFound()
+    onPick(e.lngLat.lat, e.lngLat.lng)
+  })
 
   const status = root.querySelector<HTMLElement>('#mapStatus')!
   const form = root.querySelector<HTMLFormElement>('#search')!
@@ -54,6 +58,53 @@ export function createMapView(
   }
 
   const results = form.querySelector<HTMLUListElement>('#results')!
+
+  const marker = new Marker()
+  let found = 0
+
+  function whenStyleReady(fn: () => void) {
+    if (map.isStyleLoaded()) fn()
+    else map.once('idle', fn)
+  }
+
+  function setHighlight(feature: object | null) {
+    whenStyleReady(() => {
+      const data = { type: 'FeatureCollection', features: feature ? [feature] : [] } as never
+      const source = map.getSource(FOUND) as GeoJSONSource | undefined
+      if (source) {
+        source.setData(data)
+        return
+      }
+      map.addSource(FOUND, { type: 'geojson', data })
+      map.addLayer({ id: `${FOUND}-fill`, type: 'fill', source: FOUND, paint: { 'fill-color': '#e8590c', 'fill-opacity': 0.3 } })
+      map.addLayer({ id: `${FOUND}-line`, type: 'line', source: FOUND, paint: { 'line-color': '#e8590c', 'line-width': 3 } })
+    })
+  }
+
+  function clearFound() {
+    found++
+    marker.remove()
+    setHighlight(null)
+  }
+
+  function pickPopup(hit: GeoHit) {
+    const button = document.createElement('button')
+    button.textContent = 'Use this building'
+    button.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      clearFound()
+      onPick(Number(hit.lat), Number(hit.lon))
+    })
+    return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(button)
+  }
+
+  function highlightBuildingUnder(lngLat: [number, number], token: number) {
+    map.once('moveend', () => {
+      if (token !== found) return
+      const feature = map.queryRenderedFeatures(map.project(lngLat)).find((f) => f.sourceLayer === 'building')
+      if (feature) setHighlight({ type: 'Feature', properties: {}, geometry: feature.geometry })
+    })
+  }
 
   function closeResults() {
     results.hidden = true
@@ -78,9 +129,16 @@ export function createMapView(
   }
 
   function goTo(hit: GeoHit) {
+    clearFound()
+    const token = found
+    const lngLat: [number, number] = [Number(hit.lon), Number(hit.lat)]
+    marker.setLngLat(lngLat).setPopup(pickPopup(hit)).addTo(map).togglePopup()
+    const polygon = polygonFeature(hit)
+    if (polygon) setHighlight(polygon)
+    else highlightBuildingUnder(lngLat, token)
     const view = viewFor(hit)
     if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18 })
-    else map.flyTo({ center: [Number(hit.lon), Number(hit.lat)], zoom: view.zoom })
+    else map.flyTo({ center: lngLat, zoom: view.zoom })
     setStatus('Click on a building to pick it.')
   }
 
@@ -92,6 +150,7 @@ export function createMapView(
     const q = input.value.trim()
     if (!q) return
     closeResults()
+    clearFound()
     setStatus('Searching...')
     try {
       const b = map.getBounds()
