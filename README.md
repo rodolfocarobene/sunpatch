@@ -1,4 +1,4 @@
-# Sun in House
+# Sunpatch
 
 See where the sun comes into your home: pick your building on a map, sketch your apartment and its windows,
 then walk inside in 3D and watch the sun patches move across the floor for any day of the year.
@@ -7,7 +7,7 @@ then walk inside in 3D and watch the sun patches move across the floor for any d
 
 *Click the animation for the full video (45 s).*
 
-Sun in House runs entirely in the browser. Building footprints and heights come from
+Sunpatch runs entirely in the browser. Building footprints and heights come from
 [OpenStreetMap](https://www.openstreetmap.org/), the sun position from [SunCalc](https://github.com/mourner/suncalc),
 and the 3D scene is rendered with [three.js](https://threejs.org/). No account or API key is needed.
 
@@ -40,7 +40,7 @@ You need [Node.js](https://nodejs.org/) 22.12 or newer.
 
 ```sh
 git clone <this repository>
-cd sun-in-house
+cd sunpatch
 npm install
 npm run dev
 ```

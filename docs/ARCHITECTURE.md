@@ -1,6 +1,6 @@
 # Architecture
 
-Sun in House is a single-page app with no backend: Vite + TypeScript, three.js for the 3D scene, MapLibre GL JS
+Sunpatch is a single-page app with no backend: Vite + TypeScript, three.js for the 3D scene, MapLibre GL JS
 for the map, plain DOM/SVG for the UI. Modules are small; geometry and parsing live in pure functions with Vitest
 tests next to them (`*.test.ts`).
 
