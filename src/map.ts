@@ -1,7 +1,7 @@
 import { type GeoJSONSource, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import { hitLabel, polygonFeature, searchUrl, viewFor, type GeoHit } from './geocode'
+import { buildingAt, hitLabel, isBuildingLike, polygonFeature, searchUrl, viewFor, type GeoHit } from './geocode'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
 // elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
@@ -76,8 +76,20 @@ export function createMapView(
         return
       }
       map.addSource(FOUND, { type: 'geojson', data })
-      map.addLayer({ id: `${FOUND}-fill`, type: 'fill', source: FOUND, paint: { 'fill-color': '#e8590c', 'fill-opacity': 0.3 } })
-      map.addLayer({ id: `${FOUND}-line`, type: 'line', source: FOUND, paint: { 'line-color': '#e8590c', 'line-width': 3 } })
+      // Areas (streets, cities) are outlined flat; a found building is redrawn as an orange block.
+      const flat = ['!', ['has', 'height']] as never
+      map.addLayer({ id: `${FOUND}-fill`, type: 'fill', source: FOUND, filter: flat, paint: { 'fill-color': '#e8590c', 'fill-opacity': 0.3 } })
+      map.addLayer({ id: `${FOUND}-line`, type: 'line', source: FOUND, filter: flat, paint: { 'line-color': '#e8590c', 'line-width': 3 } })
+      map.addLayer({
+        id: `${FOUND}-3d`, type: 'fill-extrusion', source: FOUND, filter: ['has', 'height'],
+        paint: {
+          'fill-extrusion-color': '#e8590c',
+          // Slightly taller than the basemap block so it is not hidden inside it.
+          'fill-extrusion-height': ['+', ['get', 'height'], 0.3],
+          'fill-extrusion-base': ['get', 'minHeight'],
+          'fill-extrusion-opacity': 0.9,
+        },
+      })
     })
   }
 
@@ -98,12 +110,24 @@ export function createMapView(
     return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(button)
   }
 
-  function highlightBuildingUnder(lngLat: [number, number], token: number) {
-    map.once('moveend', () => {
+  function highlightBuildingUnder(lngLat: [number, number], token: number, fallback: object | null) {
+    // After the move, wait for idle so the zoom-18 building tiles are loaded.
+    map.once('moveend', () => map.once('idle', () => {
       if (token !== found) return
-      const feature = map.queryRenderedFeatures(map.project(lngLat)).find((f) => f.sourceLayer === 'building')
-      if (feature) setHighlight({ type: 'Feature', properties: {}, geometry: feature.geometry })
-    })
+      // Query the tile data rather than rendered pixels: in a pitched view the pixel at the
+      // address can belong to a taller building in front of it.
+      const tiles = map.querySourceFeatures('openmaptiles', { sourceLayer: 'building' })
+      const b = buildingAt(tiles, lngLat[0], lngLat[1])
+      if (b) {
+        setHighlight({
+          type: 'Feature',
+          properties: { height: b.height, minHeight: b.minHeight },
+          geometry: { type: 'Polygon', coordinates: b.polygon },
+        })
+      } else if (fallback) {
+        setHighlight(fallback)
+      }
+    }))
   }
 
   function closeResults() {
@@ -134,8 +158,8 @@ export function createMapView(
     const lngLat: [number, number] = [Number(hit.lon), Number(hit.lat)]
     marker.setLngLat(lngLat).setPopup(pickPopup(hit)).addTo(map).togglePopup()
     const polygon = polygonFeature(hit)
-    if (polygon) setHighlight(polygon)
-    else highlightBuildingUnder(lngLat, token)
+    if (polygon && !isBuildingLike(hit)) setHighlight(polygon)
+    else highlightBuildingUnder(lngLat, token, polygon)
     const view = viewFor(hit)
     if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18 })
     else map.flyTo({ center: lngLat, zoom: view.zoom })
