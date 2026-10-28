@@ -1,4 +1,4 @@
-// Headless visual check: renders the test scene, the map, a picked OSM building
+// Headless visual check: renders the map, a picked OSM building
 // (Overpass answered from a fixture, or failing) at 11:00, and a walk through the apartment, saving PNGs to the output dir.
 // Usage: npm run shots -- [outDir]   (Chromium from `npm run shots:install`)
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -40,10 +40,7 @@ try {
     await released
     await r.fulfill({ contentType: 'application/json', body: fixture })
   })
-  await setTime(page, 11 * 60)
-  await page.waitForTimeout(1500)
-  await page.screenshot({ path: `${out}/test-scene.png` })
-  await page.click('#views [data-view="map"]')
+  // The app opens on the map.
   await page.waitForTimeout(5000)
   await page.screenshot({ path: `${out}/map.png` })
   await clickBuilding(page)

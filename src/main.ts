@@ -46,9 +46,9 @@ const mapView = createMapView(document.body, MILAN, pick)
 const editor = createPlanEditor(document.body, setPlan)
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
-// Starts on the M1 test scene until a building is picked.
-let view: View = '3d'
-setView('3d')
+// Starts on the map: there is nothing to show in 3D until a building is picked.
+let view: View = 'map'
+setView('map')
 
 function walkInside() {
   setView('3d')
@@ -114,7 +114,7 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   }
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
-  ui.setPlanAvailable(true)
+  ui.setBuildingPicked(true)
   if (view === 'plan') openEditor()
   else setView('3d')
 }

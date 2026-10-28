@@ -11,8 +11,8 @@ export interface UI {
   setLocation(lat: number, lon: number): void
   setBuildingInfo(building: Building | null): void
   setView(view: View): void
-  /** Enables the Plan view once a building is selected. */
-  setPlanAvailable(available: boolean): void
+  /** Enables the Plan and 3D views once a building is selected. */
+  setBuildingPicked(picked: boolean): void
   /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
   setPlanActive(active: boolean): void
   /** Disables the Walk button while walking. */
@@ -37,7 +37,7 @@ export function createUI(
     <nav id="views">
       <button type="button" data-view="map">Map</button>
       <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
-      <button type="button" data-view="3d">3D</button>
+      <button type="button" data-view="3d" disabled title="Pick a building first">3D</button>
     </nav>
     <div id="building"></div>
     <div id="aptTools" hidden>
@@ -133,10 +133,14 @@ export function createUI(
     setView(view) {
       for (const b of viewButtons) b.classList.toggle('active', b.dataset.view === view)
     },
-    setPlanAvailable(available) {
-      const plan = viewButtons.find((b) => b.dataset.view === 'plan')!
-      plan.disabled = !available
-      plan.title = available ? 'Draw your apartment on this building' : 'Pick a building first'
+    setBuildingPicked(picked) {
+      for (const b of viewButtons) {
+        if (b.dataset.view === 'map') continue
+        b.disabled = !picked
+        b.title = !picked
+          ? 'Pick a building first'
+          : b.dataset.view === 'plan' ? 'Draw your apartment on this building' : 'Sun and shadows in 3D'
+      }
     },
     setPlanActive(active) {
       $('aptTools').hidden = !active
