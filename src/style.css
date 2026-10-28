@@ -31,3 +31,15 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
 }
 #mapStatus[data-kind='error'] { background: #fde8e8; color: #8a1c1c; }
 #mapView.loading #mapCanvas { cursor: progress; }
+#results {
+  position: absolute; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 0; list-style: none;
+  max-height: 60vh; overflow-y: auto; font-size: 13px;
+  background: rgba(255, 255, 255, 0.96); border-radius: 6px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+#results[hidden] { display: none; }
+#results li { padding: 6px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+#results li + li { border-top: 1px solid #ddd; }
+#results li:hover, #results li:focus { background: #e8f0fe; outline: none; }
+#results small { color: #777; }
+#search { flex-wrap: wrap; width: 290px; }
+#search input { flex: 1; min-width: 0; width: auto; }
