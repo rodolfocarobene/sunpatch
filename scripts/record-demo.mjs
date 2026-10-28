@@ -100,7 +100,7 @@ try {
   /** mp4 of every frame, a shorter GIF of the highlights, and stills squeezed under 600 KB if needed. */
   async function assemble() {
     const mp4 = `${docs}demo.mp4`
-    ffmpeg('-framerate', String(FPS), '-i', join(framesDir, 'f%05d.jpg'), '-vf', 'scale=1280:720,format=yuv420p',
+    ffmpeg('-framerate', String(FPS), '-i', join(framesDir, 'f%05d.jpg'), '-vf', 'scale=1280:720:in_range=pc:out_range=tv,format=yuv420p',
       '-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-movflags', '+faststart', mp4)
     console.log(`demo.mp4  ${kb(mp4)} KB, ${(frameCount / FPS).toFixed(1)} s`)
 
