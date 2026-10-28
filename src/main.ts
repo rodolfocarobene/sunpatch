@@ -1,8 +1,20 @@
 import './style.css'
 import { createMapView } from './map'
 import { createStatusChip } from './chip'
-import { parseOverpass, project, ringCentroid, snapBuilding, unproject, type Building, type Origin } from './osm'
+import { createPlanEditor, loadSavedPlan } from './editor'
+import {
+  distanceToRing,
+  hiddenOutlines,
+  parseOverpass,
+  project,
+  ringCentroid,
+  snapBuilding,
+  unproject,
+  type Building,
+  type Origin,
+} from './osm'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
+import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { createUI, type View } from './ui'
@@ -11,8 +23,9 @@ const MILAN = { lat: 45.4642, lon: 9.19 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
-const ui = createUI((sun) => sunScene.update(sun), () => setView(view === 'map' ? '3d' : 'map'))
+const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on))
 const mapView = createMapView(document.body, MILAN, pick)
+const editor = createPlanEditor(document.body, setPlan)
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
 // Starts on the M1 test scene until a building is picked.
@@ -20,9 +33,11 @@ let view: View = '3d'
 setView('3d')
 
 function setView(next: View) {
+  if (next === 'plan' && !openEditor()) return
   view = next
   app.hidden = next !== '3d'
   mapView.setVisible(next === 'map')
+  editor.setVisible(next === 'plan')
   sunScene.setActive(next === '3d')
   if (next === '3d') sunScene.resize()
   ui.setView(next)
@@ -60,11 +75,47 @@ function pick(lat: number, lon: number) {
   void refine(last, token)
 }
 
+/** The building being worked on, with the scene data the plan editor needs. */
+let site: { buildings: Building[]; selected: Building; origin: Origin } | undefined
+let plan: Plan | undefined
+
 function show(buildings: Building[], selected: Building, origin: Origin, keepCamera: boolean) {
+  // The OSM refinement replaces the tile preview of the same building: carry its plan over.
+  const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
+  site = { buildings, selected, origin }
   sunScene.setBuildings(buildings, selected.id, { keepCamera })
+  if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id })
+  else {
+    const saved = loadSavedPlan(selected.id)
+    setPlan(saved ? rebasePlan(saved, origin) : undefined)
+  }
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
-  setView('3d')
+  ui.setPlanAvailable(true)
+  if (view === 'plan') openEditor()
+  else setView('3d')
+}
+
+const NEIGHBOR_RADIUS_M = 60
+
+/** Opens the editor on the selected building; false when there is none yet. */
+function openEditor(): boolean {
+  if (!site) return false
+  const { buildings, selected, origin } = site
+  const hidden = hiddenOutlines(buildings)
+  const c = ringCentroid(selected.outer)
+  const neighbors = buildings.filter(
+    (b) => b.id !== selected.id && !hidden.has(b.id) && distanceToRing(b.outer, c) < NEIGHBOR_RADIUS_M,
+  )
+  if (!plan) setPlan(defaultPlan(selected, origin))
+  editor.open(selected, neighbors, plan!)
+  return true
+}
+
+function setPlan(next: Plan | undefined) {
+  plan = next
+  sunScene.setPlan(next ?? null)
+  ui.setPlanActive(next !== undefined)
 }
 
 /** Replaces the preview with the detailed Overpass buildings; ignored if a newer pick started. */
