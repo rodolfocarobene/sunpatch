@@ -38,8 +38,8 @@ const NEIGHBORS: [number, number, number, number, number][] = [
 
 export interface SunScene {
   update(sun: SunDirection): void
-  /** Replaces the scene content; the selected building should be centred on the origin. */
-  setBuildings(buildings: Building[], selectedId: string): void
+  /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
+  setBuildings(buildings: Building[], selectedId: string, options?: { keepCamera?: boolean }): void
   resize(): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
@@ -158,7 +158,7 @@ export function createScene(container: HTMLElement): SunScene {
   setExtent(TEST_EXTENT)
   buildTestScene()
 
-  function setBuildings(buildings: Building[], selectedId: string) {
+  function setBuildings(buildings: Building[], selectedId: string, { keepCamera = false } = {}) {
     clearWorld()
     setExtent(DATA_EXTENT)
     const selected = buildings.find((b) => b.id === selectedId)
@@ -183,7 +183,7 @@ export function createScene(container: HTMLElement): SunScene {
     let half = 5
     for (const p of selected.outer) half = Math.max(half, Math.abs(p.x - c.x), Math.abs(p.z - c.z))
     const dist = Math.max(40, half * 3 + selected.height)
-    frame(
+    if (!keepCamera) frame(
       new Vector3(c.x + dist * 0.6, selected.height / 2 + dist * 0.5, c.z + dist * 0.8),
       new Vector3(c.x, selected.height / 2, c.z),
     )
