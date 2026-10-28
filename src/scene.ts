@@ -22,6 +22,7 @@ import {
   BufferGeometry,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
@@ -33,6 +34,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
+import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
 import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
 import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
@@ -62,6 +64,8 @@ const OUTLINE_GHOST_COLOR = 0xb45f06
 const OUTLINE_GHOST_OPACITY = 0.6
 // Above the wall tops, which are flush with the rest of the storey.
 const OUTLINE_LIFT = 0.03
+// About 4 px on screen at the usual orbit distance (a 0.16 m ribbon came out at 2 px); the same as the facade wall it sits on.
+const OUTLINE_WIDTH = 0.3
 const APARTMENT_SHADOW_MAP = 2048
 const SKY_DAY = new Color(0x8fbfe8)
 const SKY_NIGHT = new Color(0x0b1020)
@@ -319,7 +323,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: LineSegments; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -380,23 +384,20 @@ export function createScene(container: HTMLElement): SunScene {
     applyCutaway()
   }
 
-  // Amber line along the top of the apartment walls, so the apartment is findable. A faint copy
-  // ignores depth, so it still shows through the floors above when they are not hidden.
+  // Amber ribbon along the top of the apartment walls, so the apartment is findable (a 1 px line
+  // vanished at normal distances). A faint copy ignores depth, so it still shows through the floors
+  // above when they are not hidden. Built once per plan.
   function addOutline(b: Building, p: Plan) {
     const y = floorBase(b, p) + p.floorHeight - SLAB_THICKNESS + OUTLINE_LIFT
-    const points: number[] = []
-    for (const ring of [p.outline.outer, ...p.outline.holes]) {
-      for (let i = 0; i < ring.length; i++) {
-        const a = ring[i]
-        const q = ring[(i + 1) % ring.length]
-        points.push(a.x, y, a.z, q.x, y, q.z)
-      }
-    }
-    const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(points, 3))
-    const solid = new LineSegments(geometry, new LineBasicMaterial({ color: OUTLINE_COLOR, depthWrite: false }))
-    const ghost = new LineSegments(
+    const { positions, indices } = ribbonsData([p.outline.outer, ...p.outline.holes], y, OUTLINE_WIDTH)
+    const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(positions, 3))
+    geometry.setIndex(indices)
+    // Flat colour, not lit or tone-mapped, so it stays the app's amber.
+    const flat = { side: DoubleSide, depthWrite: false, toneMapped: false } as const
+    const solid = new Mesh(geometry, new MeshBasicMaterial({ ...flat, color: OUTLINE_COLOR, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
+    const ghost = new Mesh(
       geometry.clone(),
-      new LineBasicMaterial({ color: OUTLINE_GHOST_COLOR, transparent: true, opacity: OUTLINE_GHOST_OPACITY, depthTest: false, depthWrite: false }),
+      new MeshBasicMaterial({ ...flat, color: OUTLINE_GHOST_COLOR, transparent: true, opacity: OUTLINE_GHOST_OPACITY, depthTest: false }),
     )
     solid.renderOrder = 2
     ghost.renderOrder = 3
@@ -615,7 +616,7 @@ export function createScene(container: HTMLElement): SunScene {
   function renderApartmentPass() {
     const hidden = new Map<object, { colorWrite: boolean; depthWrite: boolean }>()
     scene.traverse((o) => {
-      if (!(o instanceof Mesh) || apartmentMeshes.has(o) || glassMeshes.includes(o)) return
+      if (!(o instanceof Mesh) || apartmentMeshes.has(o) || glassMeshes.includes(o) || aptLines.some((l) => l.line === o)) return
       for (const m of [o.material].flat()) hidden.set(m, { colorWrite: m.colorWrite, depthWrite: m.depthWrite })
     })
     for (const m of hidden.keys() as Iterable<MeshStandardMaterial>) m.colorWrite = m.depthWrite = false
