@@ -3,10 +3,167 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sunpatch</title>
+    <title>Sunpatch: see where the sun comes into your home</title>
+    <meta
+      name="description"
+      content="Pick your building on a map, sketch your apartment and its windows, and watch the direct sun patches move across the floor for any date and time. Free, open source, runs in your browser."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sunpatch: see where the sun comes into your home" />
+    <meta
+      property="og:description"
+      content="Sketch your apartment on a real building and watch the sun patches through your windows, for any date and time."
+    />
+    <meta property="og:image" content="https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png" />
+    <meta property="og:url" content="https://rodolfocarobene.github.io/sunpatch/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href="/src/landing.css" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="top">
+      <a class="brand" href="./" aria-label="Sunpatch home">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        Sunpatch
+      </a>
+      <nav aria-label="Main">
+        <a href="#how">How it works</a>
+        <a href="#model">What it models</a>
+        <a href="https://github.com/rodolfocarobene/sunpatch">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <p class="eyebrow">Sun and shadow, indoors</p>
+        <h1>See where the sun comes into your home</h1>
+        <p class="lead">
+          Pick your building on a map, sketch your apartment and its windows, then watch the patches of direct
+          sunlight move across your floor, for any day of the year.
+        </p>
+        <p class="actions">
+          <a class="btn primary" href="app/">Open the app</a>
+          <a class="btn" href="app/?example=milan">Try the Milan example</a>
+        </p>
+        <figure class="demo">
+          <video
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster="/media/screenshot-cutaway.png"
+            aria-label="Screen recording: picking a building, drawing the apartment, the sun moving across the floor, and walking inside"
+          >
+            <source src="/media/demo.mp4" type="video/mp4" />
+          </video>
+          <figcaption>Palazzo Reale in Milan, 21 December: from the map to a walk through the living room.</figcaption>
+        </figure>
+      </section>
+
+      <section id="how" class="band">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <img src="/media/screenshot-map.png" alt="The map with a building selected" width="1280" height="720" loading="lazy" />
+            <h3><span>1</span> Find your building</h3>
+            <p>Search an address and click your building on the OpenStreetMap map. Its neighbours come along, so their shadows count.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-plan.png" alt="The floor plan editor with an outline, three windows and an interior wall" width="1280" height="720" loading="lazy" />
+            <h3><span>2</span> Sketch your apartment</h3>
+            <p>Choose the floor, draw the outline of your flat, and click to add windows and interior walls.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-cutaway.png" alt="A 3D cutaway of the apartment with sun patches on the floor" width="1280" height="720" loading="lazy" />
+            <h3><span>3</span> Watch the sun move</h3>
+            <p>Slide the date and time. The floors above are cut away so you can see the sun patches travel through the rooms.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-walk.png" alt="First-person view inside the apartment with a patch of sun on the floor" width="1280" height="720" loading="lazy" />
+            <h3><span>4</span> Walk inside</h3>
+            <p>Step into first person and look around. Use the keys to move through the day and see when a room gets its light.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="features">
+        <h2>What you get</h2>
+        <ul class="grid">
+          <li><h3>Any date, any hour</h3><p>Real sun positions for your location, from the winter solstice to midsummer.</p></li>
+          <li><h3>Real neighbours</h3><p>Surrounding buildings come from OpenStreetMap with their heights and cast shadows on yours.</p></li>
+          <li><h3>Your own plan</h3><p>Draw the outline, windows and walls to scale. Fix a missing balcony on the building if the map lacks it.</p></li>
+          <li><h3>Cutaway and walk mode</h3><p>See the apartment from above, or stand in it and look at the window you care about.</p></li>
+          <li><h3>Export and import</h3><p>Download a plan as JSON and load it again later or on another device.</p></li>
+          <li><h3>No sign-up</h3><p>Open the page and start. There is no account, no install and no cost.</p></li>
+        </ul>
+      </section>
+
+      <section id="model" class="band">
+        <h2>What it does and doesn't model</h2>
+        <div class="two">
+          <div>
+            <h3>Models</h3>
+            <ul class="plain">
+              <li>Direct sun only: the beam through each window, with shadows from your building and the neighbours.</li>
+              <li>Building heights from OpenStreetMap (height tag, else levels, else a default).</li>
+              <li>Windows with their own width, sill and height.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Does not model</h3>
+            <ul class="plain">
+              <li>Diffuse or reflected light, so shaded rooms look dark.</li>
+              <li>Roof shapes: roofs are flat.</li>
+              <li>Terrain and distant hills: the ground is flat for now.</li>
+              <li>Trees, awnings and window frames.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="note">Treat it as a good estimate, not a survey. OpenStreetMap heights are sometimes missing or wrong.</p>
+      </section>
+
+      <section class="split">
+        <div>
+          <h2>Private by design</h2>
+          <p>
+            Everything runs in your browser. Your plans are saved in this browser's local storage and never
+            leave your device. There is no account and no tracking. The app only contacts the free map services
+            it needs to show the map and find buildings.
+          </p>
+        </div>
+        <div>
+          <h2>Open source</h2>
+          <p>
+            Sunpatch is MIT licensed. Read the code, report a problem, or send an improvement.
+          </p>
+          <p class="actions">
+            <a class="btn" href="https://github.com/rodolfocarobene/sunpatch">View on GitHub</a>
+            <a class="btn quiet" href="https://github.com/rodolfocarobene/sunpatch/issues/1">Ideas and roadmap</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>Is your living room sunny at 5 pm in January?</h2>
+        <p class="actions">
+          <a class="btn primary" href="app/">Open the app</a>
+          <a class="btn" href="app/?example=milan">Try the Milan example</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL).
+        Map tiles by <a href="https://openfreemap.org">OpenFreeMap</a> and
+        <a href="https://openmaptiles.org">OpenMapTiles</a>. Address search by
+        <a href="https://nominatim.org">Nominatim</a>. Buildings via the
+        <a href="https://overpass-api.de">Overpass API</a>.
+      </p>
+      <p>Sunpatch is MIT licensed. Made by Rodolfo Carobene.</p>
+    </footer>
   </body>
 </html>
