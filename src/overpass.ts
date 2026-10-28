@@ -1,30 +1,88 @@
-import type { OverpassElement } from './osm'
+import { project, type OverpassElement } from './osm'
 
-const ENDPOINT = 'https://overpass-api.de/api/interpreter'
+export const ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+]
 export const RADIUS_M = 250
+// Larger than RADIUS_M so a cached result still covers RADIUS_M around a click up to REUSE_M away.
+const QUERY_RADIUS_M = 350
+const REUSE_M = 100
+const ENDPOINT_TIMEOUT_MS = 15000
 
+export interface FetchOptions {
+  signal?: AbortSignal
+  fetchFn?: typeof fetch
+  endpoints?: string[]
+  timeoutMs?: number
+}
+
+const cache = new Map<string, { lat: number; lon: number; elements: OverpassElement[] }>()
+
+export function clearOverpassCache() {
+  cache.clear()
+}
+
+function cached(lat: number, lon: number): OverpassElement[] | undefined {
+  for (const c of cache.values()) {
+    const p = project(c.lat, c.lon, { lat, lon })
+    if (Math.hypot(p.x, p.z) <= REUSE_M) return c.elements
+  }
+  return undefined
+}
+
+async function queryEndpoint(
+  url: string,
+  query: string,
+  { signal, fetchFn = fetch, timeoutMs = ENDPOINT_TIMEOUT_MS }: FetchOptions,
+): Promise<OverpassElement[]> {
+  const guard = AbortSignal.timeout(timeoutMs)
+  let res: Response
+  try {
+    res = await fetchFn(url, {
+      method: 'POST',
+      body: new URLSearchParams({ data: query }),
+      signal: signal ? AbortSignal.any([signal, guard]) : guard,
+    })
+  } catch {
+    throw new Error(guard.aborted ? 'timed out' : 'network error')
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  let json: { elements?: OverpassElement[]; remark?: string }
+  try {
+    json = await res.json()
+  } catch {
+    throw new Error(guard.aborted ? 'timed out' : 'invalid response')
+  }
+  const elements = json.elements ?? []
+  // An overloaded server answers 200 with no elements and a "runtime error" remark.
+  if (!elements.length && /error|timed out/i.test(json.remark ?? '')) throw new Error(json.remark)
+  return elements
+}
+
+/** Tries the endpoints one after the other; a caller abort rejects with its AbortError. */
 export async function fetchBuildingElements(
   lat: number,
   lon: number,
-  radius = RADIUS_M,
+  options: FetchOptions = {},
 ): Promise<OverpassElement[]> {
-  const around = `(around:${radius},${lat},${lon})`
+  const hit = cached(lat, lon)
+  if (hit) return hit
+  const around = `(around:${QUERY_RADIUS_M},${lat},${lon})`
   const query =
-    `[out:json][timeout:25];(way["building"]${around};relation["building"]${around};` +
+    `[out:json][timeout:20];(way["building"]${around};relation["building"]${around};` +
     `way["building:part"]${around};relation["building:part"]${around};);out geom;`
-  let res: Response
-  try {
-    res = await fetch(ENDPOINT, { method: 'POST', body: new URLSearchParams({ data: query }) })
-  } catch {
-    throw new Error('Network error while contacting Overpass. Check your connection and retry.')
+  let last = ''
+  for (const url of options.endpoints ?? ENDPOINTS) {
+    try {
+      const elements = await queryEndpoint(url, query, options)
+      cache.set(`${lat.toFixed(4)},${lon.toFixed(4)}`, { lat, lon, elements })
+      return elements
+    } catch (err) {
+      options.signal?.throwIfAborted()
+      last = (err as Error).message
+    }
   }
-  if (!res.ok) {
-    throw new Error(
-      res.status === 429 || res.status >= 500
-        ? 'The Overpass server is busy, try again in a few seconds.'
-        : `Overpass request failed (HTTP ${res.status}).`,
-    )
-  }
-  const json = (await res.json()) as { elements?: OverpassElement[] }
-  return json.elements ?? []
+  throw new Error(`OpenStreetMap servers are unavailable right now (${last}).`)
 }
