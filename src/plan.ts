@@ -1,0 +1,77 @@
+import type { Building, Origin, Point } from './osm'
+
+/**
+ * An apartment on one floor of the selected building, in scene metres (x = east, z = south)
+ * relative to `origin`. Outline rings are the OUTER face of the facade walls; walls are built
+ * inward from them.
+ */
+export interface Plan {
+  version: 1
+  /** OSM id ("way/123") or tile id of the building the plan was drawn on. */
+  buildingId: string
+  origin: Origin
+  /** 0 = ground floor. */
+  floor: number
+  /** Floor-to-floor height in metres. */
+  floorHeight: number
+  /** Apartment outline: outer ring plus holes (courtyards, stairwells), no closing point. */
+  outline: { outer: Point[]; holes: Point[][] }
+  walls: InteriorWall[]
+  windows: Window[]
+}
+
+export interface InteriorWall {
+  a: Point
+  b: Point
+  thickness: number
+}
+
+export interface Window {
+  /** 0 = outline.outer, i > 0 = outline.holes[i - 1]. */
+  ring: number
+  /** Edge from vertex `edge` to vertex `edge + 1` (wrapping) of that ring. */
+  edge: number
+  /** Window centre along the edge, 0..1. */
+  t: number
+  width: number
+  /** Height of the window bottom above the floor. */
+  sill: number
+  height: number
+}
+
+export const FACADE_THICKNESS = 0.3
+export const SLAB_THICKNESS = 0.3
+export const DEFAULT_WALL_THICKNESS = 0.1
+export const DEFAULT_WINDOW = { width: 1.2, sill: 0.9, height: 1.4 }
+const FALLBACK_FLOOR_HEIGHT = 3
+
+export function levelCount(b: Building): number {
+  return b.levels ?? Math.max(1, Math.round((b.height - b.minHeight) / FALLBACK_FLOOR_HEIGHT))
+}
+
+export function defaultFloorHeight(b: Building): number {
+  return b.levels ? (b.height - b.minHeight) / b.levels : FALLBACK_FLOOR_HEIGHT
+}
+
+/** Height of the floor surface (top of the slab below) above the ground. */
+export function floorBase(b: Building, plan: Pick<Plan, 'floor' | 'floorHeight'>): number {
+  return b.minHeight + plan.floor * plan.floorHeight
+}
+
+export function ringOf(plan: Plan, ring: number): Point[] {
+  return ring === 0 ? plan.outline.outer : plan.outline.holes[ring - 1]
+}
+
+/** A new plan covering the whole floor of `b`, with no walls or windows. */
+export function defaultPlan(b: Building, origin: Origin, floor = 0): Plan {
+  return {
+    version: 1,
+    buildingId: b.id,
+    origin,
+    floor: Math.min(floor, levelCount(b) - 1),
+    floorHeight: defaultFloorHeight(b),
+    outline: { outer: b.outer.map((p) => ({ ...p })), holes: b.holes.map((h) => h.map((p) => ({ ...p }))) },
+    walls: [],
+    windows: [],
+  }
+}
