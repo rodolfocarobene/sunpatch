@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shots": "PLAYWRIGHT_BROWSERS_PATH=.browsers node scripts/screenshot.mjs",
+    "demo": "PLAYWRIGHT_BROWSERS_PATH=.browsers node scripts/record-demo.mjs",
     "shots:install": "PLAYWRIGHT_BROWSERS_PATH=.browsers playwright install chromium-headless-shell"
   },
   "dependencies": {
