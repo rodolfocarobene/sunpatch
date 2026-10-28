@@ -12,11 +12,19 @@
   --disabled: #7d7159;
   --danger-bg: #fde8e8;
   --danger: #8a1c1c;
+  --warn-bg: #fff4e0;
+  --warn: #7a4a00;
   --strip-night: #3b4457;
   --strip-twilight: #8a7f9a;
   --strip-golden: #f2b24a;
   --strip-day: #fbd77a;
   --shadow: 0 6px 20px rgba(120, 80, 10, 0.18);
+  /* Floating boxes (panel, chip, map status, popup, walk HUD, editor boxes) share these. */
+  --radius-box: 8px;
+  --radius-control: 6px;
+  --box-pad: 8px 12px;
+  --text-sm: 13px;
+  --text-xs: 12px;
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   color-scheme: light;
 }
@@ -32,29 +40,30 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 /* Controls, styled once for every box in the chrome. */
 #panel button, #search button, #statusChip button, #walkHud button, .editor-box button, .maplibregl-popup-content button {
   font: inherit; padding: 5px 10px; cursor: pointer;
-  color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
 #panel button:hover:not(:disabled), #search button:hover, #statusChip button:hover, #walkHud button:hover,
 .editor-box button:hover:not(:disabled), .maplibregl-popup-content button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
 #panel button:active:not(:disabled), #search button:active, #statusChip button:active, #walkHud button:active,
 .editor-box button:active:not(:disabled), .maplibregl-popup-content button:active { background: var(--line); }
 #panel button:disabled, .editor-box button:disabled { color: var(--disabled); cursor: default; }
-#panel button.primary {
+#panel button.primary, .maplibregl-popup-content button {
   padding: 8px 10px; font-weight: 600; background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
-#panel button.primary:hover:not(:disabled) { background: #e89a14; border-color: var(--accent-strong); }
-#panel button.primary:active:not(:disabled) { background: #d98d0c; }
+#panel button.primary:hover:not(:disabled), .maplibregl-popup-content button:hover { background: #e89a14; border-color: var(--accent-strong); }
+#panel button.primary:active:not(:disabled), .maplibregl-popup-content button:active { background: #d98d0c; }
 #panel button.primary:disabled { background: var(--bg-band); border-color: var(--line); }
 input[type='number'], input[type='date'], input[type='search'], .editor-box select {
-  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px;
 }
-.tabular, #timeLabel, input[type='number'], input[type='date'], #sunSummary, #walkHud, .editor-box output { font-variant-numeric: tabular-nums; }
+input::placeholder { color: var(--muted); opacity: 1; }
+#timeLabel, input[type='number'], input[type='date'], #sunSummary, #walkHud, .editor-box output { font-variant-numeric: tabular-nums; }
 
 #panel {
   position: fixed; top: 12px; left: 12px; z-index: 10; width: 264px; padding: 12px;
   max-height: calc(100% - 44px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 10px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); font-size: 14px;
   box-shadow: var(--shadow);
 }
 #panel section { display: flex; flex-direction: column; gap: 10px; }
@@ -64,7 +73,7 @@ input[type='number'], input[type='date'], input[type='search'], .editor-box sele
 #panel .split { flex-direction: row; justify-content: space-between; }
 #panel .field { display: flex; flex-direction: column; gap: 4px; }
 #presets { display: flex; gap: 4px; }
-#panel #presets button { flex: 1; padding: 3px 2px; font-size: 13px; }
+#panel #presets button { flex: 1; padding: 3px 2px; font-size: var(--text-sm); }
 #panel #presets button[aria-pressed='true'], #panel #presets button[aria-pressed='true']:hover {
   background: var(--text); border-color: var(--text); color: var(--surface);
 }
@@ -81,16 +90,17 @@ input[type='number'], input[type='date'], input[type='search'], .editor-box sele
 #time::-moz-range-thumb { width: 16px; height: 22px; border-radius: 4px; box-sizing: border-box; background: var(--surface); border: 2px solid var(--text); }
 #timeLabel { color: var(--text); font-weight: 600; }
 #panel a { color: var(--link); }
-#panel #about { font-size: 13px; color: var(--muted); text-decoration: none; align-self: flex-start; }
+#panel #about { font-size: var(--text-sm); color: var(--muted); text-decoration: none; align-self: flex-start; }
 #panel #about:hover { color: var(--accent-strong); text-decoration: underline; }
-#panel .hint, #panel .note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
-#panel .note { font-size: 12px; }
+#panel .hint, #panel .note { margin: 0; font-size: var(--text-sm); line-height: 1.4; color: var(--muted); }
+#panel .note { font-size: var(--text-xs); }
 #aptTools { display: flex; flex-direction: column; gap: 10px; }
 #building { padding-bottom: 10px; border-bottom: 1px solid var(--line); line-height: 1.4; }
 #panel[data-view='plan'] #building .detail { display: none; }
 #panel.walking > :not(#views, #about) { display: none; }
 #sunSummary { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; }
-#sunSummary span { color: var(--muted); font-size: 13px; }
+#sunSummary strong { text-wrap: balance; }
+#sunSummary span { color: var(--muted); font-size: var(--text-sm); }
 #location summary { cursor: pointer; color: var(--muted); }
 #location[open] summary { margin-bottom: 8px; }
 #location[open] { display: flex; flex-direction: column; }
@@ -107,8 +117,8 @@ input[type='number'], input[type='date'], input[type='search'], .editor-box sele
 #search { display: flex; flex-wrap: wrap; gap: 6px; }
 #search input { flex: 1; min-width: 0; }
 #results {
-  flex-basis: 100%; margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow-y: auto; font-size: 13px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  flex-basis: 100%; margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow-y: auto; font-size: var(--text-sm);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
 #results li { padding: 6px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
 #results li + li { border-top: 1px solid var(--line); }
@@ -118,34 +128,34 @@ input[type='number'], input[type='date'], input[type='search'], .editor-box sele
 
 #mapStatus {
   position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 10;
-  max-width: 80%; padding: 6px 12px; border-radius: 6px; font-size: 13px;
+  max-width: 80%; padding: var(--box-pad); border-radius: var(--radius-box); font-size: var(--text-sm);
   background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
 }
-#mapStatus[data-kind='error'] { background: var(--danger-bg); color: var(--danger); }
+#mapStatus[data-kind='error'] { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
 #mapView.loading #mapCanvas { cursor: progress; }
 
 #statusChip {
   position: absolute; top: 12px; right: 12px; z-index: 10; display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-radius: 16px; font-size: 13px;
+  padding: var(--box-pad); border-radius: var(--radius-box); font-size: var(--text-sm);
   background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
 }
 #statusChip[data-kind='loading']::before {
   content: ''; width: 12px; height: 12px; border-radius: 50%;
   border: 2px solid var(--line); border-top-color: var(--accent-strong); animation: chipSpin 0.8s linear infinite;
 }
-#statusChip[data-kind='failed'] { background: #fff4e0; color: #7a4a00; }
+#statusChip[data-kind='failed'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
 #statusChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
 #walkHud {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 8px 14px; border-radius: 8px; font-size: 13px; text-align: center;
-  background: rgba(31, 42, 55, 0.88); color: var(--surface); box-shadow: var(--shadow);
+  padding: var(--box-pad); border-radius: var(--radius-box); font-size: var(--text-sm); text-align: center;
+  background: var(--text); color: var(--surface); box-shadow: var(--shadow);
   max-width: calc(100% - 300px);
 }
 #walkHud .walkStatus { font-weight: 600; }
-#walkHud .walkHelp { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: 12px; }
+#walkHud .walkHelp { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: var(--text-xs); }
 #walkHud kbd {
   display: inline-block; min-width: 1.4em; margin-right: 2px; padding: 0 5px; box-sizing: border-box;
   font: inherit; font-weight: 600; text-align: center; color: var(--text); background: var(--surface); border-radius: 4px;
@@ -153,3 +163,12 @@ input[type='number'], input[type='date'], input[type='search'], .editor-box sele
 #walkHud kbd + kbd { margin-left: 1px; }
 #walkHud button { padding: 2px 10px; }
 #walkHud :focus-visible { outline-color: var(--accent); }
+/* The map's "Use this building" popup, in the same box as the rest of the chrome. */
+.maplibregl-popup-content {
+  padding: var(--box-pad); font: inherit; font-size: var(--text-sm); color: var(--text);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
+}
+.maplibregl-popup-anchor-top .maplibregl-popup-tip, .maplibregl-popup-anchor-top-left .maplibregl-popup-tip, .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--surface); }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip, .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip, .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--surface); }
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--surface); }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--surface); }

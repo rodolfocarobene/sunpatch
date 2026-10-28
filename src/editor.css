@@ -22,7 +22,7 @@
 .editor-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .editor-row[hidden] { display: none; }
 /* Reserved height: the row holds a note or the fix choice and must not change the box height. */
-.editor-options { min-height: 28px; gap: 8px; }
+.editor-options { min-height: 26px; gap: 8px; }
 .editor-box button { padding: 3px 8px; display: inline-flex; align-items: center; gap: 6px; }
 .editor-box button[aria-pressed='true'] { background: var(--text); color: var(--surface); border-color: var(--text); box-shadow: inset 0 -3px 0 var(--accent); }
 .editor-box .key {
