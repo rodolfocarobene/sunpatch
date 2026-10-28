@@ -2,6 +2,7 @@ import './style.css'
 import { createMapView } from './map'
 import { createStatusChip } from './chip'
 import { createPlanEditor, loadSavedPlan } from './editor'
+import { EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
   hiddenOutlines,
@@ -46,12 +47,23 @@ ui.onChange((when, sun) =>
   ),
 )
 const mapView = createMapView(document.body, MILAN, pick)
-const editor = createPlanEditor(document.body, setPlan)
+// ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
+let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'
+const editor = createPlanEditor(document.body, setPlan, { autosave: () => !exampleMode })
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
 // Starts on the map: there is nothing to show in 3D until a building is picked.
 let view: View = 'map'
 setView('map')
+if (exampleMode) void openExample()
+
+async function openExample() {
+  const { buildings, selected, origin, plan: examplePlan } = await loadExample()
+  show(buildings, selected, origin, false)
+  setPlan(examplePlan)
+  ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
+  setView('3d')
+}
 
 function walkInside() {
   setView('3d')
@@ -80,6 +92,7 @@ let pending: AbortController | undefined
 let last: Pick | undefined
 
 function pick(lat: number, lon: number) {
+  exampleMode = false // from here on it is the user's own building: plans load and save as usual
   pending?.abort()
   chip.hide()
   const token = ++current
@@ -112,7 +125,7 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   sunScene.setBuildings(buildings, selected.id, { keepCamera })
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id })
   else {
-    const saved = loadSavedPlan(selected.id)
+    const saved = exampleMode ? null : loadSavedPlan(selected.id)
     setPlan(saved ? rebasePlan(saved, origin) : undefined)
   }
   ui.setLocation(origin.lat, origin.lon)

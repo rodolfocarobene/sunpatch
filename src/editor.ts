@@ -104,7 +104,12 @@ function button(text: string, title: string, onClick: () => void): HTMLButtonEle
   return b
 }
 
-export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) => void): PlanEditor {
+export function createPlanEditor(
+  container: HTMLElement,
+  onChange: (plan: Plan) => void,
+  /** autosave() false keeps edits out of localStorage (the built-in example). */
+  { autosave = () => true }: { autosave?: () => boolean } = {},
+): PlanEditor {
   const root = document.createElement('div')
   root.className = 'editor'
   root.hidden = true
@@ -300,7 +305,7 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
 
   function persist(): void {
     if (!plan) return
-    savePlan(plan)
+    if (autosave()) savePlan(plan)
     onChange(clone(plan))
   }
 

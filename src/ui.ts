@@ -20,6 +20,8 @@ export interface UI {
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
   stepTime(minutes: number): void
   togglePlay(): void
+  /** Sets the date (YYYY-MM-DD) and the time of day in minutes. */
+  setWhen(date: string, minutes: number): void
   /** Called after every sun update with the selected date and time. */
   onChange(listener: (when: Date, sun: SunDirection) => void): void
 }
@@ -34,6 +36,7 @@ export function createUI(
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
+    <a id="about" href="../" title="About Sunpatch">&larr; Sunpatch</a>
     <nav id="views">
       <button type="button" data-view="map">Map</button>
       <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
@@ -151,6 +154,11 @@ export function createUI(
     },
     stepTime(minutes) {
       time.value = String((((Number(time.value) + minutes) % 1440) + 1440) % 1440)
+      refresh()
+    },
+    setWhen(d, minutes) {
+      date.value = d
+      time.value = String(minutes)
       refresh()
     },
     togglePlay() {
