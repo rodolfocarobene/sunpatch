@@ -3,7 +3,9 @@
 See where the sun comes into your home: pick your building on a map, sketch your apartment and its windows,
 then walk inside in 3D and watch the sun patches move across the floor for any day of the year.
 
-<!-- DEMO -->
+[![Demo: pick a building, sketch the apartment, watch the sun move and step inside](docs/demo.gif)](docs/demo.mp4)
+
+*Click the animation for the full video (45 s).*
 
 Sun in House runs entirely in the browser. Building footprints and heights come from
 [OpenStreetMap](https://www.openstreetmap.org/), the sun position from [SunCalc](https://github.com/mourner/suncalc),
@@ -25,7 +27,12 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
   look around.
 - Plans are saved in the browser automatically and can be exported and imported as JSON.
 
-<!-- SCREENSHOTS -->
+| | |
+|---|---|
+| ![Pick a building on the map](docs/screenshot-map.png) | ![Sketch the floor plan and windows](docs/screenshot-plan.png) |
+| Pick a building on the map | Sketch the floor plan and windows |
+| ![3D cutaway with neighbourhood shadows](docs/screenshot-cutaway.png) | ![First-person view with sun through the windows](docs/screenshot-walk.png) |
+| 3D cutaway with neighbourhood shadows | Walk inside and see the sun patches |
 
 ## Quick start
 
