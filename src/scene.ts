@@ -33,6 +33,8 @@ import { insideOutline, walkStart } from './walk-geom'
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
 const DATA_EXTENT = { ground: 700, shadow: 280, sunDistance: 500 }
 const SELECTED_COLOR = 0xe8a15a
+// Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
+const ADDED_COLOR = 0xf2bd84
 const OTHER_COLOR = 0xb8b8c0
 const FLOOR_COLOR = 0xd8cfc0
 const WALL_COLOR = 0xf2efe9
@@ -59,7 +61,7 @@ export interface SunScene {
   update(sun: SunDirection): void
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
   setBuildings(buildings: Building[], selectedId: string, options?: { keepCamera?: boolean }): void
-  /** Replaces the selected building by the building with this apartment carved out; null restores it. */
+  /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
   setPlan(plan: Plan | null): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
   setCutaway(on: boolean): void
@@ -216,6 +218,7 @@ export function createScene(container: HTMLElement): SunScene {
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
+  let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
   let floorMesh: Mesh | undefined
   let solidMeshes: Mesh[] = []
@@ -240,6 +243,10 @@ export function createScene(container: HTMLElement): SunScene {
     })
     for (const geometry of g.shell) apartmentMesh(geometry, shellMaterial)
     for (const geometry of g.ceiling) apartmentMesh(geometry, ceilingMaterial)
+    const addedMaterial = new MeshStandardMaterial({ color: ADDED_COLOR })
+    addedAboveMaterial = new MeshStandardMaterial({ color: ADDED_COLOR })
+    for (const geometry of g.added) apartmentMesh(geometry, addedMaterial)
+    for (const geometry of g.addedAbove) apartmentMesh(geometry, addedAboveMaterial)
     floorMesh = apartmentMesh(g.floor, floorMaterial)
     const wallMeshes = g.walls.map((geometry) => apartmentMesh(geometry, wallMaterial))
     solidMeshes = [floorMesh, ...wallMeshes]
@@ -266,10 +273,11 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   function applyCutaway() {
-    if (!ceilingMaterial) return
     // Still drawn into the shadow map (the depth pass ignores the material), but invisible to the camera.
     // Walking needs the ceiling whatever the user chose.
-    ceilingMaterial.colorWrite = ceilingMaterial.depthWrite = !cutaway || walking
+    for (const m of [ceilingMaterial, addedAboveMaterial]) {
+      if (m) m.colorWrite = m.depthWrite = !cutaway || walking
+    }
   }
 
   function apartmentBounds(b: Building, p: Plan) {
@@ -284,7 +292,7 @@ export function createScene(container: HTMLElement): SunScene {
     clearWorld()
     apartmentMeshes = new Set()
     glassMeshes = []
-    ceilingMaterial = undefined
+    ceilingMaterial = addedAboveMaterial = undefined
     glowMaterials = []
     floorMesh = undefined
     solidMeshes = []
