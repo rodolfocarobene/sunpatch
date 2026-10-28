@@ -1,5 +1,11 @@
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 
+export interface PolygonFeature {
+  type: 'Feature'
+  properties: Record<string, never>
+  geometry: { type: string; coordinates: unknown }
+}
+
 export interface GeoHit {
   lat: string
   lon: string
@@ -44,10 +50,10 @@ export function viewFor(hit: GeoHit):
   return { bounds: [w, s, e, n] }
 }
 
-export function polygonFeature(hit: GeoHit): GeoJSON.Feature | null {
+export function polygonFeature(hit: GeoHit): PolygonFeature | null {
   const g = hit.geojson
   if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return null
-  return { type: 'Feature', properties: {}, geometry: g as unknown as GeoJSON.Geometry }
+  return { type: 'Feature', properties: {}, geometry: g }
 }
 
 export function hitLabel(hit: GeoHit): string {
