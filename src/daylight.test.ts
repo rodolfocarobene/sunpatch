@@ -19,11 +19,11 @@ describe('presetDates', () => {
       ['summer', '2027-06-21'],
       ['today', '2026-10-28'],
     ])
-    expect(p[0].title).toBe('Winter solstice, 21 December')
+    expect(p[0].title).toBe('Winter solstice, 21 Dec')
   })
   it('swaps winter and summer south of the equator', () => {
     const p = presetDates(2026, -33.9, today)
-    expect(p.find((x) => x.id === 'winter')).toMatchObject({ date: '2026-06-21', title: 'Winter solstice, 21 June' })
+    expect(p.find((x) => x.id === 'winter')).toMatchObject({ date: '2026-06-21', title: 'Winter solstice, 21 Jun' })
     expect(p.find((x) => x.id === 'summer')!.date).toBe('2026-12-21')
   })
   it('finds the active preset by date', () => {

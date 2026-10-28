@@ -17,6 +17,8 @@ export interface MapView {
   setLoading(loading: boolean): void
   /** `building` features of the vector tiles loaded so far (empty before the map has loaded). */
   getTileBuildings(): TileBuilding[]
+  /** Puts the cursor in the place search. */
+  focusSearch(): void
 }
 
 export function createMapView(
@@ -210,6 +212,7 @@ export function createMapView(
     },
     setStatus,
     getTileBuildings,
+    focusSearch: () => input.focus(),
     setLoading(loading) {
       root.classList.toggle('loading', loading)
       if (loading) setStatus('Loading buildings from OpenStreetMap...')

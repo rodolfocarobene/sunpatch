@@ -22,15 +22,19 @@ export interface PresetDate {
 const pad = (n: number) => String(n).padStart(2, '0')
 export const dateValue = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** The one short date format of the app: "21 Dec" (month is 0-11). */
+export const dayLabel = (month: number, day: number) => `${day} ${MONTHS[month]}`
+
 /** Solstices and the March equinox in `year`; Winter and Summer swap south of the equator. */
 export function presetDates(year: number, lat: number, today: Date): PresetDate[] {
   const south = lat < 0
   const dec = `${year}-12-21`
   const jun = `${year}-06-21`
   return [
-    { id: 'winter', label: 'Winter', title: `Winter solstice, ${south ? '21 June' : '21 December'}`, date: south ? jun : dec },
-    { id: 'equinox', label: 'Equinox', title: 'March equinox, 20 March', date: `${year}-03-20` },
-    { id: 'summer', label: 'Summer', title: `Summer solstice, ${south ? '21 December' : '21 June'}`, date: south ? dec : jun },
+    { id: 'winter', label: 'Winter', title: `Winter solstice, ${south ? dayLabel(5, 21) : dayLabel(11, 21)}`, date: south ? jun : dec },
+    { id: 'equinox', label: 'Equinox', title: `March equinox, ${dayLabel(2, 20)}`, date: `${year}-03-20` },
+    { id: 'summer', label: 'Summer', title: `Summer solstice, ${south ? dayLabel(11, 21) : dayLabel(5, 21)}`, date: south ? dec : jun },
     { id: 'today', label: 'Today', title: 'Today', date: dateValue(today) },
   ]
 }

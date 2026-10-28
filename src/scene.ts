@@ -61,7 +61,7 @@ const GROUND_COLOR = 0x8a9880
 // The app's --accent and --accent-strong: the apartment outline along its wall tops, and its ghost when the floors above are shown.
 const OUTLINE_COLOR = 0xf5a623
 const OUTLINE_GHOST_COLOR = 0xb45f06
-const OUTLINE_GHOST_OPACITY = 0.6
+const OUTLINE_GHOST_OPACITY = 0.8
 // Above the wall tops, which are flush with the rest of the storey.
 const OUTLINE_LIFT = 0.03
 // About 4 px on screen at the usual orbit distance (a 0.16 m ribbon came out at 2 px); the same as the facade wall it sits on.
@@ -394,7 +394,8 @@ export function createScene(container: HTMLElement): SunScene {
     geometry.setIndex(indices)
     // Flat colour, not lit or tone-mapped, so it stays the app's amber.
     const flat = { side: DoubleSide, depthWrite: false, toneMapped: false } as const
-    const solid = new Mesh(geometry, new MeshBasicMaterial({ ...flat, color: OUTLINE_COLOR, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
+    // transparent (opacity 1) only to sort after the dark edge lines of the walls instead of under them.
+    const solid = new Mesh(geometry, new MeshBasicMaterial({ ...flat, color: OUTLINE_COLOR, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
     const ghost = new Mesh(
       geometry.clone(),
       new MeshBasicMaterial({ ...flat, color: OUTLINE_GHOST_COLOR, transparent: true, opacity: OUTLINE_GHOST_OPACITY, depthTest: false }),

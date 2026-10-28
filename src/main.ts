@@ -18,6 +18,7 @@ import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
+import { dayLabel } from './daylight'
 import { createUI, sunSentence, TIME_FORMAT, type View } from './ui'
 import { createWalkHud } from './walk'
 
@@ -38,7 +39,7 @@ sunScene.setWalkHandlers({
 })
 ui.onChange((when, sun) =>
   hud.setStatus(
-    `${when.getDate()} ${when.toLocaleDateString('en-GB', { month: 'short' })} ` +
+    `${dayLabel(when.getMonth(), when.getDate())} ` +
       `${when.toLocaleTimeString([], TIME_FORMAT)} \u00b7 ${sunSentence(sun, 'up')}`,
   ),
 )
@@ -52,6 +53,7 @@ const chip = createStatusChip(app, () => last && void refine(last, current))
 let view: View = 'map'
 setView('map')
 if (exampleMode) void openExample()
+else mapView.focusSearch() // the search is the first thing to do on the map
 
 async function openExample() {
   const { buildings, selected, origin, plan: examplePlan } = await loadExample()

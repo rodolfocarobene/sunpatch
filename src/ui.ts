@@ -141,8 +141,11 @@ export function createUI(
     const set = formatTime(times.sunset)
     strip.title = day.info.polar === 'day' ? 'Sun up all day' : day.info.polar === 'night' ? 'Sun below the horizon all day' : `Daylight ${rise} to ${set}`
     summary.title = `Azimuth ${sun.azimuthDeg.toFixed(1)} deg from north, altitude ${sun.altitudeDeg.toFixed(1)} deg`
+    // Two deliberate lines instead of one that wraps at an arbitrary word.
+    const { where, height } = sunParts(sun)
     summary.innerHTML =
-      `<strong>${sunSentence(sun)}</strong>` +
+      `<strong>${where}</strong>` +
+      (height ? `<span>${height}</span>` : '') +
       `<span>${rise && set ? `Sunrise ${rise} \u00b7 Sunset ${set}` : 'No sunrise or sunset on this date'}</span>`
   }
 
@@ -290,9 +293,15 @@ function formatTime(d: Date | null): string {
 
 const WORDS: Record<string, string> = { N: 'north', E: 'east', S: 'south', W: 'west' }
 
+/** The two halves of the sun sentence: where it is, and how high (empty while it is down). */
+export function sunParts(sun: SunDirection, tail = 'above the horizon'): { where: string; height: string } {
+  if (sun.altitudeDeg <= 0) return { where: 'Sun below the horizon', height: '' }
+  const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
+  return { where: `Sun in the ${dir}`, height: `${sun.altitudeDeg.toFixed(0)}\u00b0 ${tail}` }
+}
+
 /** Plain-language sun position; `tail` ends the sentence after the altitude in degrees. */
 export function sunSentence(sun: SunDirection, tail = 'above the horizon'): string {
-  if (sun.altitudeDeg <= 0) return 'Sun below the horizon'
-  const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
-  return `Sun in the ${dir}, ${sun.altitudeDeg.toFixed(0)}\u00b0 ${tail}`
+  const { where, height } = sunParts(sun, tail)
+  return height ? `${where}, ${height}` : where
 }
