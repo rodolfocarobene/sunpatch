@@ -163,5 +163,17 @@ export function validatePlan(value: unknown): { plan: Plan } | { error: string }
       return { error: 'Invalid window size' }
     }
   }
+  if (p.viewpoint !== undefined) {
+    const v = p.viewpoint
+    if (!v || !isNum(v.x) || !isNum(v.z) || !isNum(v.yaw)) return { error: 'Invalid viewpoint' }
+  }
+  if (p.edits !== undefined) {
+    if (!Array.isArray(p.edits)) return { error: 'Invalid edits' }
+    for (const e of p.edits) {
+      if (!e || (e.kind !== 'add' && e.kind !== 'cut')) return { error: 'Invalid edit kind' }
+      if (!isRing(e.outline)) return { error: 'Invalid edit outline' }
+      if (!isNum(e.bottom) || !isNum(e.top) || e.bottom >= e.top) return { error: 'Invalid edit heights' }
+    }
+  }
   return { plan: p }
 }

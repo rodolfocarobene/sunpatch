@@ -110,4 +110,25 @@ describe('validatePlan', () => {
     expect(validatePlan({ ...plan, windows: [{ ...plan.windows[0], edge: 9 }] })).toHaveProperty('error')
     expect(validatePlan({ ...plan, walls: [{ a: sq[0], b: sq[1], thickness: 'x' }] })).toHaveProperty('error')
   })
+  it('accepts a viewpoint and edits', () => {
+    const full: Plan = {
+      ...plan,
+      viewpoint: { x: 5, z: 5, yaw: 1.2 },
+      edits: [{ kind: 'add', outline: sq, bottom: 2.8, top: 3 }, { kind: 'cut', outline: sq, bottom: 0, top: 15 }],
+    }
+    expect(validatePlan(JSON.parse(JSON.stringify(full)))).toEqual({ plan: full })
+  })
+  it('rejects a bad viewpoint', () => {
+    expect(validatePlan({ ...plan, viewpoint: { x: 1, z: 2 } })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, viewpoint: { x: 1, z: NaN, yaw: 0 } })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, viewpoint: null })).toHaveProperty('error')
+  })
+  it('rejects bad edits', () => {
+    const e = { kind: 'add', outline: sq, bottom: 0, top: 3 }
+    expect(validatePlan({ ...plan, edits: 'x' })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, edits: [{ ...e, kind: 'raise' }] })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, edits: [{ ...e, outline: sq.slice(0, 2) }] })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, edits: [{ ...e, bottom: 3 }] })).toHaveProperty('error')
+    expect(validatePlan({ ...plan, edits: [{ ...e, top: Infinity }] })).toHaveProperty('error')
+  })
 })
