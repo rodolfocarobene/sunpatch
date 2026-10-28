@@ -1,7 +1,8 @@
 import './editor.css'
+import { pointInPolygon, ringArea } from './osm'
 import type { Building, Point } from './osm'
-import { DEFAULT_WALL_THICKNESS, DEFAULT_WINDOW, levelCount, ringOf } from './plan'
-import type { Plan } from './plan'
+import { DEFAULT_WALL_THICKNESS, DEFAULT_WINDOW, floorBase, levelCount, ringOf } from './plan'
+import type { BuildingEdit, Plan } from './plan'
 import {
   clampWindowT,
   constrainToDirections,
@@ -15,7 +16,8 @@ import {
   validatePlan,
 } from './editor-geom'
 import type { Segment, Snap } from './editor-geom'
-import { drawScene, windowSegment } from './editor-draw'
+import { isWalkable, yawOf } from './walk-geom'
+import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
 
 export interface PlanEditor {
@@ -25,7 +27,7 @@ export interface PlanEditor {
   getPlan(): Plan
 }
 
-type Tool = 'select' | 'outline' | 'wall' | 'window'
+type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix'
 
 const SNAP_PX = 10
 const HIT_PX = 8
@@ -39,7 +41,10 @@ const HELP: Record<Tool, string> = {
   outline: 'Outline: click points; double-click or click the first point to close; Esc cancels. Replaces the outline and clears windows.',
   wall: 'Wall: click start, click end (Shift = 0/90 deg to the nearest outline edge); Esc cancels.',
   window: 'Window: click near an outline edge to add a window; click an existing one to select it.',
+  fix: 'Building fix: click points of a balcony or wall part (Shift = 90 deg); double-click or click the first point to close; Esc cancels.',
 }
+const VIEWPOINT_HELP = 'Walk start: this is where Walk inside puts you. Drag the camera to move it, the white dot to turn it.'
+const VIEWPOINT_CLEARANCE = 0.25
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
@@ -66,6 +71,8 @@ type Drag =
   | { kind: 'pan'; sx: number; sy: number; cx: number; cz: number }
   | { kind: 'window'; index: number; before: Plan }
   | { kind: 'wallEnd'; index: number; end: 'a' | 'b'; before: Plan }
+  | { kind: 'viewpoint'; mode: 'move' | 'rotate'; dx: number; dz: number; before: Plan }
+  | { kind: 'editVertex'; index: number; vertex: number; before: Plan }
 
 function field(label: string, input: HTMLElement): HTMLLabelElement {
   const l = document.createElement('label')
@@ -127,16 +134,37 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
   let needsFit = false
   let visible = false
   let message: { text: string; kind: 'info' | 'error' } | undefined
+  let newKind: BuildingEdit['kind'] = 'add'
 
   // --- toolbar ---
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
-  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window']] as const) {
+  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Building fix']] as const) {
     const b = button(label, `${label} tool`, () => setTool(t))
     toolButtons.set(t, b)
     toolRow.appendChild(b)
   }
+  const kindRow = document.createElement('div')
+  kindRow.className = 'editor-row'
+  kindRow.hidden = true
+  const kindButtons = new Map<BuildingEdit['kind'], HTMLButtonElement>()
+  for (const [k, label, tip] of [
+    ['add', 'Add', 'New fixes add volume (balcony, bay)'],
+    ['cut', 'Cut', 'New fixes remove volume (recess, loggia)'],
+  ] as const) {
+    const b = button(label, tip, () => {
+      newKind = k
+      updateKindRow()
+    })
+    kindButtons.set(k, b)
+    kindRow.appendChild(b)
+  }
+  kindRow.prepend(Object.assign(document.createElement('small'), { textContent: 'New fix is a:' }))
+  const updateKindRow = (): void => {
+    for (const [k, b] of kindButtons) b.setAttribute('aria-pressed', String(k === newKind))
+  }
+  updateKindRow()
   const actionRow = document.createElement('div')
   actionRow.className = 'editor-row'
   const fileInput = document.createElement('input')
@@ -155,12 +183,13 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
   const floorBox = document.createElement('div')
   floorBox.className = 'editor-row'
   floorBox.style.flexDirection = 'column'
-  toolbar.append(toolRow, actionRow, floorBox)
+  toolbar.append(toolRow, kindRow, actionRow, floorBox)
 
   function setTool(t: Tool): void {
     tool = t
     draft = { outline: [] }
     root.dataset.tool = t
+    kindRow.hidden = t !== 'fix'
     for (const [name, b] of toolButtons) b.setAttribute('aria-pressed', String(name === t))
     message = undefined
     render()
@@ -191,7 +220,25 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     props.hidden = false
     const p = plan
     const sel = selection
-    if (sel.kind === 'window') {
+    if (sel.kind === 'viewpoint') {
+      const vp = effectiveViewpoint(p)
+      const heading = Math.round((((-vp.yaw * 180) / Math.PI) % 360 + 360) % 360)
+      const hint = document.createElement('small')
+      hint.textContent = 'This is where Walk inside puts you. Drag the camera to move it (only on clear floor), drag the white dot to turn it.'
+      const state = document.createElement('output')
+      state.textContent = vp.auto ? 'Automatic' : 'Fixed'
+      const reset = button('Reset to automatic', 'Forget the fixed position; Walk inside picks it from the plan', resetViewpoint)
+      reset.disabled = vp.auto
+      props.replaceChildren(
+        Object.assign(document.createElement('h4'), { textContent: 'Walk start' }),
+        field('Position', state),
+        field('Heading (0 = N, 90 = E)', Object.assign(document.createElement('output'), { textContent: String(heading) })),
+        hint,
+        reset,
+      )
+    } else if (sel.kind === 'edit') {
+      props.replaceChildren(...editProps(p, sel.index))
+    } else if (sel.kind === 'window') {
       const w = p.windows[sel.index]
       const ring = ringOf(p, w.ring)
       const a = ring[w.edge]
@@ -261,9 +308,29 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     const prev = history.pop()
     if (!prev) return setMessage('Nothing to undo')
     plan = prev
-    if (selection && !(selection.kind === 'window' ? plan.windows : plan.walls)[selection.index]) selection = null
+    if (selection && selection.kind !== 'viewpoint' && !selectionList(plan, selection.kind)[selection.index]) selection = null
     persist()
     render()
+  }
+
+  function selectionList(p: Plan, kind: 'window' | 'wall' | 'edit'): unknown[] {
+    return kind === 'window' ? p.windows : kind === 'wall' ? p.walls : (p.edits ??= [])
+  }
+
+  function resetViewpoint(): void {
+    if (!plan?.viewpoint) return
+    const next = clone(plan)
+    delete next.viewpoint
+    commit(next)
+    updateProps(true)
+    setMessage('Walk start is automatic again')
+  }
+
+  /** Drops a fixed viewpoint that no longer stands on clear floor; true when it did. */
+  function dropStaleViewpoint(next: Plan): boolean {
+    if (!next.viewpoint || isWalkable(next, next.viewpoint, VIEWPOINT_CLEARANCE)) return false
+    delete next.viewpoint
+    return true
   }
 
   function wholeFloor(): void {
@@ -271,15 +338,17 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     const next = clone(plan)
     next.outline = { outer: clone(building.outer), holes: clone(building.holes) }
     next.windows = []
+    const dropped = dropStaleViewpoint(next)
     selection = null
     commit(next)
-    setMessage('Outline reset to the building footprint; windows cleared')
+    setMessage(`Outline reset to the building footprint; windows cleared${dropped ? '; walk start is automatic again' : ''}`)
   }
 
   function deleteSelected(): void {
     if (!plan || !selection) return
+    if (selection.kind === 'viewpoint') return resetViewpoint()
     const next = clone(plan)
-    ;(selection.kind === 'window' ? next.windows : next.walls).splice(selection.index, 1)
+    selectionList(next, selection.kind).splice(selection.index, 1)
     selection = null
     commit(next)
   }
@@ -355,6 +424,11 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
 
   function constrainWall(start: Point, p: Point): Point {
     const segments = wallSnapTargets(undefined).segments.slice(0, plan!.outline.outer.length + plan!.outline.holes.reduce((n, h) => n + h.length, 0))
+    return constrainAlong(start, p, segments)
+  }
+
+  /** Projects p onto the direction of the segment nearest to `start` or its perpendicular. */
+  function constrainAlong(start: Point, p: Point, segments: Segment[]): Point {
     let best: Segment | undefined
     let bestD = Infinity
     for (const [a, b] of segments) {
@@ -366,6 +440,26 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     }
     const u = (best && unitDirection(best[0], best[1])) ?? { x: 1, z: 0 }
     return constrainToDirections(start, p, [u, { x: -u.z, z: u.x }])
+  }
+
+  function fixSnapTargets(skipEdit?: number): { vertices: Point[]; segments: Segment[] } {
+    const rings = [...footprintRings(), plan!.outline.outer, ...plan!.outline.holes]
+    ;(plan!.edits ?? []).forEach((e, i) => {
+      if (i !== skipEdit) rings.push(e.outline)
+    })
+    return { vertices: rings.flat(), segments: rings.flatMap(ringSegments) }
+  }
+
+  function snapForFix(p: Point, skipEdit?: number): Snap {
+    const { vertices, segments } = fixSnapTargets(skipEdit)
+    return snapPoint(p, [...vertices, ...draft.outline.slice(0, 1)], segments, tol(SNAP_PX))
+  }
+
+  function fixPoint(e: MouseEvent): Snap {
+    const p = eventPoint(e)
+    const last = draft.outline[draft.outline.length - 1]
+    if (e.shiftKey && last) return { point: constrainAlong(last, p, fixSnapTargets().segments), kind: 'none' }
+    return snapForFix(p)
   }
 
   function wallPoint(e: MouseEvent, start: Point | undefined, skip?: number): Snap {
@@ -403,7 +497,103 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     return best
   }
 
+  function hitEdit(p: Point): number {
+    const edits = plan?.edits ?? []
+    let best = -1
+    let bestArea = Infinity
+    edits.forEach((e, i) => {
+      const edge = ringSegments(e.outline).some(([a, b]) => distanceToSegment(p, a, b) <= tol(HIT_PX))
+      const area = Math.abs(ringArea(e.outline))
+      if ((edge || pointInPolygon(p, e.outline)) && area < bestArea) {
+        best = i
+        bestArea = area
+      }
+    })
+    return best
+  }
+
   // --- tools ---
+  function finishFix(): void {
+    if (!plan || !building) return
+    const pts = draft.outline
+    if (pts.length < 3) return setMessage('A fix needs at least 3 points', 'error')
+    if (selfIntersects(pts)) return setMessage('Shape crosses itself; adjust the points', 'error')
+    const next = clone(plan)
+    const bottom = floorBase(building, plan)
+    const edit: BuildingEdit = { kind: newKind, outline: clone(pts), bottom, top: bottom + plan.floorHeight }
+    next.edits = [...(next.edits ?? []), edit]
+    selection = { kind: 'edit', index: next.edits.length - 1 }
+    draft = { outline: [] }
+    message = undefined
+    commit(next)
+    setMessage('Fix added; set its heights in the box on the right (presets for balconies)')
+  }
+
+  function fixClick(e: MouseEvent): void {
+    const snap = fixPoint(e)
+    const pts = draft.outline
+    if (pts.length >= 3 && Math.hypot(snap.point.x - pts[0].x, snap.point.z - pts[0].z) < 1e-6) return finishFix()
+    const last = pts[pts.length - 1]
+    if (last && Math.hypot(snap.point.x - last.x, snap.point.z - last.z) < tol(2)) return
+    pts.push(snap.point)
+    message = undefined
+    render()
+  }
+
+  function editProps(p: Plan, index: number): HTMLElement[] {
+    const e = p.edits![index]
+    const b = building!
+    const base = floorBase(b, p)
+    const patch = (change: Partial<BuildingEdit>): void => {
+      const next = clone(p)
+      Object.assign(next.edits![index], change)
+      commit(next)
+      updateProps(true)
+    }
+    const kind = document.createElement('select')
+    for (const [v, label] of [['add', 'Add (solid volume)'], ['cut', 'Cut (remove volume)']]) kind.add(new Option(label, v, false, v === e.kind))
+    kind.addEventListener('change', () => patch({ kind: kind.value as BuildingEdit['kind'] }))
+    const heights = (bottom: number, top: number): void => {
+      if (top <= bottom) return setMessage('Top must be above bottom', 'error')
+      patch({ bottom, top })
+    }
+    const copy = (sign: 1 | -1): void => {
+      const shift = sign * p.floorHeight
+      if (e.top + shift <= b.minHeight) return setMessage('That would be below the ground', 'error')
+      const next = clone(p)
+      next.edits!.push({ ...clone(e), bottom: e.bottom + shift, top: e.top + shift })
+      selection = { kind: 'edit', index: next.edits!.length - 1 }
+      commit(next)
+      updateProps(true)
+      setMessage(`Copied one floor ${sign > 0 ? 'up' : 'down'}`)
+    }
+    const hint = document.createElement('small')
+    hint.textContent = 'Heights are metres above the ground. The parapet preset shows the slab as a solid block up to parapet height.'
+    const presets = document.createElement('div')
+    presets.className = 'editor-row'
+    presets.style.flexDirection = 'column'
+    presets.append(
+      button('Balcony slab on this floor', `Bottom ${(base - 0.2).toFixed(1)}, top ${base.toFixed(1)}: a floor you can stand on`, () => heights(base - 0.2, base)),
+      button('Balcony with parapet', `Bottom ${(base - 0.2).toFixed(1)}, top ${(base + 1).toFixed(1)}`, () => heights(base - 0.2, base + 1)),
+      button('Full height', 'From the building bottom to its top', () => heights(b.minHeight, b.height)),
+    )
+    const copies = document.createElement('div')
+    copies.className = 'editor-row'
+    copies.append(
+      button('Copy to floor above', 'Duplicate shifted up by one floor height', () => copy(1)),
+      button('Copy to floor below', 'Duplicate shifted down by one floor height', () => copy(-1)),
+    )
+    return [
+      Object.assign(document.createElement('h4'), { textContent: 'Building fix' }),
+      field('Kind', kind),
+      field('Bottom (m)', numberInput(e.bottom, 0.1, -50, (v) => heights(v, e.top))),
+      field('Top (m)', numberInput(e.top, 0.1, -50, (v) => heights(e.bottom, v))),
+      presets,
+      copies,
+      hint,
+    ]
+  }
+
   function finishOutline(): void {
     if (!plan) return
     const pts = draft.outline
@@ -413,10 +603,14 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     const hadWindows = next.windows.length > 0
     next.outline = { outer: clone(pts), holes: [] }
     next.windows = []
+    const dropped = dropStaleViewpoint(next)
     selection = null
     draft = { outline: [] }
     commit(next)
-    setMessage(hadWindows ? 'Outline replaced; its windows were cleared' : 'Outline replaced')
+    setMessage(
+      (hadWindows ? 'Outline replaced; its windows were cleared' : 'Outline replaced') +
+        (dropped ? '; the walk start was off the floor, so it is automatic again' : ''),
+    )
   }
 
   function outlineClick(e: MouseEvent): void {
@@ -473,6 +667,23 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
   function selectDown(e: PointerEvent): void {
     if (!plan) return
     const p = eventPoint(e)
+    const vp = effectiveViewpoint(plan)
+    const tip = viewTip(vp)
+    const near = (q: Point, px: number): boolean => Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(tol(px), 0.2)
+    if (near(tip, 9) || near(vp, 13)) {
+      const mode = near(tip, 9) ? 'rotate' : 'move'
+      selection = { kind: 'viewpoint', index: 0 }
+      message = { text: VIEWPOINT_HELP, kind: 'info' }
+      drag = { kind: 'viewpoint', mode, dx: vp.x - p.x, dz: vp.z - p.z, before: clone(plan) }
+      return render()
+    }
+    if (selection?.kind === 'edit') {
+      const vertex = plan.edits![selection.index].outline.findIndex((q) => near(q, HIT_PX))
+      if (vertex >= 0) {
+        drag = { kind: 'editVertex', index: selection.index, vertex, before: clone(plan) }
+        return
+      }
+    }
     if (selection?.kind === 'wall') {
       const w = plan.walls[selection.index]
       const end = [['a', w.a], ['b', w.b]].find(([, q]) => Math.hypot((q as Point).x - p.x, (q as Point).z - p.z) <= tol(HIT_PX))
@@ -490,6 +701,11 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     const wl = hitWall(p)
     if (wl >= 0) {
       selection = { kind: 'wall', index: wl }
+      return render()
+    }
+    const ed = hitEdit(p)
+    if (ed >= 0) {
+      selection = { kind: 'edit', index: ed }
       return render()
     }
     selection = null
@@ -514,6 +730,17 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
       const b = ring[(w.edge + 1) % ring.length]
       const t = clampWindowT(projectOnSegment(eventPoint(e), a, b).t, w.width, Math.hypot(b.x - a.x, b.z - a.z))
       if (t !== null) w.t = t
+    } else if (drag.kind === 'viewpoint') {
+      const p = eventPoint(e)
+      const base = plan.viewpoint ?? effectiveViewpoint(plan)
+      if (drag.mode === 'move') {
+        const to = { x: p.x + drag.dx, z: p.z + drag.dz }
+        if (isWalkable(plan, to, VIEWPOINT_CLEARANCE)) plan.viewpoint = { x: to.x, z: to.z, yaw: base.yaw }
+      } else if (Math.hypot(p.x - base.x, p.z - base.z) > 0.05) {
+        plan.viewpoint = { x: base.x, z: base.z, yaw: yawOf(p.x - base.x, p.z - base.z) }
+      }
+    } else if (drag.kind === 'editVertex') {
+      plan.edits![drag.index].outline[drag.vertex] = snapForFix(eventPoint(e), drag.index).point
     } else {
       plan.walls[drag.index][drag.end] = wallPoint(e, plan.walls[drag.index][drag.end === 'a' ? 'b' : 'a'], drag.index).point
     }
@@ -533,6 +760,7 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     if (tool === 'select') selectDown(e)
     else if (tool === 'outline') outlineClick(e)
     else if (tool === 'wall') wallClick(e)
+    else if (tool === 'fix') fixClick(e)
     else windowClick(e)
   })
 
@@ -541,6 +769,10 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
     if (drag) return dragMove(e)
     if (tool === 'outline') {
       const snap = snapForOutline(eventPoint(e))
+      draft.cursor = snap.point
+      draft.snap = snap
+    } else if (tool === 'fix') {
+      const snap = fixPoint(e)
       draft.cursor = snap.point
       draft.snap = snap
     } else if (tool === 'wall') {
@@ -567,6 +799,7 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
 
   svg.addEventListener('dblclick', () => {
     if (tool === 'outline' && draft.outline.length >= 3) finishOutline()
+    else if (tool === 'fix' && draft.outline.length >= 3) finishFix()
   })
 
   svg.addEventListener('wheel', (e) => {
@@ -598,7 +831,7 @@ export function createPlanEditor(container: HTMLElement, onChange: (plan: Plan) 
       render()
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault()
-      if (tool === 'outline' && draft.outline.length) draft.outline.pop()
+      if ((tool === 'outline' || tool === 'fix') && draft.outline.length) draft.outline.pop()
       else deleteSelected()
       render()
     }
