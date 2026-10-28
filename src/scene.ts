@@ -87,7 +87,7 @@ export interface SunScene {
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
   setBuildings(buildings: Building[], selectedId: string, options?: { keepCamera?: boolean }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
-  setPlan(plan: Plan | null): void
+  setPlan(plan: Plan | null, options?: { close?: boolean }): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
   setCutaway(on: boolean): void
   /** Enters first person in the apartment at scene point `at` (default: the plan's viewpoint, else a clear spot near the middle); false without a plan. */
@@ -395,10 +395,10 @@ export function createScene(container: HTMLElement): SunScene {
     for (const { line, ceiling } of aptLines) line.visible = on && (!ceiling || !cutaway || walking)
   }
 
-  function apartmentBounds(b: Building, p: Plan) {
+  function apartmentBounds(b: Building, p: Plan, tight = false) {
     const c = ringCentroid(p.outline.outer)
     let radius = 5
-    for (const q of [...b.outer, ...p.outline.outer]) radius = Math.max(radius, Math.hypot(q.x - c.x, q.z - c.z))
+    for (const q of tight ? p.outline.outer : [...b.outer, ...p.outline.outer]) radius = Math.max(radius, Math.hypot(q.x - c.x, q.z - c.z))
     return { c, radius }
   }
 
@@ -460,8 +460,8 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   // From above at ~45 degrees, on the side opposite the windows so they are seen from inside.
-  function frameApartment(b: Building, p: Plan) {
-    const { c, radius } = apartmentBounds(b, p)
+  function frameApartment(b: Building, p: Plan, tight: boolean) {
+    const { c, radius } = apartmentBounds(b, p, tight)
     const out = new Vector3()
     for (const w of p.windows) {
       const ring = w.ring === 0 ? p.outline.outer : p.outline.holes[w.ring - 1]
@@ -473,7 +473,7 @@ export function createScene(container: HTMLElement): SunScene {
     }
     const side = out.lengthSq() > 1e-6 ? out.normalize().negate() : new Vector3(0, 0, 1)
     const target = new Vector3(c.x, floorBase(b, p) + 1, c.z)
-    const dist = radius * 3 + 6
+    const dist = radius * (tight ? 4.5 : 3) + 6
     frame(target.clone().addScaledVector(side, dist * 0.7).setY(target.y + dist * 0.7), target)
   }
 
@@ -487,7 +487,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (selected && !keepCamera) frameBuilding(selected)
   }
 
-  function setPlan(next: Plan | null) {
+  function setPlan(next: Plan | null, { close = false } = {}) {
     const selected = buildings.find((b) => b.id === selectedId)
     const accepted = next && selected && next.buildingId === selected.id ? next : null
     const first = accepted && !plan
@@ -496,7 +496,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (accepted && selected && first) {
       cutaway = true
       applyCutaway()
-      frameApartment(selected, accepted)
+      frameApartment(selected, accepted, close)
     }
   }
 

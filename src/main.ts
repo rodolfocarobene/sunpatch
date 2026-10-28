@@ -60,7 +60,7 @@ if (exampleMode) void openExample()
 async function openExample() {
   const { buildings, selected, origin, plan: examplePlan } = await loadExample()
   show(buildings, selected, origin, false)
-  setPlan(examplePlan)
+  setPlan(examplePlan, true)
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
   setView('3d')
 }
@@ -151,9 +151,10 @@ function openEditor(): boolean {
   return true
 }
 
-function setPlan(next: Plan | undefined) {
+/** close: frame the apartment itself rather than the whole building. */
+function setPlan(next: Plan | undefined, close = false) {
   plan = next
-  sunScene.setPlan(next ?? null)
+  sunScene.setPlan(next ?? null, { close })
   ui.setPlanActive(next !== undefined)
 }
 

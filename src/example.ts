@@ -20,7 +20,7 @@ const inside = (ring: Point[], p: Point) => buildingContains({ outer: ring, hole
 /** The sample apartment: floor 1, 12 x 10 m on the facade that faces the afternoon sun most, three French windows, one wall. */
 export function examplePlan(selected: Building, origin: Origin): Plan {
   const ring = selected.outer
-  let facade: { a: Point; u: Point; n: Point; score: number } | undefined
+  let facade: { b: Point; u: Point; n: Point; score: number } | undefined
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i]
     const b = ring[(i + 1) % ring.length]
@@ -31,10 +31,13 @@ export function examplePlan(selected: Building, origin: Origin): Plan {
     const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }
     if (!inside(ring, { x: mid.x + n.x * 0.5, z: mid.z + n.z * 0.5 })) n = { x: -n.x, z: -n.z }
     const score = len * Math.max(0, n.x * 0.707 - n.z * 0.707) // outward normal toward south-west
-    if (!facade || score > facade.score) facade = { a, u, n, score }
+    if (!facade || score > facade.score) facade = { b, u, n, score }
   }
   if (!facade) throw new Error('example building has no facade long enough')
-  const { a, u, n } = facade
+  // Measure from the far end of the facade (the sunnier part of this building, as in the README demo).
+  const { n } = facade
+  const a = facade.b
+  const u = { x: -facade.u.x, z: -facade.u.z }
   // s metres along the facade from its start, d metres inward
   const at = (s: number, d: number): Point => ({ x: a.x + u.x * s + n.x * d, z: a.z + u.z * s + n.z * d })
   const base = defaultPlan(selected, origin, 1)
