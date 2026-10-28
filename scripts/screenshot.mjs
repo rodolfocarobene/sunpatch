@@ -43,7 +43,7 @@ try {
   await setTime(page, 11 * 60)
   await page.waitForTimeout(1500)
   await page.screenshot({ path: `${out}/test-scene.png` })
-  await page.click('#viewToggle')
+  await page.click('#views [data-view="map"]')
   await page.waitForTimeout(5000)
   await page.screenshot({ path: `${out}/map.png` })
   await clickBuilding(page)
@@ -53,11 +53,32 @@ try {
   release()
   await page.waitForFunction(() => document.querySelector('#statusChip:not([hidden])')?.dataset.kind === 'done', null, { polling: 50 })
   await page.screenshot({ path: `${out}/osm-scene.png` })
+
+  // Plan: whole-floor outline on the picked building, windows spread along its outer ring.
+  await page.click('#views [data-view="plan"]')
+  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: 'Window', exact: true }).click()
+  const spots = await page.evaluate(() => {
+    const path = document.querySelector('.editor svg path[stroke="#b85a08"]')
+    const m = path.getScreenCTM()
+    const len = path.getTotalLength()
+    return [0.05, 0.2, 0.35, 0.5, 0.65, 0.8].map((f) => {
+      const p = path.getPointAtLength(f * len)
+      return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f }
+    })
+  })
+  for (const { x, y } of spots) await page.mouse.click(x, y)
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: `${out}/plan.png` })
+  await page.click('#views [data-view="3d"]')
+  await setTime(page, 11 * 60)
+  await page.waitForTimeout(2000)
+  await page.screenshot({ path: `${out}/plan-3d.png` })
   await page.close()
 
   // Every Overpass mirror fails: the tile scene stays and the chip offers a retry.
   page = await newPage((r) => r.fulfill({ status: 504, body: 'Gateway Timeout' }))
-  await page.click('#viewToggle')
+  await page.click('#views [data-view="map"]')
   await page.waitForTimeout(5000)
   await clickBuilding(page)
   await setTime(page, 11 * 60)
