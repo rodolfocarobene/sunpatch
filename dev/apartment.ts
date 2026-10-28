@@ -1,5 +1,6 @@
 // Dev page: a 12 x 10 m, 4 x 3 m test building with an apartment on floor 1 (3 windows south, 1 east).
 // /dev/apartment.html?date=2026-12-21&time=13:00&cutaway=1&half=1 (half: apartment covers only the west part),
+// &edits=1 (balcony slab over the south windows on the floor above, plus a notch cut from the NE corner),
 // &walk=1 (stand inside, looking at the windows; &at=x,z picks the spot).
 import { createScene } from '../src/scene'
 import type { Building, Point } from '../src/osm'
@@ -12,8 +13,12 @@ const time = params.get('time') ?? '13:00'
 const cutaway = params.get('cutaway') !== '0'
 const half = params.get('half') === '1'
 const walk = params.get('walk') === '1'
+const edits = params.get('edits') === '1'
 const origin = { lat: 45.4642, lon: 9.19 }
 
+const rect = (x0: number, z0: number, x1: number, z1: number): Point[] => [
+  { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
+]
 const box = (id: string, x0: number, z0: number, x1: number, z1: number, height: number): Building => ({
   id,
   outer: [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }],
@@ -46,6 +51,12 @@ const plan: Plan = {
     ...[0.2, 0.5, 0.8].map((t) => ({ ring: 0, edge: 2, t, width: 1.2, sill: 0.9, height: 1.4 })),
     { ring: 0, edge: 1, t: 0.5, width: 1.2, sill: 0.9, height: 1.4 },
   ],
+  ...(edits && {
+    edits: [
+      { kind: 'add', outline: rect(-2, 5, 4, 6.5), bottom: 6, top: 6.3 },
+      { kind: 'cut', outline: rect(2, -5, 6, -1), bottom: 6, top: 9 },
+    ],
+  }),
 }
 
 const sunScene = createScene(document.querySelector<HTMLElement>('#app')!)
