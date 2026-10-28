@@ -56,7 +56,7 @@ try {
   await page.waitForTimeout(500)
   await page.getByRole('button', { name: 'Window', exact: true }).click()
   const spots = await page.evaluate(() => {
-    const path = document.querySelector('.editor svg path[stroke="#b85a08"]')
+    const path = document.querySelector('.editor svg path[data-role="outline"]')
     const m = path.getScreenCTM()
     const len = path.getTotalLength()
     return [0.05, 0.2, 0.35, 0.5, 0.65, 0.8].map((f) => {

@@ -70,6 +70,18 @@ export interface Scene {
 }
 
 const NS = 'http://www.w3.org/2000/svg'
+
+// The warm app tokens of style.css (SVG attributes cannot read CSS variables).
+const C = {
+  surface: '#fffdf8',
+  text: '#1f2a37',
+  muted: '#526071',
+  line: '#e6d9bd',
+  lineStrong: '#d6c59f',
+  band: '#f4ead6',
+  accent: '#f5a623',
+  accentStrong: '#b45f06',
+}
 export const NORTH_ARROW_POS = { x: 320, y: 56 }
 export const SCALE_BAR_POS = { x: 300, y: 56 }
 
@@ -115,8 +127,8 @@ function drawGrid(g: SVGElement, v: View): void {
     for (let z = Math.ceil(z0 / step) * step; z <= z1; z += step) d += `M${x0} ${z}H${x1}`
     svgEl(g, 'path', { d, stroke, 'stroke-width': 1 / v.scale, fill: 'none' })
   }
-  if (v.scale >= 10) lines(1, '#e6e9ed')
-  lines(v.scale >= 2 ? 5 : 50, '#d0d5db')
+  if (v.scale >= 10) lines(1, C.line)
+  lines(v.scale >= 2 ? 5 : 50, C.lineStrong)
 }
 
 export function drawScene(svg: SVGSVGElement, s: Scene): void {
@@ -132,50 +144,53 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     svgEl(root, 'path', {
       d: pathOf([n.outer, ...n.holes]),
       'fill-rule': 'evenodd',
-      fill: '#dcdee2',
-      stroke: '#c3c6cb',
+      fill: '#ece2cc',
+      stroke: C.lineStrong,
       'stroke-width': px,
     })
   }
   svgEl(root, 'path', {
     d: pathOf([s.building.outer, ...s.building.holes]),
     'fill-rule': 'evenodd',
-    fill: '#f1f3f6',
-    stroke: '#8b95a3',
+    fill: C.band,
+    stroke: '#8a7f6a',
     'stroke-width': 1.5 * px,
     'stroke-dasharray': `${6 * px} ${4 * px}`,
   })
   drawEdits(root, s, px)
   svgEl(root, 'path', {
+    'data-role': 'outline',
     d: pathOf([plan.outline.outer, ...plan.outline.holes]),
     'fill-rule': 'evenodd',
-    fill: 'rgba(255, 170, 60, 0.28)',
-    stroke: '#b85a08',
-    'stroke-width': 2.5 * px,
+    fill: 'rgba(245, 166, 35, 0.3)',
+    stroke: C.accentStrong,
+    'stroke-width': 3 * px,
     'stroke-linejoin': 'round',
   })
 
   plan.walls.forEach((w, i) => {
     const sel = s.selection?.kind === 'wall' && s.selection.index === i
     const line = { x1: w.a.x, y1: w.a.z, x2: w.b.x, y2: w.b.z }
-    if (sel) svgEl(root, 'line', { ...line, stroke: '#ff7a00', 'stroke-width': w.thickness + 6 * px, 'stroke-linecap': 'round', opacity: 0.5 })
-    svgEl(root, 'line', { ...line, stroke: '#3a3f47', 'stroke-width': w.thickness })
+    if (sel) svgEl(root, 'line', { ...line, stroke: C.accent, 'stroke-width': w.thickness + 8 * px, 'stroke-linecap': 'round', opacity: 0.7 })
+    svgEl(root, 'line', { ...line, stroke: C.text, 'stroke-width': Math.max(w.thickness, 2 * px) })
   })
 
+  // A window is a pale gap in a slate frame, at least 8 px thick however far out the view is zoomed.
+  const windowThickness = Math.max(0.3, 8 * px)
   plan.windows.forEach((_, i) => {
     const [a, b] = windowSegment(plan, i)
     const line = { x1: a.x, y1: a.z, x2: b.x, y2: b.z }
     if (s.selection?.kind === 'window' && s.selection.index === i) {
-      svgEl(root, 'line', { ...line, stroke: '#ff7a00', 'stroke-width': 0.3 + 8 * px, opacity: 0.6 })
+      svgEl(root, 'line', { ...line, stroke: C.accent, 'stroke-width': windowThickness + 10 * px, 'stroke-linecap': 'round', opacity: 0.85 })
     }
-    svgEl(root, 'line', { ...line, stroke: '#14b8d9', 'stroke-width': 0.3 })
-    svgEl(root, 'line', { ...line, stroke: '#0a6f85', 'stroke-width': px })
+    svgEl(root, 'line', { ...line, stroke: C.text, 'stroke-width': windowThickness })
+    svgEl(root, 'line', { ...line, stroke: C.surface, 'stroke-width': windowThickness - 4 * px })
   })
 
   if (s.selection?.kind === 'wall') {
     const w = plan.walls[s.selection.index]
     for (const p of [w.a, w.b]) {
-      svgEl(root, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: '#fff', stroke: '#ff7a00', 'stroke-width': 2 * px })
+      svgEl(root, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
     }
   }
 
@@ -197,7 +212,7 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
     const sel = s.selection?.kind === 'edit' && s.selection.index === i
     const g = svgEl(root, 'g', { opacity: editOnFloor(plan, base, e) ? 1 : 0.35 })
     const d = pathOf([e.outline])
-    if (sel) svgEl(g, 'path', { d, fill: 'none', stroke: '#ff7a00', 'stroke-width': 8 * px, opacity: 0.5, 'stroke-linejoin': 'round' })
+    if (sel) svgEl(g, 'path', { d, fill: 'none', stroke: C.accent, 'stroke-width': 8 * px, opacity: 0.7, 'stroke-linejoin': 'round' })
     if (e.kind === 'add') {
       svgEl(g, 'path', { d, fill: 'rgba(112, 72, 232, 0.2)', stroke: 'none' })
       svgEl(g, 'path', { d, fill: 'url(#edit-hatch)', stroke: '#3b2a8c', 'stroke-width': 2 * px, 'stroke-linejoin': 'round' })
@@ -211,12 +226,12 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
     const range = `${e.bottom.toFixed(1)}\u2013${e.top.toFixed(1)} m`
     const t = svgEl(g, 'text', {
       x: c.x, y: c.z, 'font-size': 11 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
-      fill: e.kind === 'add' ? '#3b2a8c' : '#a61e1e', stroke: '#fff', 'stroke-width': 3 * px, 'paint-order': 'stroke',
+      fill: e.kind === 'add' ? '#3b2a8c' : '#a61e1e', stroke: C.surface, 'stroke-width': 3 * px, 'paint-order': 'stroke',
     })
     t.textContent = e.kind === 'add' ? `+${range}` : `cut ${range}`
     if (sel) {
       for (const p of e.outline) {
-        svgEl(g, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: '#fff', stroke: '#ff7a00', 'stroke-width': 2 * px })
+        svgEl(g, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
       }
     }
   })
@@ -225,8 +240,9 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
 function drawViewpoint(root: SVGElement, s: Scene, px: number): void {
   const vp = effectiveViewpoint(s.plan)
   const sel = s.selection?.kind === 'viewpoint'
-  const color = vp.auto ? '#6c9bd1' : '#1864ab'
-  const g = svgEl(root, 'g', { opacity: vp.auto ? 0.8 : 1 })
+  // Slate camera, amber heading wedge; the automatic spot is the same in a lighter slate with a dashed wedge.
+  const color = vp.auto ? C.muted : C.text
+  const g = svgEl(root, 'g', { 'data-role': 'viewpoint' })
   const title = svgEl(g, 'title', {})
   title.textContent = `This is where Walk inside puts you${vp.auto ? ' (automatic: drag to fix it)' : ''}`
   const a0 = vp.yaw - VIEW_FOV / 2
@@ -234,33 +250,41 @@ function drawViewpoint(root: SVGElement, s: Scene, px: number): void {
   const at = (a: number): string => `${vp.x - Math.sin(a) * VIEW_LENGTH} ${vp.z - Math.cos(a) * VIEW_LENGTH}`
   svgEl(g, 'path', {
     d: `M${vp.x} ${vp.z}L${at(a0)}A${VIEW_LENGTH} ${VIEW_LENGTH} 0 0 0 ${at(a1)}Z`,
-    fill: vp.auto ? 'rgba(108, 155, 209, 0.22)' : 'rgba(24, 100, 171, 0.25)',
-    stroke: color, 'stroke-width': 1.5 * px, 'stroke-dasharray': vp.auto ? `${4 * px} ${3 * px}` : 'none', 'stroke-linejoin': 'round',
+    fill: vp.auto ? 'rgba(245, 166, 35, 0.22)' : 'rgba(245, 166, 35, 0.42)',
+    stroke: C.accentStrong, 'stroke-width': 1.5 * px, 'stroke-dasharray': vp.auto ? `${4 * px} ${3 * px}` : 'none', 'stroke-linejoin': 'round',
   })
   const tip = viewTip(vp)
-  if (sel) svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 14 * px, fill: 'none', stroke: '#ff7a00', 'stroke-width': 3 * px, opacity: 0.6 })
-  svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 10 * px, fill: color, stroke: '#fff', 'stroke-width': 2 * px })
+  if (sel) svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 15 * px, fill: 'none', stroke: C.accent, 'stroke-width': 4 * px, opacity: 0.85 })
+  svgEl(g, 'circle', { cx: vp.x, cy: vp.z, r: 10 * px, fill: color, stroke: C.surface, 'stroke-width': 2 * px })
   // camera glyph: body, viewfinder bump, lens
-  svgEl(g, 'rect', { x: vp.x - 6 * px, y: vp.z - 3.5 * px, width: 12 * px, height: 8 * px, rx: 1.5 * px, fill: '#fff' })
-  svgEl(g, 'rect', { x: vp.x - 3 * px, y: vp.z - 5.5 * px, width: 6 * px, height: 3 * px, rx: px, fill: '#fff' })
+  svgEl(g, 'rect', { x: vp.x - 6 * px, y: vp.z - 3.5 * px, width: 12 * px, height: 8 * px, rx: 1.5 * px, fill: C.surface })
+  svgEl(g, 'rect', { x: vp.x - 3 * px, y: vp.z - 5.5 * px, width: 6 * px, height: 3 * px, rx: px, fill: C.surface })
   svgEl(g, 'circle', { cx: vp.x, cy: vp.z + 0.5 * px, r: 2.5 * px, fill: color })
-  svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: '#fff', stroke: color, 'stroke-width': 2 * px })
+  svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
+  // The label sits behind the camera, away from the wedge.
+  const back = viewDirection(vp.yaw)
+  const label = svgEl(g, 'text', {
+    x: vp.x - back.x * 22 * px, y: vp.z - back.z * 22 * px, 'font-size': 12 * px, 'font-weight': 600,
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    fill: C.text, stroke: C.surface, 'stroke-width': 3.5 * px, 'paint-order': 'stroke',
+  })
+  label.textContent = 'Walk start'
 }
 
 function drawDraft(root: SVGElement, s: Scene, px: number): void {
   const { draft } = s
-  const guide = { stroke: '#d9480f', 'stroke-width': 2 * px, 'stroke-dasharray': `${5 * px} ${3 * px}`, fill: 'none' }
+  const guide = { stroke: C.accentStrong, 'stroke-width': 2 * px, 'stroke-dasharray': `${5 * px} ${3 * px}`, fill: 'none' }
   const pts = draft.outline
   if (pts.length) {
     const live = draft.cursor ? [...pts, draft.cursor] : pts
     svgEl(root, 'path', { d: pathOf([live], false), ...guide })
-    for (const p of pts) svgEl(root, 'circle', { cx: p.x, cy: p.z, r: 3.5 * px, fill: '#d9480f' })
+    for (const p of pts) svgEl(root, 'circle', { cx: p.x, cy: p.z, r: 3.5 * px, fill: C.accentStrong })
   }
   let label: { at: Point; text: string } | undefined
   if (draft.wallStart && draft.cursor) {
     const a = draft.wallStart
     const b = draft.cursor
-    svgEl(root, 'line', { x1: a.x, y1: a.z, x2: b.x, y2: b.z, stroke: '#d9480f', 'stroke-width': DEFAULT_PREVIEW, opacity: 0.6 })
+    svgEl(root, 'line', { x1: a.x, y1: a.z, x2: b.x, y2: b.z, stroke: C.accentStrong, 'stroke-width': DEFAULT_PREVIEW, opacity: 0.6 })
     label = { at: b, text: `${Math.hypot(b.x - a.x, b.z - a.z).toFixed(2)} m` }
   } else if (pts.length && draft.cursor) {
     const a = pts[pts.length - 1]
@@ -278,8 +302,8 @@ function drawDraft(root: SVGElement, s: Scene, px: number): void {
       x: label.at.x + 10 * px,
       y: label.at.z - 10 * px,
       'font-size': 12 * px,
-      fill: '#222',
-      stroke: '#fff',
+      fill: C.text,
+      stroke: C.surface,
       'stroke-width': 3 * px,
       'paint-order': 'stroke',
     })
@@ -290,7 +314,7 @@ function drawDraft(root: SVGElement, s: Scene, px: number): void {
 const DEFAULT_PREVIEW = 0.1
 
 function drawOverlay(svg: SVGSVGElement, v: View): void {
-  const g = svgEl(svg, 'g', { fill: '#333', stroke: '#333', 'font-family': 'system-ui, sans-serif', 'font-size': 11 })
+  const g = svgEl(svg, 'g', { fill: C.text, stroke: C.text, 'font-family': 'system-ui, sans-serif', 'font-size': 12 })
   const { x, y } = NORTH_ARROW_POS
   svgEl(g, 'path', { d: `M${x} ${y - 22}L${x + 7} ${y + 6}L${x} ${y + 1}L${x - 7} ${y + 6}Z`, 'stroke-width': 1 })
   const n = svgEl(g, 'text', { x, y: y - 27, 'text-anchor': 'middle', stroke: 'none' })

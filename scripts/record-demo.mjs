@@ -188,7 +188,7 @@ try {
 
   // Metres in the plan (x east, z south) to screen pixels, read from the live SVG.
   const planGeo = () => page.evaluate(() => {
-    const path = document.querySelector('.editor svg path[stroke="#b85a08"]')
+    const path = document.querySelector('.editor svg path[data-role="outline"]')
     const m = path.getScreenCTM()
     const nums = path.getAttribute('d').split('M').filter(Boolean)[0].match(/-?[\d.]+(?:e-?\d+)?/g).map(Number)
     const ring = []
