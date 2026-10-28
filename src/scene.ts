@@ -2,8 +2,16 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   ArrowHelper,
+  AdditiveBlending,
+  BackSide,
   BoxGeometry,
+  CanvasTexture,
   Color,
+  Float32BufferAttribute,
+  MeshBasicMaterial,
+  SphereGeometry,
+  Sprite,
+  SpriteMaterial,
   DoubleSide,
   EdgesGeometry,
   LineBasicMaterial,
@@ -49,6 +57,16 @@ const GLASS_COLOR = 0x9ecfe8
 const APARTMENT_SHADOW_MAP = 2048
 const SKY_DAY = new Color(0x9ec9ee)
 const SKY_NIGHT = new Color(0x0b1020)
+const SKY_HORIZON_DAY = new Color(0xdce9f5)
+const SKY_HORIZON_NIGHT = new Color(0x141b30)
+// The sun is drawn along its direction at this distance from the camera (inside far, in front of the sky dome).
+const SKY_RADIUS = 2000
+const SUN_DISTANCE = 1700
+// Exaggerated so it can be noticed (the real sun is 0.53 deg); the glow sprite is GLOW_RATIO times wider than the core.
+const SUN_DISC_DEG = 2.5
+const GLOW_RATIO = 5
+const SUN_WHITE = new Color(0xfff6dc)
+const SUN_LOW = new Color(0xff9a45)
 // Stand-in for indirect light: the apartment surfaces glow by this fraction of their colour in daylight.
 const INTERIOR_GLOW = 0.18
 const ORBIT_FOV = 50
@@ -93,6 +111,69 @@ function addBox(scene: Group, spec: number[], color: number): Mesh {
   return mesh
 }
 
+/** Inverted sphere around the camera, lighter toward the horizon; colours set by `paint`. */
+function createSky() {
+  const geometry = new SphereGeometry(SKY_RADIUS, 24, 12)
+  const position = geometry.getAttribute('position')
+  const colours = new Float32BufferAttribute(position.count * 3, 3)
+  geometry.setAttribute('color', colours)
+  const mesh = new Mesh(
+    geometry,
+    new MeshBasicMaterial({ vertexColors: true, side: BackSide, depthWrite: false, depthTest: false, toneMapped: false, fog: false }),
+  )
+  mesh.renderOrder = -10
+  const horizon = new Color()
+  const zenith = new Color()
+  const c = new Color()
+  return {
+    mesh,
+    paint(daylight: number) {
+      zenith.copy(SKY_NIGHT).lerp(SKY_DAY, daylight)
+      horizon.copy(SKY_HORIZON_NIGHT).lerp(SKY_HORIZON_DAY, daylight)
+      for (let i = 0; i < position.count; i++) {
+        // Above the horizon blend to the zenith colour (quickly: the sky is light only near the ground); below it stays at horizon.
+        const t = Math.min(1, Math.max(0, position.getY(i) / SKY_RADIUS)) ** 0.6
+        c.copy(horizon).lerp(zenith, t)
+        colours.setXYZ(i, c.r, c.g, c.b)
+      }
+      colours.needsUpdate = true
+    },
+  }
+}
+
+function glowTexture(): CanvasTexture {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const g = canvas.getContext('2d')!
+  const half = size / 2
+  const core = 1 / GLOW_RATIO
+  const gradient = g.createRadialGradient(half, half, 0, half, half, half)
+  gradient.addColorStop(0, 'rgba(255,255,255,1)')
+  gradient.addColorStop(core * 0.9, 'rgba(255,255,255,1)')
+  gradient.addColorStop(core * 1.25, 'rgba(255,255,255,0.35)')
+  gradient.addColorStop(core * 2.5, 'rgba(255,255,255,0.1)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = gradient
+  g.fillRect(0, 0, size, size)
+  return new CanvasTexture(canvas)
+}
+
+/** The sun as a glowing disc: a sprite the scene keeps on the sun's direction, occluded by solid geometry. */
+function createSunDisc(): Sprite {
+  const sprite = new Sprite(
+    new SpriteMaterial({
+      map: glowTexture(), blending: AdditiveBlending, depthWrite: false, depthTest: true, toneMapped: false, fog: false,
+    }),
+  )
+  const angle = (SUN_DISC_DEG * GLOW_RATIO * Math.PI) / 180
+  const size = 2 * SUN_DISTANCE * Math.tan(angle / 2)
+  sprite.scale.set(size, size, 1)
+  sprite.renderOrder = 2
+  sprite.visible = false
+  return sprite
+}
+
 export function createScene(container: HTMLElement): SunScene {
   const renderer = new WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio)
@@ -104,6 +185,10 @@ export function createScene(container: HTMLElement): SunScene {
 
   const scene = new Scene()
   scene.background = SKY_DAY.clone()
+
+  const sky = createSky()
+  const sunDisc = createSunDisc()
+  scene.add(sky.mesh, sunDisc)
 
   const camera = new PerspectiveCamera(ORBIT_FOV, 1, ORBIT_NEAR, 3000)
   const controls = new OrbitControls(camera, renderer.domElement)
@@ -166,6 +251,8 @@ export function createScene(container: HTMLElement): SunScene {
     // Fade the sky and fill light through twilight (0 to -6 deg) rather than snapping.
     const t = Math.min(1, Math.max(0, (sun.altitudeDeg + 6) / 6))
     scene.background = SKY_NIGHT.clone().lerp(SKY_DAY, t)
+    sky.paint(t)
+    sunDisc.material.color.copy(SUN_LOW).lerp(SUN_WHITE, Math.min(1, Math.max(0, (sun.altitudeDeg - 2) / 10)))
     daylight = t
     applyGlow()
     hemi.intensity = 0.05 + 0.3 * t
@@ -498,6 +585,7 @@ export function createScene(container: HTMLElement): SunScene {
     for (const m of hidden.keys() as Iterable<MeshStandardMaterial>) m.colorWrite = m.depthWrite = false
     for (const g of glassMeshes) g.visible = true
     showAptLines(true)
+    sunDisc.visible = false
     sunLight.visible = false
     aptLight.visible = true
     // A colour background clears the frame even with autoClear off, so take it away for this pass.
@@ -515,12 +603,23 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
+  // The sky and the sun follow the camera, so they stay at infinity.
+  function placeSky() {
+    sky.mesh.position.copy(camera.position)
+    sunDisc.visible = lastSun !== undefined && sunUp
+    if (lastSun) {
+      const { x, y, z } = lastSun.vector
+      sunDisc.position.set(x, y, z).multiplyScalar(SUN_DISTANCE).add(camera.position)
+    }
+  }
+
   let lastFrame = performance.now()
   function render() {
     const now = performance.now()
     if (walking) walk.update((now - lastFrame) / 1000)
     else controls.update()
     lastFrame = now
+    placeSky()
     const twoPass = plan !== null && sunUp
     for (const g of glassMeshes) g.visible = !twoPass
     // The second pass repaints the apartment surfaces, so their edge lines are drawn there instead.
