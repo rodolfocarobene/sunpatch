@@ -8,7 +8,7 @@ import {
   HemisphereLight,
   Mesh,
   MeshStandardMaterial,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -60,7 +60,7 @@ export function createScene(container: HTMLElement): SunScene {
   const renderer = new WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = PCFSoftShadowMap
+  renderer.shadowMap.type = PCFShadowMap
   container.appendChild(renderer.domElement)
 
   const scene = new Scene()
