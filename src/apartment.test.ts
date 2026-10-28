@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { edgeOpenings, facadeWall, facadeWalls, interiorWalls, wallFrame } from './apartment'
+import { apartmentGeometry, edgeOpenings, facadeWall, facadeWalls, interiorWalls, remainderRanges, restOfFloorPolygons, wallFrame } from './apartment'
 import type { Building, Point } from './osm'
 import { FACADE_THICKNESS, SLAB_THICKNESS, type Plan, type Window } from './plan'
 
@@ -152,5 +152,73 @@ describe('interiorWalls', () => {
     expect([b.min.z, b.max.z]).toEqual([2.9, 3.1].map((v) => expect.closeTo(v)))
     expect(b.min.y).toBeCloseTo(3)
     expect(b.max.y).toBeCloseTo(5.7)
+  })
+})
+
+describe('remainderRanges', () => {
+  const at = (floor: number) => remainderRanges({ ...building, minHeight: 0, height: 9 }, { ...floorPlan(outer), floor })
+
+  it('ground floor has only a thin slab below the floor', () => {
+    const r = at(0)
+    expect(r.lower[0]).toBeCloseTo(-SLAB_THICKNESS)
+    expect(r.lower[1]).toBeCloseTo(0, 1)
+    expect(r.upper![0]).toBeCloseTo(3 - SLAB_THICKNESS)
+    expect(r.upper![1]).toBe(9)
+  })
+
+  it('middle floor keeps the whole block below and above', () => {
+    const r = at(1)
+    expect(r.lower[0]).toBe(0)
+    expect(r.lower[1]).toBeCloseTo(3, 1)
+    expect(r.upper![0]).toBeCloseTo(6 - SLAB_THICKNESS)
+  })
+
+  it('top floor still gets a roof slab', () => {
+    const r = at(2)
+    expect(r.upper![0]).toBeCloseTo(9 - SLAB_THICKNESS)
+    expect(r.upper![1]).toBe(9)
+  })
+})
+
+describe('restOfFloorPolygons', () => {
+  const b: Building = { ...building, outer, holes: [] }
+
+  it('is empty when the plan covers the whole footprint', () => {
+    expect(restOfFloorPolygons(b, floorPlan(outer))).toEqual([])
+    expect(restOfFloorPolygons(b, floorPlan(ccw(outer)))).toEqual([])
+  })
+
+  it('is the other half for a half plan', () => {
+    const rest = restOfFloorPolygons(b, floorPlan(rect(0, 0, 5, 6)))
+    expect(rest).toHaveLength(1)
+    const xs = rest[0].outer.map((p) => p.x)
+    expect(Math.min(...xs)).toBeCloseTo(5)
+    expect(Math.max(...xs)).toBeCloseTo(10)
+  })
+
+  it('keeps a courtyard of the footprint as a hole of the rest', () => {
+    const withHole: Building = { ...b, holes: [rect(4, 2, 6, 4)] }
+    const rest = restOfFloorPolygons(withHole, floorPlan(rect(0, 0, 3, 6)))
+    expect(rest).toHaveLength(1)
+    expect(rest[0].holes).toHaveLength(1)
+  })
+
+  it('drops slivers', () => {
+    expect(restOfFloorPolygons(b, floorPlan(rect(0, 0, 10, 5.996)))).toEqual([])
+  })
+})
+
+describe('apartmentGeometry', () => {
+  const b: Building = { ...building, height: 9 }
+
+  it('stacks floor slab, walls and rest of floor on the right heights', () => {
+    const g = apartmentGeometry(b, floorPlan(rect(0, 0, 5, 6)))
+    const box = (x: any) => bounds(x)
+    expect(box(g.floor).max.y).toBeCloseTo(3)
+    expect(g.shell).toHaveLength(2)
+    expect(box(g.shell[1]).min.y).toBeCloseTo(3)
+    expect(box(g.shell[1]).max.y).toBeCloseTo(6 - SLAB_THICKNESS)
+    expect(g.ceiling).toHaveLength(1)
+    expect(g.walls).toHaveLength(4)
   })
 })
