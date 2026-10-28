@@ -91,6 +91,8 @@ export function createScene(container: HTMLElement): SunScene {
 
   const ground = new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial({ color: 0x7a8f6a }))
   ground.rotation.x = -Math.PI / 2
+  // Just below y = 0 so a ground-floor apartment's floor does not z-fight with it.
+  ground.position.y = -0.05
   ground.receiveShadow = true
   scene.add(ground)
 
