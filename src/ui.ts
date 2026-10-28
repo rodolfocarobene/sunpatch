@@ -1,7 +1,10 @@
 import SunCalc from 'suncalc'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
-import { sunDirection } from './sun'
+import { compassName, sunDirection } from './sun'
+
+/** One 24-hour HH:MM format for every time shown in the app. */
+export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
@@ -9,6 +12,8 @@ export type View = 'map' | 'plan' | '3d'
 
 export interface UI {
   setLocation(lat: number, lon: number): void
+  /** Where the place search form is mounted (the Map view panel). */
+  readonly searchSlot: HTMLElement
   setBuildingInfo(building: Building | null): void
   setView(view: View): void
   /** Enables the Plan and 3D views once a building is selected. */
@@ -42,20 +47,32 @@ export function createUI(
       <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
       <button type="button" data-view="3d" disabled title="Pick a building first">3D</button>
     </nav>
-    <div id="building"></div>
-    <div id="aptTools" hidden>
-      <label class="row"><input id="cutaway" type="checkbox" checked> Cutaway (hide floors above)</label>
-      <button id="walk" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
-    </div>
-    <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
-    <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
-    <label>Date <input id="date" type="date" value="${toDateValue(now)}"></label>
-    <label>Time <span id="timeLabel"></span>
-      <input id="time" type="range" min="0" max="1435" step="5" value="${now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5}">
-    </label>
-    <button id="play" type="button">Play</button>
-    <small>Times are the local time of your browser. Azimuth is measured clockwise from north.</small>
-    <pre id="readout"></pre>`
+    <section data-views="map">
+      <h2>Find your building</h2>
+      <div id="searchSlot"></div>
+    </section>
+    <div id="building" hidden></div>
+    <p class="hint" data-views="map">Click a building on the map to pick it.</p>
+    <p class="hint" data-views="plan">Draw your apartment's outline, then add windows.</p>
+    <section data-views="3d">
+      <div id="aptTools" hidden>
+        <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
+        <button id="walk" class="primary" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
+      </div>
+      <label>Date <input id="date" type="date" value="${toDateValue(now)}"></label>
+      <label>
+        <span class="split">Time <span id="timeLabel"></span></span>
+        <input id="time" type="range" min="0" max="1435" step="5" value="${now.getHours() * 60 + Math.floor(now.getMinutes() / 5) * 5}">
+      </label>
+      <button id="play" type="button">Play</button>
+      <div id="sunSummary"></div>
+      <details id="location">
+        <summary>Location</summary>
+        <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
+        <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
+      </details>
+      <p class="note">Times use your browser's time zone.</p>
+    </section>`
   document.body.appendChild(panel)
 
   const $ = <T extends HTMLElement>(id: string) => panel.querySelector<T>('#' + id)!
@@ -64,6 +81,7 @@ export function createUI(
   const date = $<HTMLInputElement>('date')
   const time = $<HTMLInputElement>('time')
   const play = $<HTMLButtonElement>('play')
+  const summary = $('sunSummary')
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const cutaway = $<HTMLInputElement>('cutaway')
@@ -85,18 +103,20 @@ export function createUI(
     const lo = lon.valueAsNumber
     $('timeLabel').textContent = formatMinutes(Number(time.value))
     if (!when || Number.isNaN(la) || Number.isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
-      $('readout').textContent = 'Invalid latitude, longitude or date'
+      summary.textContent = 'Invalid latitude, longitude or date'
+      summary.removeAttribute('title')
       return
     }
     const sun = sunDirection(when, la, lo)
     onSun(sun)
     listener?.(when, sun)
     const times = SunCalc.getTimes(when, la, lo)
-    $('readout').textContent =
-      `Azimuth   ${sun.azimuthDeg.toFixed(1)} deg\n` +
-      `Altitude  ${sun.altitudeDeg.toFixed(1)} deg\n` +
-      `Sunrise   ${formatTime(times.sunrise)}\n` +
-      `Sunset    ${formatTime(times.sunset)}`
+    const rise = formatTime(times.sunrise)
+    const set = formatTime(times.sunset)
+    summary.title = `Azimuth ${sun.azimuthDeg.toFixed(1)} deg from north, altitude ${sun.altitudeDeg.toFixed(1)} deg`
+    summary.innerHTML =
+      `<strong>${sunSentence(sun)}</strong>` +
+      `<span>${rise && set ? `Sunrise ${rise} \u00b7 Sunset ${set}` : 'No sunrise or sunset on this date'}</span>`
   }
 
   let timer: number | undefined
@@ -128,13 +148,22 @@ export function createUI(
       lon.value = lo.toFixed(5)
       refresh()
     },
+    searchSlot: $('searchSlot'),
     setBuildingInfo(b) {
       const el = $('building')
       el.hidden = !b
       if (b) el.innerHTML = buildingInfoHtml(b)
     },
     setView(view) {
-      for (const b of viewButtons) b.classList.toggle('active', b.dataset.view === view)
+      for (const b of viewButtons) {
+        b.classList.toggle('active', b.dataset.view === view)
+        if (b.dataset.view === view) b.setAttribute('aria-current', 'page')
+        else b.removeAttribute('aria-current')
+      }
+      for (const el of panel.querySelectorAll<HTMLElement>('[data-views]')) {
+        el.hidden = !el.dataset.views!.split(' ').includes(view)
+      }
+      panel.dataset.view = view
     },
     setBuildingPicked(picked) {
       for (const b of viewButtons) {
@@ -151,6 +180,7 @@ export function createUI(
     },
     setWalking(walking) {
       walk.disabled = walking
+      panel.classList.toggle('walking', walking)
     },
     stepTime(minutes) {
       time.value = String((((Number(time.value) + minutes) % 1440) + 1440) % 1440)
@@ -186,10 +216,11 @@ function buildingInfoHtml(b: Building): string {
     ? 'Map-tile outline, not an OSM object'
     : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
   return (
-    `<strong>Selected building</strong><br>` +
-    `${source}<br>` +
+    `<strong>Selected building</strong>` +
+    `<span class="detail"><br>${source}<br>` +
     `Height: ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})` +
-    levels
+    levels +
+    `</span>`
   )
 }
 
@@ -202,8 +233,15 @@ function formatMinutes(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
 
+/** 24-hour HH:MM, or '' when the date is missing (no sunrise or sunset). */
 function formatTime(d: Date | null): string {
-  return d && !Number.isNaN(d.getTime())
-    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : 'n/a (no event)'
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString([], TIME_FORMAT) : ''
+}
+
+const WORDS: Record<string, string> = { N: 'north', E: 'east', S: 'south', W: 'west' }
+
+function sunSentence(sun: SunDirection): string {
+  if (sun.altitudeDeg <= 0) return 'Sun below the horizon'
+  const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
+  return `Sun in the ${dir}, ${sun.altitudeDeg.toFixed(0)}\u00b0 above the horizon`
 }

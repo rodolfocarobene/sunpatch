@@ -23,16 +23,12 @@ export function createMapView(
   container: HTMLElement,
   start: { lat: number; lon: number },
   onPick: (lat: number, lon: number) => void,
+  searchHost: HTMLElement,
 ): MapView {
   const root = document.createElement('div')
   root.id = 'mapView'
   root.innerHTML = `
     <div id="mapCanvas"></div>
-    <form id="search">
-      <input name="q" type="search" placeholder="Search a place" aria-label="Search a place">
-      <button type="submit">Search</button>
-      <ul id="results" hidden></ul>
-    </form>
     <div id="mapStatus" hidden></div>`
   container.appendChild(root)
 
@@ -50,7 +46,13 @@ export function createMapView(
   })
 
   const status = root.querySelector<HTMLElement>('#mapStatus')!
-  const form = root.querySelector<HTMLFormElement>('#search')!
+  const form = document.createElement('form')
+  form.id = 'search'
+  form.innerHTML = `
+    <input name="q" type="search" placeholder="Search a place or address" aria-label="Search a place or address">
+    <button type="submit">Search</button>
+    <ul id="results" hidden></ul>`
+  searchHost.appendChild(form)
   const input = form.querySelector<HTMLInputElement>('input')!
 
   function setStatus(text: string, kind: 'info' | 'error' = 'info') {

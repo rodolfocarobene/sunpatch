@@ -19,7 +19,7 @@ import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { compassName } from './sun'
 import { tileBuildings } from './tiles'
-import { createUI, type View } from './ui'
+import { createUI, TIME_FORMAT, type View } from './ui'
 import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -40,13 +40,13 @@ sunScene.setWalkHandlers({
 ui.onChange((when, sun) =>
   hud.setStatus(
     `${when.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} ` +
-      `${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ` +
+      `${when.toLocaleTimeString([], TIME_FORMAT)} · ` +
       (sun.altitudeDeg > 0
         ? `sun: ${compassName(sun.azimuthDeg)}, ${sun.altitudeDeg.toFixed(0)}° high (azimuth ${sun.azimuthDeg.toFixed(0)}°)`
         : 'sun below the horizon'),
   ),
 )
-const mapView = createMapView(document.body, MILAN, pick)
+const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
 let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'
 const editor = createPlanEditor(document.body, setPlan, { autosave: () => !exampleMode })
