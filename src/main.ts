@@ -18,12 +18,30 @@ import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { createUI, type View } from './ui'
+import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
-const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on))
+const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
+const hud = createWalkHud(app, () => sunScene.stopWalk())
+sunScene.setWalkHandlers({
+  change(walking) {
+    hud.show(walking)
+    ui.setWalking(walking)
+  },
+  exit: () => sunScene.stopWalk(),
+  stepTime: (minutes) => ui.stepTime(minutes),
+  togglePlay: () => ui.togglePlay(),
+})
+ui.onChange((when, sun) =>
+  hud.setStatus(
+    `${when.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} ` +
+      `${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ` +
+      `sun azimuth ${sun.azimuthDeg.toFixed(0)}°, altitude ${sun.altitudeDeg.toFixed(0)}°`,
+  ),
+)
 const mapView = createMapView(document.body, MILAN, pick)
 const editor = createPlanEditor(document.body, setPlan)
 const chip = createStatusChip(app, () => last && void refine(last, current))
@@ -31,6 +49,11 @@ const chip = createStatusChip(app, () => last && void refine(last, current))
 // Starts on the M1 test scene until a building is picked.
 let view: View = '3d'
 setView('3d')
+
+function walkInside() {
+  setView('3d')
+  sunScene.startWalk()
+}
 
 function setView(next: View) {
   if (next === 'plan' && !openEditor()) return

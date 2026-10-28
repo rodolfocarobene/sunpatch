@@ -15,12 +15,20 @@ export interface UI {
   setPlanAvailable(available: boolean): void
   /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
   setPlanActive(active: boolean): void
+  /** Disables the Walk button while walking. */
+  setWalking(walking: boolean): void
+  /** Time controls for the walk-mode keys; the UI keeps the time state. */
+  stepTime(minutes: number): void
+  togglePlay(): void
+  /** Called after every sun update with the selected date and time. */
+  onChange(listener: (when: Date, sun: SunDirection) => void): void
 }
 
 export function createUI(
   onSun: (sun: SunDirection) => void,
   onView: (view: View) => void,
   onCutaway: (on: boolean) => void,
+  onWalk: () => void,
 ): UI {
   const now = new Date()
   const panel = document.createElement('div')
@@ -32,7 +40,10 @@ export function createUI(
       <button type="button" data-view="3d">3D</button>
     </nav>
     <div id="building"></div>
-    <label id="cutawayRow" class="row" hidden><input id="cutaway" type="checkbox" checked> Cutaway (hide floors above)</label>
+    <div id="aptTools" hidden>
+      <label class="row"><input id="cutaway" type="checkbox" checked> Cutaway (hide floors above)</label>
+      <button id="walk" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
+    </div>
     <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
     <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
     <label>Date <input id="date" type="date" value="${toDateValue(now)}"></label>
@@ -54,6 +65,9 @@ export function createUI(
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const cutaway = $<HTMLInputElement>('cutaway')
   cutaway.addEventListener('change', () => onCutaway(cutaway.checked))
+  const walk = $<HTMLButtonElement>('walk')
+  walk.addEventListener('click', onWalk)
+  let listener: ((when: Date, sun: SunDirection) => void) | undefined
 
   function currentDate(): Date | null {
     if (!date.value) return null
@@ -73,6 +87,7 @@ export function createUI(
     }
     const sun = sunDirection(when, la, lo)
     onSun(sun)
+    listener?.(when, sun)
     const times = SunCalc.getTimes(when, la, lo)
     $('readout').textContent =
       `Azimuth   ${sun.azimuthDeg.toFixed(1)} deg\n` +
@@ -124,8 +139,22 @@ export function createUI(
       plan.title = available ? 'Draw your apartment on this building' : 'Pick a building first'
     },
     setPlanActive(active) {
-      $('cutawayRow').hidden = !active
+      $('aptTools').hidden = !active
       if (active) onCutaway(cutaway.checked)
+    },
+    setWalking(walking) {
+      walk.disabled = walking
+    },
+    stepTime(minutes) {
+      time.value = String((((Number(time.value) + minutes) % 1440) + 1440) % 1440)
+      refresh()
+    },
+    togglePlay() {
+      play.click()
+    },
+    onChange(fn) {
+      listener = fn
+      refresh()
     },
   }
 }

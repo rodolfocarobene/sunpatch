@@ -60,3 +60,16 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
 #views button { flex: 1; }
 #views button.active { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
 #panel label.row { flex-direction: row; align-items: center; gap: 6px; }
+#panel #aptTools { display: flex; flex-direction: column; gap: 8px; }
+#aptTools[hidden] { display: none; }
+#walkHud {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 14px; border-radius: 8px; font-size: 13px; text-align: center;
+  background: rgba(20, 24, 32, 0.72); color: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  max-width: calc(100% - 300px);
+}
+#walkHud[hidden] { display: none; }
+#walkHud .walkStatus { font-weight: 600; }
+#walkHud .walkHelp { font-size: 12px; opacity: 0.85; }
+#walkHud button { font: inherit; padding: 2px 10px; cursor: pointer; }
