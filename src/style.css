@@ -94,6 +94,21 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #about:hover { color: var(--accent-strong); text-decoration: underline; }
 #panel .hint, #panel .note { margin: 0; font-size: var(--text-sm); line-height: 1.4; color: var(--muted); }
 #panel .note { font-size: var(--text-xs); }
+#panel #firstRun { display: flex; flex-direction: column; gap: 8px; }
+#guide summary { cursor: pointer; font-weight: 600; }
+#guide ol { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
+#guide li::marker { font-weight: 600; }
+#guide li[aria-current='step'] { color: var(--text); }
+#guide li span { display: block; color: var(--muted); }
+#exampleLink { font-size: var(--text-sm); }
+#exampleNote {
+  display: flex; align-items: flex-start; gap: 8px; padding: var(--box-pad); font-size: var(--text-sm); line-height: 1.4;
+  background: var(--bg-band); border-radius: var(--radius-control);
+}
+#exampleNote span { flex: 1; }
+#panel #exampleNote button { padding: 4px; line-height: 0; background: transparent; border-color: transparent; color: var(--muted); }
+#panel button.link { padding: 0; font-weight: 600; background: none; border: 0; color: var(--link); text-decoration: underline; }
+#panel button.link:hover:not(:disabled) { background: none; color: var(--accent-strong); }
 #aptTools { display: flex; flex-direction: column; gap: 10px; }
 #building { padding-bottom: 10px; border-bottom: 1px solid var(--line); line-height: 1.4; }
 #panel[data-view='plan'] #building .detail { display: none; }

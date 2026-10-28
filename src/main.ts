@@ -15,6 +15,7 @@ import {
   type Origin,
 } from './osm'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
+import { nextStep } from './next-step'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
@@ -60,6 +61,7 @@ async function openExample() {
   show(buildings, selected, origin, false)
   setPlan(examplePlan, true)
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
+  ui.setExample(true)
   setView('3d')
 }
 
@@ -91,6 +93,7 @@ let last: Pick | undefined
 
 function pick(lat: number, lon: number) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
+  ui.setExample(false)
   pending?.abort()
   chip.hide()
   const token = ++current
@@ -154,6 +157,7 @@ function setPlan(next: Plan | undefined, close = false) {
   plan = next
   sunScene.setPlan(next ?? null, { close })
   ui.setPlanActive(next !== undefined)
+  ui.setNextStep(nextStep(next, site?.selected))
 }
 
 /** Replaces the preview with the detailed Overpass buildings; ignored if a newer pick started. */

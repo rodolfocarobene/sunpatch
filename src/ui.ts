@@ -3,6 +3,10 @@ import type { Building } from './osm'
 import type { SunDirection } from './sun'
 import { activePreset, dateValue, daylight, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
+import type { NextStep } from './next-step'
+
+const ACCURACY_URL = 'https://github.com/rodolfocarobene/sunpatch#accuracy-and-limitations'
+const GUIDE_KEY = 'sunpatch.guide'
 
 /** One 24-hour HH:MM format for every time shown in the app. */
 export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
@@ -19,6 +23,10 @@ export interface UI {
   setView(view: View): void
   /** Enables the Plan and 3D views once a building is selected. */
   setBuildingPicked(picked: boolean): void
+  /** Shows what to do next on the apartment (Plan hint, 3D button); derived from the plan by the caller. */
+  setNextStep(step: NextStep): void
+  /** Shows the sample-apartment note (Plan and 3D views) until it is dismissed. */
+  setExample(on: boolean): void
   /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
   setPlanActive(active: boolean): void
   /** Disables the Walk button while walking. */
@@ -53,9 +61,29 @@ export function createUI(
       <div id="searchSlot"></div>
     </section>
     <div id="building" hidden></div>
-    <p class="hint" data-views="map">Click a building on the map to pick it.</p>
-    <p class="hint" data-views="plan">Draw your apartment's outline, then add windows.</p>
+    <div data-views="map" id="firstRun">
+      <details id="guide" open>
+        <summary>How it works</summary>
+        <ol>
+          <li aria-current="step"><strong>Pick your building</strong><span>Search, or click it on the map.</span></li>
+          <li>Draw your apartment and windows</li>
+          <li>See the sun come in</li>
+        </ol>
+      </details>
+      <a id="exampleLink" href="?example=milan">Try the Milan example</a>
+    </div>
+    <p class="hint" id="mapHint" data-views="map" hidden></p>
+    <div data-views="plan 3d">
+      <div id="exampleNote" hidden>
+        <span>This is a sample apartment in Milan. Pick your own building on the Map.</span>
+        <button id="exampleClose" type="button" aria-label="Dismiss note" title="Dismiss">
+          <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link" type="button" hidden>See it in 3D</button></p>
     <section data-views="3d">
+      <button id="nextStep" class="primary" type="button"></button>
       <div id="aptTools" hidden>
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
         <button id="walk" class="primary" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
@@ -66,7 +94,7 @@ export function createUI(
         <input id="date" type="date" value="${dateValue(now)}">
       </div>
       <div class="field">
-        <label class="split" for="time">Time <span id="timeLabel"></span></label>
+        <label class="split" for="time">Time <span id="timeLabel" title="Times use your browser's time zone"></span></label>
         <div id="timeTrack">
           <div id="dayStrip" aria-hidden="true"></div>
           <input id="time" type="range" min="0" max="${DAY_MAX}" step="${STEP}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
@@ -79,7 +107,7 @@ export function createUI(
         <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
         <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
       </details>
-      <p class="note">Times use your browser's time zone.</p>
+      <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
     </section>`
   document.body.appendChild(panel)
 
@@ -104,6 +132,31 @@ export function createUI(
   cutaway.addEventListener('change', () => onCutaway(cutaway.checked))
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
+  const nextButton = $<HTMLButtonElement>('nextStep')
+  nextButton.addEventListener('click', () => onView('plan'))
+  $('planToThree').addEventListener('click', () => onView('3d'))
+  $('exampleClose').addEventListener('click', () => ($('exampleNote').hidden = true))
+
+  // The first-run guide: open by default, its collapsed state is remembered.
+  const guide = $<HTMLDetailsElement>('guide')
+  const mapHint = $('mapHint')
+  let picked = false
+  try {
+    if (localStorage.getItem(GUIDE_KEY) === 'closed') guide.open = false
+  } catch { /* storage blocked: the guide just stays open */ }
+  guide.addEventListener('toggle', () => {
+    try {
+      localStorage.setItem(GUIDE_KEY, guide.open ? 'open' : 'closed')
+    } catch { /* not remembered */ }
+    updateMapHint()
+  })
+  /** One line under the tabs; the open guide already says what to do, so it stays quiet then. */
+  function updateMapHint() {
+    $('firstRun').hidden = picked
+    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan and 3D.'
+    mapHint.textContent = text
+    mapHint.hidden = !text || panel.dataset.view !== 'map'
+  }
   let listener: ((when: Date, sun: SunDirection) => void) | undefined
 
   function currentDate(): Date | null {
@@ -221,8 +274,11 @@ export function createUI(
         el.hidden = !el.dataset.views!.split(' ').includes(view)
       }
       panel.dataset.view = view
+      if (view === 'map') updateMapHint()
     },
-    setBuildingPicked(picked) {
+    setBuildingPicked(isPicked) {
+      picked = isPicked
+      updateMapHint()
       for (const b of viewButtons) {
         if (b.dataset.view === 'map') continue
         b.disabled = !picked
@@ -230,6 +286,19 @@ export function createUI(
           ? 'Pick a building first'
           : b.dataset.view === 'plan' ? 'Draw your apartment on this building' : 'Sun and shadows in 3D'
       }
+    },
+    setNextStep(step) {
+      $('planNext').textContent =
+        step === 'outline' ? "Draw your apartment's outline, then place its windows."
+        : step === 'windows' ? 'Now place windows on the outline.'
+        : 'Windows placed.'
+      $('planToThree').hidden = step !== 'see'
+      nextButton.hidden = step === 'see'
+      nextButton.textContent = step === 'outline' ? 'Next: draw your apartment' : 'Next: place the windows'
+      walk.classList.toggle('primary', step === 'see')
+    },
+    setExample(on) {
+      $('exampleNote').hidden = !on
     },
     setPlanActive(active) {
       $('aptTools').hidden = !active
