@@ -35,7 +35,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
 import { buildingGeometry } from './footprint'
 import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
-import { floorBase, type Plan } from './plan'
+import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
@@ -43,21 +43,29 @@ import { insideOutline, walkStart } from './walk-geom'
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
 const DATA_EXTENT = { ground: 700, shadow: 280, sunDistance: 500 }
-const SELECTED_COLOR = 0xe8a15a
+// Warm plaster and stone; amber is kept for the apartment outline and the sun patches.
+const SELECTED_COLOR = 0xdac8a6
 // Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
-const ADDED_COLOR = 0xf2bd84
-const OTHER_COLOR = 0xb8b8c0
-const FLOOR_COLOR = 0xcfae82
+const ADDED_COLOR = 0xecd6aa
+const OTHER_COLOR = 0xc9c1b4
+const FLOOR_COLOR = 0xc9a77a
 const WALL_COLOR = 0xf7eddd
 const CEILING_COLOR = 0xd0def2
 const EDGE_COLOR = 0x2b2b30
 const EDGE_OPACITY = 0.75
 const EDGE_ANGLE_DEG = 25
 const GLASS_COLOR = 0x9ecfe8
+const GROUND_COLOR = 0x8a9880
+// The app's --accent and --accent-strong: the apartment outline along its wall tops, and its ghost when the floors above are shown.
+const OUTLINE_COLOR = 0xf5a623
+const OUTLINE_GHOST_COLOR = 0xb45f06
+const OUTLINE_GHOST_OPACITY = 0.6
+// Above the wall tops, which are flush with the rest of the storey.
+const OUTLINE_LIFT = 0.03
 const APARTMENT_SHADOW_MAP = 2048
-const SKY_DAY = new Color(0x9ec9ee)
+const SKY_DAY = new Color(0x8fbfe8)
 const SKY_NIGHT = new Color(0x0b1020)
-const SKY_HORIZON_DAY = new Color(0xdce9f5)
+const SKY_HORIZON_DAY = new Color(0xf1ece0)
 const SKY_HORIZON_NIGHT = new Color(0x141b30)
 // The sun is drawn along its direction at this distance from the camera (inside far, in front of the sky dome).
 const SKY_RADIUS = 2000
@@ -201,7 +209,7 @@ export function createScene(container: HTMLElement): SunScene {
   }
   frame(new Vector3(35, 30, 55), new Vector3(0, 4, 0))
 
-  const ground = new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial({ color: 0x7a8f6a }))
+  const ground = new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial({ color: GROUND_COLOR }))
   ground.rotation.x = -Math.PI / 2
   // Just below y = 0 so a ground-floor apartment's floor does not z-fight with it.
   ground.position.y = -0.05
@@ -211,8 +219,8 @@ export function createScene(container: HTMLElement): SunScene {
   const world = new Group()
   scene.add(world)
 
-  const hemi = new HemisphereLight(0xcfe3ff, 0x5a6a4a, 0.35)
-  const ambient = new AmbientLight(0xffffff, 0.05)
+  const hemi = new HemisphereLight(0xdfe9f5, 0x7d8a6c, 0.35)
+  const ambient = new AmbientLight(0xfff3e0, 0.1)
   scene.add(hemi, ambient)
 
   const sunLight = new DirectionalLight(0xfff4e0, 3)
@@ -220,7 +228,7 @@ export function createScene(container: HTMLElement): SunScene {
   sunLight.shadow.mapSize.set(4096, 4096)
   sunLight.shadow.camera.near = 1
   sunLight.shadow.bias = -0.0005
-  sunLight.shadow.normalBias = 0.05
+  sunLight.shadow.normalBias = 0.08
   sunLight.target.position.set(0, 0, 0)
   scene.add(sunLight, sunLight.target)
 
@@ -232,8 +240,8 @@ export function createScene(container: HTMLElement): SunScene {
   aptLight.visible = false
   aptLight.shadow.mapSize.set(APARTMENT_SHADOW_MAP, APARTMENT_SHADOW_MAP)
   aptLight.shadow.camera.near = 1
-  aptLight.shadow.bias = -0.0003
-  aptLight.shadow.normalBias = 0.02
+  aptLight.shadow.bias = -0.0004
+  aptLight.shadow.normalBias = 0.05
   scene.add(aptLight, aptLight.target)
 
   let sunDistance = TEST_EXTENT.sunDistance
@@ -255,7 +263,7 @@ export function createScene(container: HTMLElement): SunScene {
     sunDisc.material.color.copy(SUN_LOW).lerp(SUN_WHITE, Math.min(1, Math.max(0, (sun.altitudeDeg - 2) / 10)))
     daylight = t
     applyGlow()
-    hemi.intensity = 0.05 + 0.3 * t
+    hemi.intensity = 0.05 + 0.45 * t
     sunLight.intensity = aptLight.intensity = 3 * Math.min(1, sun.altitudeDeg / 5)
   }
 
@@ -311,7 +319,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: LineSegments; ceiling: boolean }[] = []
+  let aptLines: { line: LineSegments; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -329,7 +337,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (edges) {
       const line = new LineSegments(new EdgesGeometry(geometry, EDGE_ANGLE_DEG), edges)
       line.renderOrder = 1
-      aptLines.push({ line, ceiling: material === ceilingMaterial })
+      aptLines.push({ line, kind: material === ceilingMaterial ? 'ceiling' : 'edge' })
       world.add(line)
     }
     const mesh = new Mesh(geometry, material)
@@ -368,7 +376,32 @@ export function createScene(container: HTMLElement): SunScene {
       world.add(mesh)
       return mesh
     })
+    addOutline(b, p)
     applyCutaway()
+  }
+
+  // Amber line along the top of the apartment walls, so the apartment is findable. A faint copy
+  // ignores depth, so it still shows through the floors above when they are not hidden.
+  function addOutline(b: Building, p: Plan) {
+    const y = floorBase(b, p) + p.floorHeight - SLAB_THICKNESS + OUTLINE_LIFT
+    const points: number[] = []
+    for (const ring of [p.outline.outer, ...p.outline.holes]) {
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]
+        const q = ring[(i + 1) % ring.length]
+        points.push(a.x, y, a.z, q.x, y, q.z)
+      }
+    }
+    const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(points, 3))
+    const solid = new LineSegments(geometry, new LineBasicMaterial({ color: OUTLINE_COLOR, depthWrite: false }))
+    const ghost = new LineSegments(
+      geometry.clone(),
+      new LineBasicMaterial({ color: OUTLINE_GHOST_COLOR, transparent: true, opacity: OUTLINE_GHOST_OPACITY, depthTest: false, depthWrite: false }),
+    )
+    solid.renderOrder = 2
+    ghost.renderOrder = 3
+    aptLines.push({ line: solid, kind: 'outline' }, { line: ghost, kind: 'ghost' })
+    world.add(solid, ghost)
   }
 
   function applyGlow() {
@@ -390,9 +423,12 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
-  /** Edge lines of the apartment; the ceiling's follow the ceiling (hidden by cutaway). */
+  /** Edge lines of the apartment; the ceiling's follow the ceiling (hidden by cutaway), the ghost outline shows when the floors above are not hidden. */
   function showAptLines(on: boolean) {
-    for (const { line, ceiling } of aptLines) line.visible = on && (!ceiling || !cutaway || walking)
+    for (const { line, kind } of aptLines) {
+      const shown = kind === 'ceiling' ? !cutaway || walking : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : true
+      line.visible = on && shown
+    }
   }
 
   function apartmentBounds(b: Building, p: Plan, tight = false) {
