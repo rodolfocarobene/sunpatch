@@ -128,3 +128,11 @@ export function windowYaw(plan: Plan, from: Point): number {
   const t = best.t / best.width
   return yawOf(a.x + (b.x - a.x) * t - from.x, a.z + (b.z - a.z) * t - from.z)
 }
+
+/** Where walking starts: `at` (made walkable) if given, else the plan's viewpoint when walkable, else the automatic spot. */
+export function walkStart(plan: Plan, at?: Point): { pos: Point; yaw: number } {
+  const v = plan.viewpoint
+  if (!at && v && isWalkable(plan, v)) return { pos: { x: v.x, z: v.z }, yaw: v.yaw }
+  const pos = (at && resolvePosition(plan, at)) || startPosition(plan)
+  return { pos, yaw: windowYaw(plan, pos) }
+}

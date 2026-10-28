@@ -27,7 +27,7 @@ import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
 import { floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
-import { insideOutline, resolvePosition, startPosition, windowYaw } from './walk-geom'
+import { insideOutline, walkStart } from './walk-geom'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
@@ -63,7 +63,7 @@ export interface SunScene {
   setPlan(plan: Plan | null): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
   setCutaway(on: boolean): void
-  /** Enters first person in the apartment at scene point `at` (default: a clear spot near the middle); false without a plan. */
+  /** Enters first person in the apartment at scene point `at` (default: the plan's viewpoint, else a clear spot near the middle); false without a plan. */
   startWalk(at?: { x: number; z: number }): boolean
   stopWalk(): void
   /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
@@ -392,14 +392,13 @@ export function createScene(container: HTMLElement): SunScene {
       saved.position.copy(camera.position)
       saved.target.copy(controls.target)
     }
-    const spot = at ?? startPosition(plan)
-    const resolved = resolvePosition(plan, spot) ?? startPosition(plan)
+    const start = walkStart(plan, at)
     walking = true
     controls.enabled = false
     camera.fov = WALK_FOV
     camera.near = WALK_NEAR
     camera.updateProjectionMatrix()
-    walk.start(plan, floorBase(selected, plan), resolved, windowYaw(plan, resolved))
+    walk.start(plan, floorBase(selected, plan), start.pos, start.yaw)
     applyCutaway()
     applyGlow()
     renderer.domElement.style.cursor = 'grab'

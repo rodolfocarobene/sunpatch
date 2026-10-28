@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Point } from './osm'
 import { FACADE_THICKNESS, type Plan, type Window } from './plan'
-import { isWalkable, movePosition, resolvePosition, startPosition, windowYaw, yawOf } from './walk-geom'
+import { isWalkable, movePosition, resolvePosition, startPosition, walkStart, windowYaw, yawOf } from './walk-geom'
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Point[] => [
   { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
@@ -121,5 +121,26 @@ describe('yawOf', () => {
     expect(yawOf(0, -1)).toBeCloseTo(0)
     expect(yawOf(-1, 0)).toBeCloseTo(Math.PI / 2) // west is counter-clockwise from north
     expect(yawOf(1, 0)).toBeCloseTo(-Math.PI / 2)
+  })
+})
+
+describe('walkStart', () => {
+  const withWindow = planOf(rect(0, 0, 10, 6), { windows: [win({ edge: 2 })] })
+
+  it('uses the viewpoint when it is walkable', () => {
+    const plan = { ...withWindow, viewpoint: { x: 2, z: 2, yaw: 1.25 } }
+    expect(walkStart(plan)).toEqual({ pos: { x: 2, z: 2 }, yaw: 1.25 })
+  })
+
+  it('falls back to the automatic start when the viewpoint is outside', () => {
+    const plan = { ...withWindow, viewpoint: { x: 20, z: 2, yaw: 1.25 } }
+    expect(walkStart(plan)).toEqual({ pos: startPosition(plan), yaw: windowYaw(plan, startPosition(plan)) })
+  })
+
+  it('starts at a clicked point whatever the viewpoint', () => {
+    const plan = { ...withWindow, viewpoint: { x: 2, z: 2, yaw: 1.25 } }
+    const { pos, yaw } = walkStart(plan, { x: 8, z: 3 })
+    expect(pos).toEqual({ x: 8, z: 3 })
+    expect(yaw).toBeCloseTo(windowYaw(plan, pos))
   })
 })
