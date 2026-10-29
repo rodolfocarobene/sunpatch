@@ -2,7 +2,8 @@ import type { PerspectiveCamera } from 'three'
 import type { Point } from './osm'
 import type { Plan } from './plan'
 import { DAY_MAX, STEP } from './daylight'
-import { movePosition } from './walk-geom'
+import type { SunDirection } from './sun'
+import { bandMarker, headingDeg, movePosition, relativeBearing } from './walk-geom'
 
 export const EYE_HEIGHT = 1.6
 const WALK_SPEED = 1.4
@@ -17,10 +18,14 @@ export interface WalkHandlers {
   togglePlay(): void
   /** The H key: show or hide the floors above. */
   toggleCutaway(): void
+  /** Every frame while walking, with the look direction (the HUD compass). */
+  look?(yaw: number): void
 }
 
 export interface WalkControls {
   readonly active: boolean
+  /** Where the camera looks, radians counter-clockwise from north. */
+  readonly yaw: number
   /** Stands at `at` (scene x, z) on a floor whose surface is at height `floorY`, looking along `yaw`. */
   start(plan: Plan, floorY: number, at: Point, yaw: number): void
   stop(): void
@@ -95,6 +100,9 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
     get active() {
       return active
     },
+    get yaw() {
+      return yaw
+    },
     start(p, y, at, direction) {
       plan = p
       floorY = y
@@ -150,6 +158,10 @@ export interface WalkHud {
   setPlaying(playing: boolean): void
   /** Mirrors the panel's "Hide floors above" checkbox on the HUD button. */
   setCutaway(hidden: boolean): void
+  /** The sun for the compass band; called whenever the date or time changes. */
+  setSun(sun: SunDirection): void
+  /** The look direction (walk yaw) for the compass band; cheap to call every frame. */
+  setYaw(yaw: number): void
 }
 
 export interface WalkHudHandlers {
@@ -159,6 +171,29 @@ export interface WalkHudHandlers {
   togglePlay(): void
   /** The floors-above button was pressed. */
   toggleCutaway(): void
+}
+
+const BAND_WIDTH = 320
+const BAND_INSET = 16 // the sun marker's half width: it stops this far from the end of the band
+const BAND_HALF_SPAN = 90 // degrees either side of the view direction that the band maps onto its inner width
+const PX_PER_DEGREE = (BAND_WIDTH / 2 - BAND_INSET) / BAND_HALF_SPAN
+const CARDINALS = new Map([[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW']])
+const SUN_ICON =
+  '<svg class="sunMark" viewBox="-10 -10 20 20" width="20" height="20" aria-hidden="true"><circle r="4.5"/>' +
+  [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-6.5" y2="-9" transform="rotate(${a})"/>`).join('') +
+  '</svg>'
+const CHEVRON = (side: 'left' | 'right') =>
+  `<svg class="edgeArrow" data-side="${side}" viewBox="0 0 8 12" width="8" height="12" aria-hidden="true"><path d="${side === 'left' ? 'M6.5 1 1.5 6l5 5' : 'M1.5 1l5 5-5 5'}"/></svg>`
+
+/** Ticks every 15 degrees from -180 to 540 (so any heading shows a full band), labelled at the eight main points. */
+function bandTicks(): string {
+  let html = ''
+  for (let a = -180; a < 540; a += 15) {
+    const name = CARDINALS.get(((a % 360) + 360) % 360)
+    const kind = name ? (name.length === 1 ? 'main' : 'half') : 'minor'
+    html += `<i class="tick ${kind}" style="left:${(a + 180) * PX_PER_DEGREE}px">${name ? `<b>${name}</b>` : ''}</i>`
+  }
+  return html
 }
 
 export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers): WalkHud {
@@ -187,6 +222,44 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
   for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) hud.addEventListener(type, (e) => e.stopPropagation())
   container.appendChild(hud)
+  const compass = document.createElement('div')
+  compass.id = 'walkCompass'
+  compass.hidden = true
+  compass.style.setProperty('--band', `${BAND_WIDTH}px`)
+  compass.innerHTML = `
+    <div class="compassBand" role="img" aria-label="Where the sun is, relative to where you look">
+      <div class="compassStrip">${bandTicks()}</div>
+      <span class="compassAhead"></span>
+      ${CHEVRON('left')}${CHEVRON('right')}${SUN_ICON}
+    </div>
+    <div class="compassCaption"></div>`
+  container.appendChild(compass)
+  const compassStrip = compass.querySelector<HTMLElement>('.compassStrip')!
+  const sunMark = compass.querySelector<SVGElement>('.sunMark')!
+  const caption = compass.querySelector('.compassCaption')!
+  const band = compass.querySelector<HTMLElement>('.compassBand')!
+  let sunNow: SunDirection | undefined
+  let yawNow: number | undefined
+  let drawn = ''
+  // Writes only what changed since the last frame: the strip's offset, the marker's offset and the caption.
+  function drawCompass() {
+    if (!sunNow || yawNow === undefined) return
+    const heading = headingDeg(yawNow)
+    const relative = relativeBearing(heading, sunNow.azimuthDeg)
+    const marker = bandMarker(relative, BAND_HALF_SPAN)
+    const stripX = Math.round((BAND_WIDTH / 2 - (heading + 180) * PX_PER_DEGREE) * 4) / 4
+    const markX = Math.round(marker.offset * (BAND_WIDTH / 2 - BAND_INSET) * 4) / 4
+    const up = sunNow.altitudeDeg > 0
+    const text = up ? `Sun ${Math.round(sunNow.altitudeDeg)}\u00b0 up` : 'Sun below the horizon'
+    const state = `${stripX}|${markX}|${marker.clamped ? Math.sign(relative) : 0}|${up}|${text}`
+    if (state === drawn) return
+    drawn = state
+    compassStrip.style.transform = `translateX(${stripX}px)`
+    sunMark.style.transform = `translateX(${markX}px)`
+    band.dataset.edge = marker.clamped ? (relative < 0 ? 'left' : 'right') : ''
+    band.dataset.up = String(up)
+    caption.textContent = text
+  }
   const status = hud.querySelector('.walkStatus')!
   const range = hud.querySelector<HTMLInputElement>('.timeRange')!
   const strip = hud.querySelector<HTMLElement>('.dayStrip')!
@@ -208,6 +281,16 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
   return {
     show(on) {
       hud.hidden = !on
+      compass.hidden = !on
+      if (on) drawn = ''
+    },
+    setSun(sun) {
+      sunNow = sun
+      drawCompass()
+    },
+    setYaw(yaw) {
+      yawNow = yaw
+      drawCompass()
     },
     setStatus(text) {
       status.textContent = text

@@ -767,7 +767,10 @@ export function createScene(container: HTMLElement): SunScene {
   let lastFrame = performance.now()
   function render() {
     const now = performance.now()
-    if (walking) walk.update((now - lastFrame) / 1000)
+    if (walking) {
+      walk.update((now - lastFrame) / 1000)
+      walkHandlers?.look?.(walk.yaw)
+    }
     else controls.update()
     lastFrame = now
     placeSky()
