@@ -1,9 +1,9 @@
-export type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix'
+export type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix' | 'panel'
 
 export type Shortcut = { tool: Tool } | { action: 'fit' }
 
 /** Single-letter shortcuts, shown on the buttons. Space, Esc, Del and Ctrl+Z are handled elsewhere. */
-export const TOOL_KEYS: Record<Tool, string> = { select: 'V', outline: 'O', wall: 'W', window: 'N', fix: 'B' }
+export const TOOL_KEYS: Record<Tool, string> = { select: 'V', outline: 'O', wall: 'W', window: 'N', fix: 'B', panel: 'P' }
 export const FIT_KEY = 'F'
 
 /** The shortcut for a key press, or undefined for other keys and for keys held with Ctrl, Meta or Alt. */

@@ -2,7 +2,7 @@
 .editor[hidden] { display: none; }
 .editor svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .editor[data-tool='select'] svg { cursor: default; }
-.editor[data-tool='outline'] svg, .editor[data-tool='wall'] svg, .editor[data-tool='window'] svg, .editor[data-tool='fix'] svg { cursor: crosshair; }
+.editor[data-tool='outline'] svg, .editor[data-tool='wall'] svg, .editor[data-tool='window'] svg, .editor[data-tool='fix'] svg, .editor[data-tool='panel'] svg { cursor: crosshair; }
 .editor.panning svg { cursor: grabbing; }
 /* One column holds the boxes, so the properties box simply follows the toolbar. */
 .editor-side {

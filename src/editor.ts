@@ -2,7 +2,7 @@ import './editor.css'
 import { pointInPolygon, ringArea } from './osm'
 import type { Building, Point } from './osm'
 import { DEFAULT_WALL_THICKNESS, DEFAULT_WINDOW, SLAB_THICKNESS, floorBase, levelCount, ringOf } from './plan'
-import type { BuildingEdit, Plan } from './plan'
+import type { BuildingEdit, Panel, Plan } from './plan'
 import {
   clampWindowVertical,
   normalizeWindows,
@@ -25,6 +25,8 @@ import { isClick } from './click'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
+import { azimuthOf, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
+import type { PanelPreset } from './panel'
 import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
 
@@ -47,17 +49,19 @@ const FREE_AREA = { top: 40, bottom: 80 }
 const storageKey = (buildingId: string): string => `sun-in-house:plan:${buildingId}`
 
 const HELP: Record<Tool, string> = {
-  select: 'Click a window or wall to select it; drag a window along its edge. Drag empty space to pan.',
+  select: 'Click a window, wall or panel to select it; drag a window along its edge, a panel to move it. Drag empty space to pan.',
   outline: 'Click the corners of your apartment; click the first point or double-click to close. Esc cancels.',
   wall: 'Click where the wall starts, then where it ends; each next click continues from there. Click the first point to close, double-click or Esc to stop. Shift snaps to 0 or 90 degrees.',
   window: 'Click near an outline edge to add a window, or click a window to select it.',
   fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees.',
+  panel: 'Click to place a solar panel, inside or outside the outline. Near a wall it snaps and faces outward; hold Shift to place it freely.',
 }
 // One short line under the tools for the tools without options, so that row is never an empty gap.
 const TOOL_HINT: Partial<Record<Tool, string>> = {
   select: 'Drag a window along its edge.',
   wall: 'Click to chain walls. Esc to stop.',
   window: 'Click an outline edge to add one.',
+  panel: 'Click to place. Near a wall it snaps.',
 }
 const VIEWPOINT_HELP = 'Walk start: this is where Walk inside puts you. Drag the camera to move it, the white dot to turn it.'
 const VIEWPOINT_CLEARANCE = 0.25
@@ -88,6 +92,8 @@ type Drag =
   | { kind: 'window'; index: number; before: Plan }
   | { kind: 'wallEnd'; index: number; end: 'a' | 'b'; before: Plan }
   | { kind: 'viewpoint'; mode: 'move' | 'rotate'; dx: number; dz: number; before: Plan }
+  | { kind: 'panel'; index: number; dx: number; dz: number; free: boolean; before: Plan }
+  | { kind: 'panelRotate'; index: number; before: Plan }
   | { kind: 'editVertex'; index: number; vertex: number; before: Plan }
 
 function field(label: string, input: HTMLElement): HTMLLabelElement {
@@ -178,7 +184,7 @@ export function createPlanEditor(
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
-  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Building fix']] as const) {
+  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Building fix'], ['panel', 'Panel']] as const) {
     const b = button(label, `${label} tool (${TOOL_KEYS[t]})`, () => setTool(t))
     b.append(keyHint(TOOL_KEYS[t]))
     toolButtons.set(t, b)
@@ -308,6 +314,8 @@ export function createPlanEditor(
       )
     } else if (sel.kind === 'edit') {
       props.replaceChildren(...editProps(p, sel.index))
+    } else if (sel.kind === 'panel') {
+      props.replaceChildren(...panelProps(p, sel.index))
     } else if (sel.kind === 'window') {
       const w = p.windows[sel.index]
       const ring = ringOf(p, w.ring)
@@ -392,8 +400,8 @@ export function createPlanEditor(
     render()
   }
 
-  function selectionList(p: Plan, kind: 'window' | 'wall' | 'edit'): unknown[] {
-    return kind === 'window' ? p.windows : kind === 'wall' ? p.walls : (p.edits ??= [])
+  function selectionList(p: Plan, kind: 'window' | 'wall' | 'edit' | 'panel'): unknown[] {
+    return kind === 'window' ? p.windows : kind === 'wall' ? p.walls : kind === 'panel' ? p.panels : (p.edits ??= [])
   }
 
   function resetViewpoint(): void {
@@ -682,6 +690,75 @@ export function createPlanEditor(
     ]
   }
 
+  // --- solar panels ---
+  /** A panel for a click at `p`: snapped to the nearest outline or building edge unless `free`. */
+  function panelAt(p: Point, free: boolean): Panel {
+    const snap = free
+      ? undefined
+      : snapPanel(p, [building!.outer, plan!.outline.outer], [...building!.holes, ...plan!.outline.holes], tol(SNAP_PX * 1.5))
+    return newPanel(p, building!, plan!, snap)
+  }
+
+  function hitPanel(p: Point): number {
+    if (!plan) return -1
+    for (let i = plan.panels.length - 1; i >= 0; i--) if (hitsPanel(plan.panels[i], p, tol(HIT_PX), tol(8))) return i
+    return -1
+  }
+
+  function panelClick(e: MouseEvent): void {
+    if (!plan || !building) return
+    const p = eventPoint(e)
+    const existing = hitPanel(p)
+    if (existing >= 0) {
+      selection = { kind: 'panel', index: existing }
+      return render()
+    }
+    const panel = panelAt(p, e.shiftKey)
+    const next = clone(plan)
+    next.panels.push(panel)
+    selection = { kind: 'panel', index: next.panels.length - 1 }
+    draft = { outline: [] }
+    commit(next)
+    setMessage(
+      panel.tilt === 90
+        ? 'Panel on the facade, facing out. Set tilt, facing and height in the box; drag the white dot to turn it.'
+        : 'Panel placed facing south at 30 degrees. Set tilt, facing and height in the box; drag the white dot to turn it.',
+    )
+  }
+
+  function panelProps(p: Plan, index: number): HTMLElement[] {
+    const q = p.panels[index]
+    const patch = (change: Partial<Panel>): void => {
+      const next = clone(p)
+      Object.assign(next.panels[index], change)
+      commit(next)
+      updateProps(true)
+    }
+    const preset = (kind: PanelPreset): void => patch(presetPatch(kind, building!, p))
+    const presets = document.createElement('div')
+    presets.className = 'editor-row'
+    presets.style.flexDirection = 'column'
+    const base = floorBase(building!, p)
+    presets.append(
+      button('Balcony railing', `Vertical, lowest edge ${(base + 1).toFixed(1)} m: a metre above this floor`, () => preset('railing')),
+      button('Roof stand', `Tilted 30 degrees, lowest edge at the roof (${building!.height.toFixed(1)} m)`, () => preset('roof')),
+      button('Ground', 'Tilted 30 degrees, lowest edge 0.5 m above the ground', () => preset('ground')),
+    )
+    const hint = document.createElement('small')
+    hint.textContent = 'Facing: 0 = N, 90 = E, 180 = S. Tilt: 90 is vertical, 0 flat. Heights are metres above the ground.'
+    return [
+      Object.assign(document.createElement('h4'), { textContent: 'Solar panel' }),
+      field('Module width (m)', numberInput(q.width, 0.01, 0.1, (v) => patch({ width: v }))),
+      field('Module height (m)', numberInput(q.height, 0.01, 0.1, (v) => patch({ height: v }))),
+      field('Modules in a row', numberInput(q.count ?? 1, 1, 1, (v) => patch({ count: Math.round(v) }), 50)),
+      field('Tilt (deg)', numberInput(q.tilt, 1, 0, (v) => patch({ tilt: v }), 90)),
+      field('Facing (deg)', numberInput(q.azimuth, 1, 0, (v) => patch({ azimuth: v % 360 }), 360)),
+      field('Lowest edge (m)', numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
+      presets,
+      hint,
+    ]
+  }
+
   function finishOutline(): void {
     if (!plan) return
     const pts = draft.outline
@@ -781,6 +858,17 @@ export function createPlanEditor(
       drag = { kind: 'viewpoint', mode, dx: vp.x - p.x, dz: vp.z - p.z, before: clone(plan) }
       return render()
     }
+    if (selection?.kind === 'panel' && near(panelTip(plan.panels[selection.index]), 9)) {
+      drag = { kind: 'panelRotate', index: selection.index, before: clone(plan) }
+      return
+    }
+    const pi = hitPanel(p)
+    if (pi >= 0) {
+      const q = plan.panels[pi]
+      selection = { kind: 'panel', index: pi }
+      drag = { kind: 'panel', index: pi, dx: q.x - p.x, dz: q.z - p.z, free: e.shiftKey, before: clone(plan) }
+      return render()
+    }
     if (selection?.kind === 'edit') {
       const vertex = plan.edits![selection.index].outline.findIndex((q) => near(q, HIT_PX))
       if (vertex >= 0) {
@@ -845,6 +933,23 @@ export function createPlanEditor(
       } else if (Math.hypot(p.x - base.x, p.z - base.z) > 0.05) {
         plan.viewpoint = { x: base.x, z: base.z, yaw: yawOf(p.x - base.x, p.z - base.z) }
       }
+    } else if (drag.kind === 'panel') {
+      const q = plan.panels[drag.index]
+      const p = eventPoint(e)
+      const to = { x: p.x + drag.dx, z: p.z + drag.dz }
+      // A vertical panel (railing, facade) snaps to walls as it is dragged; the others move freely.
+      const snap = q.tilt >= 80 && !drag.free && !e.shiftKey && building
+        ? snapPanel(p, [building.outer, plan.outline.outer], [...building.holes, ...plan.outline.holes], tol(SNAP_PX * 1.5))
+        : undefined
+      if (snap) Object.assign(q, snap.point, { azimuth: snap.azimuth })
+      else Object.assign(q, to)
+    } else if (drag.kind === 'panelRotate') {
+      const q = plan.panels[drag.index]
+      const p = eventPoint(e)
+      if (Math.hypot(p.x - q.x, p.z - q.z) > 0.05) {
+        const az = azimuthOf(p.x - q.x, p.z - q.z)
+        q.azimuth = (e.shiftKey ? Math.round(az / 15) * 15 : Math.round(az)) % 360
+      }
     } else if (drag.kind === 'editVertex') {
       plan.edits![drag.index].outline[drag.vertex] = snapForFix(eventPoint(e), drag.index).point
     } else {
@@ -868,6 +973,7 @@ export function createPlanEditor(
     else if (tool === 'outline') outlineClick(e)
     else if (tool === 'wall') wallClick(e)
     else if (tool === 'fix') fixClick(e)
+    else if (tool === 'panel') panelClick(e)
     else windowClick(e)
   })
 
@@ -882,6 +988,8 @@ export function createPlanEditor(
       const snap = fixPoint(e)
       draft.cursor = snap.point
       draft.snap = snap
+    } else if (tool === 'panel' && building) {
+      draft.panel = panelAt(eventPoint(e), e.shiftKey)
     } else if (tool === 'wall') {
       const snap = wallPoint(e, draft.wallStart)
       draft.cursor = snap.point
@@ -895,6 +1003,10 @@ export function createPlanEditor(
     render()
   })
   svg.addEventListener('pointerleave', () => {
+    if (draft.panel) {
+      draft.panel = undefined
+      render()
+    }
     if (hoverId === undefined) return
     hoverId = undefined
     svg.style.cursor = ''
