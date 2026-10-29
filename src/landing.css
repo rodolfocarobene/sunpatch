@@ -73,7 +73,6 @@ main > section > *, .split { max-width: var(--maxw); margin-left: auto; margin-r
   padding-top: 40px;
   background: radial-gradient(ellipse 70% 60% at 50% 0%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%);
 }
-.eyebrow { color: var(--accent-strong); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.8rem; }
 .hero h1 { font-size: clamp(2.2rem, 6.5vw, 4rem); max-width: 16ch; margin: 0 auto 1.2rem; }
 .lead { font-size: clamp(1.05rem, 2.2vw, 1.25rem); color: var(--muted); max-width: 40rem; margin: 0 auto 1.8rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 0; }
