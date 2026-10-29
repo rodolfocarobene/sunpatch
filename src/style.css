@@ -43,7 +43,7 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
   color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
 #panel button:hover:not(:disabled), #search button:hover, #statusChip button:hover, #walkHud button:hover,
-.editor-box button:hover:not(:disabled), .maplibregl-popup-content button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
+.editor-box button:hover:not(:disabled):not([aria-pressed='true']), .maplibregl-popup-content button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
 #panel button:active:not(:disabled), #search button:active, #statusChip button:active, #walkHud button:active,
 .editor-box button:active:not(:disabled), .maplibregl-popup-content button:active { background: var(--line); }
 #panel button:disabled, .editor-box button:disabled { color: var(--disabled); cursor: default; }
