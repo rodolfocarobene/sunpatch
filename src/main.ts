@@ -201,6 +201,7 @@ function switchTo(polygonId: string, at: Point) {
   show(buildings, selected, origin, false)
   sunScene.setTrees(scatterTrees(parseGreen(data.elements, origin), buildings))
   chip.done(SWITCHED)
+  if (view === 'plan') editor.notify(SWITCHED) // the chip lives in the 3D view
 }
 
 /** Shift-click in 3D: add the polygon to the selection or take it out; the plan carries over and is saved. */

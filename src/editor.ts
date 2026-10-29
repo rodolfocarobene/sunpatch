@@ -32,6 +32,8 @@ export interface PlanEditor {
   /** Shows `building` (and faint `neighbors` footprints for context) and edits `plan`. */
   open(building: Building, neighbors: Building[], plan: Plan): void
   setVisible(visible: boolean): void
+  /** Shows a message in the status line until the next action. */
+  notify(text: string): void
   getPlan(): Plan
 }
 
@@ -1029,6 +1031,9 @@ export function createPlanEditor(
         needsFit = needsFit || !view.w
         render()
       }
+    },
+    notify(text) {
+      setMessage(text)
     },
     getPlan() {
       if (!plan) throw new Error('Plan editor has no plan: call open() first')
