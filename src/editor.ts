@@ -25,7 +25,7 @@ import { isClick } from './click'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
-import { azimuthOf, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
+import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
 import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
@@ -695,7 +695,7 @@ export function createPlanEditor(
   function panelAt(p: Point, free: boolean): Panel {
     const snap = free
       ? undefined
-      : snapPanel(p, [building!.outer, plan!.outline.outer], [...building!.holes, ...plan!.outline.holes], tol(SNAP_PX * 1.5))
+      : snapPanel(p, [building!.outer, plan!.outline.outer], [...building!.holes, ...plan!.outline.holes], tol(SNAP_PX * 1.5), exteriorEdge(building!))
     return newPanel(p, building!, plan!, snap)
   }
 
@@ -940,7 +940,7 @@ export function createPlanEditor(
       const to = { x: p.x + drag.dx, z: p.z + drag.dz }
       // A vertical panel (railing, facade) snaps to walls as it is dragged; the others move freely.
       const snap = q.tilt >= 80 && !drag.free && !e.shiftKey && building
-        ? snapPanel(p, [building.outer, plan.outline.outer], [...building.holes, ...plan.outline.holes], tol(SNAP_PX * 1.5))
+        ? snapPanel(p, [building.outer, plan.outline.outer], [...building.holes, ...plan.outline.holes], tol(SNAP_PX * 1.5), exteriorEdge(building))
         : undefined
       if (snap) Object.assign(q, snap.point, { azimuth: snap.azimuth })
       else Object.assign(q, to)

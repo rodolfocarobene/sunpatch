@@ -101,14 +101,35 @@ export interface PanelSnap {
   azimuth: number
 }
 
+/** An edge counts as exterior when its ends and middle lie within this of the building's outer boundary. */
+export const EXTERIOR_TOLERANCE = 0.3
+
 /**
- * Snaps `at` to the nearest edge within `tol` of the outer rings and holes given: the point goes on the edge,
- * pushed `FACADE_GAP` outward, and the panel faces outward.
+ * Accepts the edges that lie on the outside of `building` (its merged footprint, holes included): the footprint's
+ * own edges and any other edge, such as an apartment outline's, that coincides with them. An apartment edge
+ * inside the building is rejected, so a facade panel is never buried in the mass.
  */
-export function snapPanel(at: Point, outers: Point[][], holes: Point[][], tol: number): PanelSnap | undefined {
+export function exteriorEdge(building: Pick<Building, 'outer' | 'holes'>, tol = EXTERIOR_TOLERANCE): (a: Point, b: Point) => boolean {
+  const segments = [building.outer, ...building.holes].flatMap(ringSegments)
+  const near = (p: Point): boolean => segments.some(([a, b]) => distanceToSegment(p, a, b) <= tol)
+  return (a, b) => near(a) && near(b) && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 })
+}
+
+/**
+ * Snaps `at` to the nearest edge within `tol` of the outer rings and holes given (only those `accept` lets
+ * through): the point goes on the edge, pushed `FACADE_GAP` outward, and the panel faces outward.
+ */
+export function snapPanel(
+  at: Point,
+  outers: Point[][],
+  holes: Point[][],
+  tol: number,
+  accept?: (a: Point, b: Point) => boolean,
+): PanelSnap | undefined {
   let best: { ring: Point[]; edge: number; hole: boolean; point: Point; dist: number } | undefined
   const scan = (ring: Point[], hole: boolean): void => {
     ringSegments(ring).forEach(([a, b], edge) => {
+      if (accept && !accept(a, b)) return
       const hit = projectOnSegment(at, a, b)
       if (hit.dist <= tol && (!best || hit.dist < best.dist)) best = { ring, edge, hole, point: hit.point, dist: hit.dist }
     })
