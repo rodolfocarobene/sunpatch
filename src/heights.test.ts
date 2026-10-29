@@ -6,7 +6,7 @@ import {
   applyHeights, heightIn, isGuessed, keepKnown, overrideFor, parseHeights, reselect, validHeight,
 } from './heights'
 import { buildingHeights, parseOverpass, type Building, type OverpassElement, type Point } from './osm'
-import { buildingLine } from './building-line'
+import { buildingLine, hoverLines } from './building-line'
 import { defaultPlan, levelCount, rebasePlan } from './plan'
 import { tileBuildings } from './tiles'
 
@@ -36,7 +36,7 @@ describe('isGuessed', () => {
   })
 
   it('marks an outline raised from its parts as estimated, not as data', () => {
-    const { buildings } = parseOverpass((duomo as { elements: OverpassElement[] }).elements, { lat: 45.4642, lon: 9.19 })
+    const { buildings } = parseOverpass(duomo.elements as unknown as OverpassElement[], { lat: 45.4642, lon: 9.19 })
     const raised = buildings.filter((b) => b.heightSource === 'parts')
     expect(raised.length).toBeGreaterThan(0)
     expect(raised.every(isGuessed)).toBe(true)
@@ -157,5 +157,13 @@ describe('heights in a plan', () => {
     const known = keepKnown({ 'way/1': { height: 5 }, 'way/9': { height: 7 } }, [b])
     expect(known).toEqual({ 'way/1': { height: 5 } })
     expect(keepKnown({ 'way/9': { height: 7 } }, [b])).toBeUndefined()
+  })
+})
+
+describe('hover note', () => {
+  it('names the building, the height with its source, and the gesture', () => {
+    const b = make('way/1', rect(0, 0, 10, 10), { name: 'Casa Rossa' })
+    expect(hoverLines(b)).toEqual(['Casa Rossa', '9 m · height guessed: 9 m default', 'Right-click to edit the height'])
+    expect(hoverLines({ ...b, heightSource: 'tag' })[1]).toBe('9 m')
   })
 })

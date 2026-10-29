@@ -54,3 +54,10 @@ export function buildingLine(b: Building): BuildingLine {
     source: heightSourceLabel(b),
   }
 }
+
+/** The hover note on a building in 3D: its name or id, its height with where that came from, and how to change it. */
+export function hoverLines(b: Building): string[] {
+  const line = buildingLine(b)
+  const height = [`${Math.round(b.height * 10) / 10} m`, line.source].filter(Boolean).join(' \u00b7 ')
+  return [line.title ?? line.label, height, 'Right-click to edit the height']
+}

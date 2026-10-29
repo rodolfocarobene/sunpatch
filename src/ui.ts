@@ -55,6 +55,10 @@ export interface UI {
   setCutaway(on: boolean): void
   toggleCutaway(): void
   onCutaway(listener: (hidden: boolean) => void): void
+  /** The "Mark guessed heights" switch (on by default): hear about it now and on every change. */
+  onMarkGuessed(listener: (on: boolean) => void): void
+  /** The selected building's Edit height button: hears where the button is on screen. */
+  onEditHeight(listener: (at: { x: number; y: number }) => void): void
   /** The "Sun map" switch (off by default): hear about changes. */
   onSunMap(listener: (on: boolean) => void): void
   /** Sets or flips the switch (the walk panel, the M key and a floor click in walk mode use these). */
@@ -137,13 +141,19 @@ export function createUI(
     <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>See it in 3D</button></p>
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
-      <div id="aptTools" hidden>
+      <div id="aptTools">
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
         <div class="field">
           <h3 class="groupHead">Show</h3>
-          <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
-          <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
-          <div id="sunMapLegend" hidden></div>
+          <div id="aptShow" hidden>
+            <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
+            <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
+            <div id="sunMapLegend" hidden></div>
+          </div>
+          <div id="guessedBox">
+            <label class="row" title="Stripe the buildings whose height OpenStreetMap does not have (a 9 m default is used)"><input id="guessed" type="checkbox" checked> Mark guessed heights</label>
+            <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>Hatched: height guessed (no data in OpenStreetMap)</p>
+          </div>
         </div>
       </div>
       <details id="location">
@@ -206,6 +216,12 @@ export function createUI(
   })
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
+  const guessed = $<HTMLInputElement>('guessed')
+  let guessedListener: ((on: boolean) => void) | undefined
+  guessed.addEventListener('change', () => {
+    $('guessedLegend').hidden = !guessed.checked
+    guessedListener?.(guessed.checked)
+  })
   const cutaway = $<HTMLInputElement>('cutaway')
   let cutawayListener: ((hidden: boolean) => void) | undefined
   const applyCutaway = () => {
@@ -248,6 +264,13 @@ export function createUI(
 
   // The switching hint is for the first visits: once dismissed it stays away.
   const switchHint = $('switchHint')
+  let editHeightListener: ((at: { x: number; y: number }) => void) | undefined
+  $('building').addEventListener('click', (e) => {
+    const button = (e.target as HTMLElement).closest<HTMLButtonElement>('button.editHeight')
+    if (!button) return
+    const r = button.getBoundingClientRect()
+    editHeightListener?.({ x: r.left + r.width / 2, y: r.bottom })
+  })
   let hintGone = false
   let hasBuilding = false
   let building: Building | null = null
@@ -267,7 +290,7 @@ export function createUI(
     if (switchHint.hidden) return
     const parts = (building?.members?.length ?? 1) > 1
     switchHint.firstElementChild!.textContent =
-      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift-click to add or remove parts${parts ? ' of your building' : ''}.`
+      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift-click to add or remove parts${parts ? ' of your building' : ''}. Right-click a building to set its height.`
   }
 
   // The first-run guide: open by default, its collapsed state is remembered.
@@ -448,7 +471,7 @@ export function createUI(
       $('exampleNote').hidden = !on
     },
     setPlanActive(active) {
-      $('aptTools').hidden = !active
+      $('aptShow').hidden = !active
       if (active) applyCutaway()
     },
     setCutaway(on) {
@@ -465,6 +488,13 @@ export function createUI(
     },
     onSunMap(fn) {
       sunMapListener = fn
+    },
+    onMarkGuessed(fn) {
+      guessedListener = fn
+      fn(guessed.checked)
+    },
+    onEditHeight(fn) {
+      editHeightListener = fn
     },
     setSunMap(on) {
       if (sunMap.checked === on) return
@@ -598,6 +628,11 @@ function renderBuilding(el: HTMLElement, b: Building) {
   const facts = Object.assign(document.createElement('span'), { textContent: ` \u00b7 ${line.facts.join(' \u00b7 ')}`, title: line.heightNote })
   row.append(id, facts)
   const extra: HTMLElement[] = []
+  // Where the height came from, when it is a guess or yours; the button is the way to change any height without a neighbour to click.
+  const note = Object.assign(document.createElement('span'), { className: 'heightNote' })
+  if (line.source) note.append(Object.assign(document.createElement('span'), { className: line.source.includes('guessed') || line.source.includes('estimated') ? 'guess' : '', textContent: line.source }), ' ')
+  note.append(Object.assign(document.createElement('button'), { type: 'button', className: 'link editHeight', textContent: 'Edit height', title: 'Set the height of this building in floors or metres (right-click any building in 3D to do the same)' }))
+  extra.push(note)
   if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: 'Stopped at a large selection; shift-click to trim it.' }))
   // The Map view says how to grow the selection; 3D and Plan have the dismissible switching hint instead.
   const parts = b.members?.length ?? 1
