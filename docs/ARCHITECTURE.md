@@ -36,9 +36,9 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 | `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play), status chip. |
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
-| `tiles.ts` | Vector-tile features → `Building` for the instant preview. |
+| `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
-| `block.ts` | The selection model: merges the polygons of one building (parts, relation rings, address, overlap) into the selected `Building` with `members` and `sources`. |
+| `block.ts` | The selection model: flood fill over touching, overlapping and related polygons into the selected `Building` with `members` and `sources`; shift-click trimming; restoring a saved selection. |
 | `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights, picking helpers. |
 | `trees.ts` | Trees: green areas and mapped trees from Overpass, seeded Poisson-ish scatter (clear of buildings, capped at 1500 within 300 m), two `InstancedMesh`es that cast shadows. |
 | `footprint.ts` | Extrudes footprints into three.js geometry. |
@@ -53,21 +53,37 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 ## The selection model
 
 One real building is often several OSM polygons (an outline plus `building:part`s with their own heights, the
-outer rings of a multipolygon, a footprint mapped twice). `selectBuilding` in `src/block.ts` turns the clicked
-polygon into one selected `Building`:
+outer rings of a multipolygon, a footprint mapped twice, or neighbouring volumes of different height that merely
+touch). `selectBuilding` in `src/block.ts` turns the clicked polygon into one selected `Building`:
 
 - `outer`/`holes` are the union of the footprints (the plan editor snaps to it and "Whole floor" uses it);
   `height`/`minHeight`/`levels` summarise the pieces (tallest piece, lowest start).
 - `members` are the pieces that are drawn, each with its own footprint and heights; `sources` lists every polygon
-  merged in, including an outline that is only the footprint of its parts (not drawn).
-- Merge rules: same relation; same `addr:street` + `addr:housenumber`; parts lying in an outline; overlapping
-  outlines; a stray part joins the neighbour it shares the longest wall (4 m or more) with. Buildings that merely
-  touch are not merged (a Milan perimeter block would become one selection); different addresses never merge.
-- `id` is the id of the largest outline, so it does not depend on which polygon was clicked. Plans saved under any
-  merged polygon's id are still found (`savedPlanFor` in `main.ts`).
-- `apartment.ts` cuts every member around the one apartment outline; whatever of any member lies above the ceiling
-  slab goes to the cutaway group.
-- A lone polygon is returned unchanged, with no `members`/`sources`.
+  merged in, including an outline that is only the footprint of its parts (not drawn). `anchor` is the clicked
+  polygon.
+- The selection is a flood fill from the clicked polygon over a graph. Edges: same relation; same `addr:street` +
+  `addr:housenumber`; a part lying in an outline; overlapping outlines; touching (a shared wall of 1 m or more
+  within 0.3 m, or an overlap of 1 m2; a corner contact does not count). In Milan this can be a whole perimeter
+  block. The fill stops at 60 polygons or 250 m from the click and sets `capped`, which the building card reports.
+- Shift-click in 3D (`scene.onPartClick`, then `togglePart`) removes a polygon or adds one that touches the
+  selection. The clicked polygon always stays, and a removal also drops what it was the only link to. The plan key
+  (`id`) does not change. The Map view has no shift-click: it does not draw the selection, and heights, which tell
+  the parts apart, are only visible in 3D.
+- `id` is the id of the largest outline, so it does not depend on which polygon was clicked, unless a trimmed or
+  restored selection forces it (`options.id`). A lone polygon is returned unchanged, with no `members`/`sources`.
+- Persistence: a `Plan` stores `selection` (the `sources` ids) next to `buildingId`. On a pick, `choose` in
+  `main.ts` floods, finds a saved plan under any polygon of the result (`savedPlanFor`, so plans saved before merging
+  still load), and, if the plan has a `selection`, rebuilds exactly those parts with `restoreSelection`. Shift-click
+  saves the plan again when one exists.
+- Tile preview to OSM: tile pieces are flooded the same way. If the user trimmed the preview, `carrySelection` picks
+  the OSM polygons that lie mostly inside the previous footprint; otherwise the fill runs again from the click.
+- `apartment.ts` cuts every member around the one apartment outline, each with its own height and min height;
+  whatever of any member lies above the ceiling slab goes to the cutaway group.
+- The `?example=milan` sample keeps Palazzo Reale alone (`ids: [id]`): flooding adds its neighbours and moves the
+  facade the sample apartment is drawn on.
+
+`tiles.ts` also joins tile pieces of one building (`joinPieces`): same heights, touching or overlapping, same
+feature id (without ids: a wall along a constant longitude or latitude, or a buffer overlap).
 
 ## The plan model
 

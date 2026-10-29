@@ -288,6 +288,19 @@ export function restoreSelection(all: Building[], p: Point, saved: { id: string;
   return mergeSelection(all, seed, { ids: saved.ids, id: saved.id })
 }
 
+/**
+ * The selection carried onto another set of polygons (map-tile preview to OSM data): the polygons of `all`
+ * that lie mostly inside `previous`'s footprint, kept to the ones connected to the click.
+ */
+export function carrySelection(all: Building[], previous: Building, p: Point): Building | undefined {
+  const seed = snapBuilding(all, p)
+  if (!seed) return undefined
+  const ids = all.filter((b) => shareInside(b, previous) >= OVERLAP_SHARE).map((b) => b.id)
+  const wanted = new Set([seed.id, ...ids])
+  const kept = connectedTo(all, wanted, seed)
+  return mergeSelection(all, seed, { ids: [...kept], click: p })
+}
+
 /** Polygons connected to `anchor` through `ids` only. */
 function connectedTo(all: Building[], ids: Set<string>, anchor: Building): Set<string> {
   const pool = all.filter((b) => ids.has(b.id) && b.id !== anchor.id)

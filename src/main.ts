@@ -1,7 +1,7 @@
 import './style.css'
 import { createMapView } from './map'
 import { createStatusChip } from './chip'
-import { createPlanEditor, loadSavedPlan } from './editor'
+import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
 import { EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
@@ -13,7 +13,7 @@ import {
   type Building,
   type Origin,
 } from './osm'
-import { selectBuilding } from './block'
+import { carrySelection, restoreSelection, selectBuilding, togglePart } from './block'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { nextStep } from './next-step'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
@@ -52,6 +52,7 @@ const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
 let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'
 const editor = createPlanEditor(document.body, setPlan, { autosave: () => !exampleMode })
+sunScene.onPartClick(togglePartAt)
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
 // Starts on the map: there is nothing to show in 3D until a building is picked.
@@ -95,10 +96,13 @@ interface Pick {
 let current = 0
 let pending: AbortController | undefined
 let last: Pick | undefined
+/** The user added or removed parts of the selection (shift-click) since the last pick. */
+let edited = false
 
 function pick(lat: number, lon: number) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
   ui.setExample(false)
+  edited = false
   pending?.abort()
   chip.hide()
   const token = ++current
@@ -110,7 +114,7 @@ function pick(lat: number, lon: number) {
   if (hit) {
     const origin = unproject(ringCentroid(hit.outer), clicked)
     const buildings = tileBuildings(features, origin, RADIUS_M)
-    const selected = selectBuilding(buildings, project(lat, lon, origin))!
+    const selected = choose(buildings, origin, clicked)!
     last.origin = origin
     sunScene.setTrees([]) // the old trees belong to the old origin
     show(buildings, selected, origin, false)
@@ -130,10 +134,10 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
   site = { buildings, selected, origin }
   sunScene.setBuildings(buildings, selected.id, { keepCamera })
-  if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id })
+  if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
   else {
     const saved = exampleMode ? null : savedPlanFor(selected)
-    setPlan(saved ? rebasePlan(saved, origin) : undefined)
+    setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
   }
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
@@ -144,14 +148,38 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
 
 const NEIGHBOR_RADIUS_M = 60
 
+/** The building at the click: the flood fill, or the parts a saved plan recorded (older plans have none). */
+function choose(buildings: Building[], origin: Origin, clicked: { lat: number; lon: number }): Building | undefined {
+  const at = project(clicked.lat, clicked.lon, origin)
+  const flooded = selectBuilding(buildings, at)
+  const saved = flooded && !exampleMode ? savedPlanFor(flooded) : null
+  if (!flooded || !saved?.selection) return flooded
+  return restoreSelection(buildings, at, { id: saved.originalId, ids: saved.selection }) ?? flooded
+}
+
+/** Shift-click in 3D: add the polygon to the selection or take it out; the plan carries over and is saved. */
+function togglePartAt(polygonId: string) {
+  if (!site) return
+  const result = togglePart(site.buildings, site.selected, polygonId)
+  if ('hint' in result) {
+    chip.done(result.hint)
+    return
+  }
+  edited = true
+  show(site.buildings, result.selected, site.origin, true)
+  if (plan && !exampleMode) savePlan(plan)
+}
+
 /** A plan saved on the building, or on any polygon that is now merged into it (older plans used the clicked one). */
-function savedPlanFor(b: Building): Plan | null {
+function savedPlanFor(b: Building): (Plan & { originalId: string }) | null {
   for (const id of [b.id, ...(b.sources ?? [])]) {
     const saved = loadSavedPlan(id)
-    if (saved) return { ...saved, buildingId: b.id }
+    if (saved) return { ...saved, buildingId: b.id, originalId: id }
   }
   return null
 }
+
+const withoutKey = ({ originalId: _, ...plan }: Plan & { originalId: string }): Plan => plan
 
 /** Opens the editor on the selected building; false when there is none yet. */
 function openEditor(): boolean {
@@ -195,7 +223,9 @@ async function refine({ clicked, origin }: Pick, token: number) {
       return
     }
     const { buildings } = parseOverpass(elements, sceneOrigin)
-    const selected = selectBuilding(buildings, project(clicked.lat, clicked.lon, sceneOrigin))
+    // Parts the user trimmed or added on the preview carry over to the OSM polygons that cover them.
+    const at = project(clicked.lat, clicked.lon, sceneOrigin)
+    const selected = hasPreview && edited && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
     if (!selected) {
       // Nothing in OSM under the click: the preview stays.
       if (hasPreview) chip.done('Detailed OSM data loaded (no OSM building at this point)')

@@ -71,7 +71,7 @@ export function loadSavedPlan(buildingId: string): Plan | null {
   }
 }
 
-function savePlan(plan: Plan): void {
+export function savePlan(plan: Plan): void {
   try {
     localStorage.setItem(storageKey(plan.buildingId), JSON.stringify(plan))
   } catch {

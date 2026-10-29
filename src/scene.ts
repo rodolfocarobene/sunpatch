@@ -36,7 +36,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
-import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
+import { hiddenOutlines, partsOf, pickBuilding, ringCentroid, type Building } from './osm'
 import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
@@ -111,6 +111,8 @@ export interface SunScene {
   /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
   setWalkHandlers(handlers: WalkHandlers & { change(walking: boolean): void }): void
   resize(): void
+  /** Called with the id of the building polygon under a shift-click (not a drag) in the 3D view. */
+  onPartClick(handler: (polygonId: string) => void): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
   dispose(): void
@@ -604,6 +606,29 @@ export function createScene(container: HTMLElement): SunScene {
     startWalk({ x: hit.point.x, z: hit.point.z })
   })
 
+  // Shift-click (without dragging) names the building polygon under the cursor, to add it to or remove it from the selection.
+  let partClick: ((polygonId: string) => void) | undefined
+  let downAt: { x: number; y: number } | undefined
+  renderer.domElement.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }))
+  renderer.domElement.addEventListener('click', (e) => {
+    if (!e.shiftKey || walking || !partClick || (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5)) return
+    const rect = renderer.domElement.getBoundingClientRect()
+    const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+    raycaster.setFromCamera(ndc, camera)
+    const seen = (o: Object3D) =>
+      o instanceof Mesh && !glassMeshes.includes(o) && [o.material].flat().every((m) => m.colorWrite && !m.transparent)
+    const hit = raycaster.intersectObjects(world.children, true).find((h) => seen(h.object))
+    if (!hit) return
+    // A wall hit lies on the polygon's edge: step a little way along the ray, into the building.
+    const dir = raycaster.ray.direction
+    const flat = Math.hypot(dir.x, dir.z) || 1
+    const at = { x: hit.point.x + (dir.x / flat) * 0.15, z: hit.point.z + (dir.z / flat) * 0.15 }
+    const hidden = hiddenOutlines(buildings)
+    const here = buildings.filter((b) => !hidden.has(b.id) && hit.point.y >= b.minHeight - 0.3 && hit.point.y <= b.height + 0.3)
+    const polygon = pickBuilding(here, at)
+    if (polygon) partClick(polygon.id)
+  })
+
   function setTrees(trees: Tree[]) {
     scene.remove(treeGroup)
     disposeTreeGroup(treeGroup)
@@ -688,6 +713,9 @@ export function createScene(container: HTMLElement): SunScene {
     setPlan,
     setTrees,
     setCutaway,
+    onPartClick(handler) {
+      partClick = handler
+    },
     startWalk,
     stopWalk,
     setWalkHandlers(handlers) {
