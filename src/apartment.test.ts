@@ -38,9 +38,17 @@ describe('edgeOpenings', () => {
     expect(o.v1).toBeCloseTo(2.3)
   })
 
-  it('drops windows that overrun the edge or collide with the previous one', () => {
-    const windows = [win({ t: 0.02 }), win({ t: 0.98 }), win({ t: 0.3 }), win({ t: 0.32 }), win({ edge: 1 })]
+  it('moves windows that overrun the edge in, clear of the corners', () => {
+    const openings = edgeOpenings(floorPlan(outer, [], [win({ t: 0.02 }), win({ t: 0.98 })]), 0, 0, 10, 2.7)
+    expect(openings).toHaveLength(2)
+    expect(openings[0].u0).toBeGreaterThanOrEqual(FACADE_THICKNESS - 1e-9)
+    expect(openings[1].u1).toBeLessThanOrEqual(10 - FACADE_THICKNESS + 1e-9)
+  })
+
+  it('drops a window that cannot fit its edge, and one colliding with the previous one', () => {
+    const windows = [win({ t: 0.3 }), win({ t: 0.32 }), win({ edge: 1 })]
     expect(edgeOpenings(floorPlan(outer, [], windows), 0, 0, 10, 2.7)).toHaveLength(1)
+    expect(edgeOpenings(floorPlan(outer, [], [win({ width: 9.8 })]), 0, 0, 10, 2.7)).toHaveLength(0)
   })
 
   it('drops windows taller than the wall and clamps ones that only touch the ceiling', () => {

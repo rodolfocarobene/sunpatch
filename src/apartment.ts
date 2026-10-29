@@ -1,6 +1,7 @@
 import polygonClipping, { type Polygon } from 'polygon-clipping'
 import { BoxGeometry, ExtrudeGeometry, Matrix4, Path, PlaneGeometry, Shape, Vector3, type BufferGeometry } from 'three'
 import { addsOf, carve, cutsOf, polygonsOf, sparing, toPairs, type Piece } from './edits'
+import { clampWindowT } from './editor-geom'
 import { extrudeRings } from './footprint'
 import type { Building, Point } from './osm'
 import { FACADE_THICKNESS, SLAB_THICKNESS, floorBase, ringOf, type Plan } from './plan'
@@ -35,11 +36,14 @@ export function edgeOpenings(plan: Plan, ring: number, edge: number, length: num
   const found: Opening[] = []
   for (const w of plan.windows) {
     if (w.ring !== ring || w.edge !== edge) continue
-    const u0 = w.t * length - w.width / 2
+    // Windows saved before the editor kept them clear of the corners are moved in, not dropped.
+    const t = clampWindowT(w.t, w.width, length)
+    if (t === null) continue
+    const u0 = t * length - w.width / 2
     const u1 = u0 + w.width
     const v0 = Math.max(w.sill, MARGIN)
     const v1 = Math.min(w.sill + w.height, height - MARGIN)
-    if (u0 < MARGIN || u1 > length - MARGIN || v1 - v0 < 0.1) continue
+    if (v1 - v0 < 0.1) continue
     found.push({ u0, u1, v0, v1 })
   }
   found.sort((a, b) => a.u0 - b.u0)

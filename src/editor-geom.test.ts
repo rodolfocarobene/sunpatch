@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampWindowT,
+  clampWindowVertical,
+  normalizeWindows,
+  placeWindowT,
+  WINDOW_CLEARANCE,
+  WINDOW_GAP,
+  WINDOW_VERTICAL_MARGIN,
   constrainToDirections,
   distanceToSegment,
   fitBounds,
@@ -11,6 +17,7 @@ import {
   snapPoint,
   validatePlan,
 } from './editor-geom'
+import type { Point } from './osm'
 import type { Plan } from './plan'
 
 const sq = [
@@ -60,13 +67,64 @@ describe('nearestEdge', () => {
 })
 
 describe('clampWindowT', () => {
-  it('keeps the window inside the edge', () => {
-    expect(clampWindowT(0, 2, 10)).toBeCloseTo(0.1)
-    expect(clampWindowT(1, 2, 10)).toBeCloseTo(0.9)
+  it('keeps the window inside the edge and clear of its ends', () => {
+    expect(clampWindowT(0, 2, 10)).toBeCloseTo((WINDOW_CLEARANCE + 1) / 10)
+    expect(clampWindowT(1, 2, 10)).toBeCloseTo(1 - (WINDOW_CLEARANCE + 1) / 10)
     expect(clampWindowT(0.5, 2, 10)).toBe(0.5)
   })
-  it('rejects too short edges', () => {
+  it('rejects edges too short once the clearance is kept', () => {
     expect(clampWindowT(0.5, 1.2, 1)).toBeNull()
+    expect(clampWindowT(0.5, 1.2, 1.7)).toBeNull()
+    expect(clampWindowT(0.5, 1.2, 1.8)).toBeCloseTo(0.5)
+  })
+})
+
+describe('placeWindowT', () => {
+  const others = [{ t: 0.5, width: 2 }]
+  it('moves a window out of a neighbour to the nearest free spot', () => {
+    const t = placeWindowT(0.52, 1.2, 10, others)!
+    const u0 = t * 10 - 0.6
+    expect(u0).toBeGreaterThanOrEqual(6 + WINDOW_GAP - 1e-9)
+    expect(t).toBeGreaterThan(0.5)
+  })
+  it('picks the side the cursor is on', () => {
+    expect(placeWindowT(0.45, 1.2, 10, others)!).toBeLessThan(0.5)
+  })
+  it('returns null when nothing fits between the others and the ends', () => {
+    expect(placeWindowT(0.5, 1.2, 4, [{ t: 0.5, width: 1.5 }])).toBeNull()
+  })
+  it('lets two windows sit side by side with the gap', () => {
+    const t = placeWindowT(0.55, 1.2, 10, [{ t: 0.5, width: 1.2 }])!
+    expect(t * 10 - 0.6 - (5 + 0.6)).toBeCloseTo(WINDOW_GAP)
+  })
+})
+
+describe('clampWindowVertical', () => {
+  it('keeps sill + height under the ceiling slab', () => {
+    const r = clampWindowVertical(2, 1.4, 2.7)
+    expect(r.sill + r.height).toBeLessThanOrEqual(2.7 - WINDOW_VERTICAL_MARGIN + 1e-9)
+    expect(r.height).toBeGreaterThanOrEqual(0.2)
+  })
+  it('leaves a window that fits alone', () => {
+    expect(clampWindowVertical(0.9, 1.4, 2.7)).toEqual({ sill: 0.9, height: 1.4 })
+  })
+  it('lifts a sill off the floor', () => {
+    expect(clampWindowVertical(0, 1, 2.7).sill).toBe(WINDOW_VERTICAL_MARGIN)
+  })
+})
+
+describe('normalizeWindows', () => {
+  const sq: Point[] = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 6 }, { x: 0, z: 6 }]
+  const w = (over: object) => ({ ring: 0, edge: 0, t: 0.5, width: 1.2, sill: 0.9, height: 1.4, ...over })
+  const plan = (windows: object[]) => ({ floorHeight: 3, outline: { outer: sq, holes: [] }, windows }) as unknown as Plan
+
+  it('moves flush, overrunning and overlapping windows to valid places', () => {
+    const p = normalizeWindows(plan([w({ t: 0 }), w({ t: 0.02 }), w({ t: 1 }), w({ edge: 1, sill: 2.5, height: 2 })]))
+    const [a, b, c, d] = p.windows
+    expect(a.t * 10 - 0.6).toBeGreaterThanOrEqual(WINDOW_CLEARANCE - 1e-9)
+    expect(b.t * 10 - 0.6).toBeGreaterThanOrEqual(a.t * 10 + 0.6 + WINDOW_GAP - 1e-9)
+    expect(c.t * 10 + 0.6).toBeLessThanOrEqual(10 - WINDOW_CLEARANCE + 1e-9)
+    expect(d.sill + d.height).toBeLessThanOrEqual(2.7)
   })
 })
 

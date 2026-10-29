@@ -1,10 +1,12 @@
 import './editor.css'
 import { pointInPolygon, ringArea } from './osm'
 import type { Building, Point } from './osm'
-import { DEFAULT_WALL_THICKNESS, DEFAULT_WINDOW, floorBase, levelCount, ringOf } from './plan'
+import { DEFAULT_WALL_THICKNESS, DEFAULT_WINDOW, SLAB_THICKNESS, floorBase, levelCount, ringOf } from './plan'
 import type { BuildingEdit, Plan } from './plan'
 import {
-  clampWindowT,
+  clampWindowVertical,
+  normalizeWindows,
+  placeWindowT,
   constrainToDirections,
   distanceToSegment,
   fitBounds,
@@ -305,14 +307,14 @@ export function createPlanEditor(
       props.replaceChildren(
         Object.assign(document.createElement('h4'), { textContent: 'Window' }),
         field('Width (m)', numberInput(w.width, 0.1, 0.1, (v) => {
-          const t = clampWindowT(w.t, v, len)
-          if (t === null) return setMessage('Window is wider than its edge', 'error')
+          const t = placeWindowT(w.t, v, len, otherWindows(p, sel.index))
+          if (t === null) return setMessage('No room for that width on this edge', 'error')
           edit({ width: v, t })
         })),
-        field('Sill (m)', numberInput(w.sill, 0.1, 0, (v) => edit({ sill: v }))),
-        field('Height (m)', numberInput(w.height, 0.1, 0.1, (v) => edit({ height: v }))),
+        field('Sill (m)', numberInput(w.sill, 0.1, 0, (v) => edit(clampWindowVertical(v, w.height, wallHeight(p))))),
+        field('Height (m)', numberInput(w.height, 0.1, 0.1, (v) => edit(clampWindowVertical(w.sill, v, wallHeight(p))))),
         field('From edge start (m)', numberInput(w.t * len, 0.1, 0, (v) => {
-          const t = clampWindowT(v / len, w.width, len)
+          const t = placeWindowT(v / len, w.width, len, otherWindows(p, sel.index))
           if (t !== null) edit({ t })
         })),
       )
@@ -345,7 +347,7 @@ export function createPlanEditor(
       history.push(previous)
       if (history.length > MAX_HISTORY) history.shift()
     }
-    plan = next
+    plan = normalizeWindows(next)
     persist()
     render()
   }
@@ -699,6 +701,14 @@ export function createPlanEditor(
     commit(next)
   }
 
+  /** Windows on the same edge as window `index` (or as `onEdge`), for placement and dragging. */
+  function otherWindows(p: Plan, index: number, onEdge?: { ring: number; edge: number }) {
+    const target = onEdge ?? p.windows[index]
+    return p.windows.filter((o, i) => i !== index && o.ring === target.ring && o.edge === target.edge)
+  }
+
+  const wallHeight = (p: Plan) => p.floorHeight - SLAB_THICKNESS
+
   function windowClick(e: MouseEvent): void {
     if (!plan) return
     const p = eventPoint(e)
@@ -713,10 +723,10 @@ export function createPlanEditor(
     const ring = rings[edge.ring]
     const a = ring[edge.edge]
     const b = ring[(edge.edge + 1) % ring.length]
-    const t = clampWindowT(edge.t, DEFAULT_WINDOW.width, Math.hypot(b.x - a.x, b.z - a.z))
-    if (t === null) return setMessage('That edge is too short for a window', 'error')
+    const t = placeWindowT(edge.t, DEFAULT_WINDOW.width, Math.hypot(b.x - a.x, b.z - a.z), otherWindows(plan, -1, edge))
+    if (t === null) return setMessage('No room for a window there', 'error')
     const next = clone(plan)
-    next.windows.push({ ring: edge.ring, edge: edge.edge, t, ...DEFAULT_WINDOW })
+    next.windows.push({ ring: edge.ring, edge: edge.edge, t, ...DEFAULT_WINDOW, ...clampWindowVertical(DEFAULT_WINDOW.sill, DEFAULT_WINDOW.height, wallHeight(plan)) })
     selection = { kind: 'window', index: next.windows.length - 1 }
     message = undefined
     commit(next)
@@ -786,7 +796,7 @@ export function createPlanEditor(
       const ring = ringOf(plan, w.ring)
       const a = ring[w.edge]
       const b = ring[(w.edge + 1) % ring.length]
-      const t = clampWindowT(projectOnSegment(eventPoint(e), a, b).t, w.width, Math.hypot(b.x - a.x, b.z - a.z))
+      const t = placeWindowT(projectOnSegment(eventPoint(e), a, b).t, w.width, Math.hypot(b.x - a.x, b.z - a.z), otherWindows(plan, drag.index))
       if (t !== null) w.t = t
     } else if (drag.kind === 'viewpoint') {
       const p = eventPoint(e)

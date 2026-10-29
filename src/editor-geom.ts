@@ -1,4 +1,4 @@
-import type { Plan } from './plan'
+import { FACADE_THICKNESS, SLAB_THICKNESS, ringOf, type Plan, type Window } from './plan'
 import type { Point } from './osm'
 
 export type Segment = [Point, Point]
@@ -71,14 +71,77 @@ export function nearestEdge(
   return best
 }
 
+/** A window keeps this far from each end of its edge: the neighbouring facade wall overlaps that much of it. */
+export const WINDOW_CLEARANCE = FACADE_THICKNESS
+/** Minimum gap between two windows on one edge. */
+export const WINDOW_GAP = 0.1
+/** Room kept above a window and below it, so it never touches the floor or the ceiling slab. */
+export const WINDOW_VERTICAL_MARGIN = 0.05
+const MIN_WINDOW_HEIGHT = 0.2
+
+interface Placed {
+  t: number
+  width: number
+}
+
 /**
- * Window centre `t` clamped so a window of `width` fits inside an edge of `edgeLength`;
- * null when the edge is too short.
+ * Window centre `t` closest to the wanted one such that a window of `width` stays inside an edge of
+ * `edgeLength`, clear of both ends by WINDOW_CLEARANCE and of the `others` on the same edge by WINDOW_GAP.
+ * Null when no such place exists.
  */
+export function placeWindowT(t: number, width: number, edgeLength: number, others: Placed[] = []): number | null {
+  // Free stretches of the edge, in metres from its start, as [from, to] for the window's edges.
+  let free: [number, number][] = [[WINDOW_CLEARANCE, edgeLength - WINDOW_CLEARANCE]]
+  const taken = others
+    .map((o) => [o.t * edgeLength - o.width / 2 - WINDOW_GAP, o.t * edgeLength + o.width / 2 + WINDOW_GAP] as const)
+    .sort((x, y) => x[0] - y[0])
+  for (const [from, to] of taken) {
+    free = free.flatMap(([f, e]): [number, number][] =>
+      to <= f || from >= e ? [[f, e]] : [[f, Math.min(e, from)], [Math.max(f, to), e]],
+    )
+  }
+  const want = t * edgeLength
+  let best: number | null = null
+  for (const [f, e] of free) {
+    if (e - f < width - 1e-9) continue
+    const centre = Math.max(f + width / 2, Math.min(e - width / 2, want))
+    if (best === null || Math.abs(centre - want) < Math.abs(best - want)) best = centre
+  }
+  return best === null ? null : best / edgeLength
+}
+
+/** `placeWindowT` for a window alone on its edge. */
 export function clampWindowT(t: number, width: number, edgeLength: number): number | null {
-  if (width > edgeLength) return null
-  const half = width / 2 / edgeLength
-  return Math.max(half, Math.min(1 - half, t))
+  return placeWindowT(t, width, edgeLength)
+}
+
+/** Sill and height that fit in a wall of `wallHeight` (floor height minus the ceiling slab). */
+export function clampWindowVertical(sill: number, height: number, wallHeight: number): { sill: number; height: number } {
+  const top = wallHeight - WINDOW_VERTICAL_MARGIN
+  const s = Math.max(WINDOW_VERTICAL_MARGIN, Math.min(sill, top - MIN_WINDOW_HEIGHT))
+  return { sill: s, height: Math.max(MIN_WINDOW_HEIGHT, Math.min(height, top - s)) }
+}
+
+/**
+ * Brings every window of the plan to a valid place in the same way the editor does when it places one:
+ * clear of the edge ends, of each other and of the ceiling. Mutates and returns the plan.
+ */
+export function normalizeWindows(plan: Plan): Plan {
+  const wallHeight = plan.floorHeight - SLAB_THICKNESS
+  const placed: Window[] = []
+  for (const w of plan.windows) {
+    const ring = ringOf(plan, w.ring)
+    const a = ring[w.edge]
+    const b = ring[(w.edge + 1) % ring.length]
+    if (a && b) {
+      const length = Math.hypot(b.x - a.x, b.z - a.z)
+      const t = placeWindowT(w.t, w.width, length, placed.filter((o) => o.ring === w.ring && o.edge === w.edge))
+      if (t !== null) w.t = t
+    }
+    Object.assign(w, clampWindowVertical(w.sill, w.height, wallHeight))
+    placed.push(w)
+  }
+  return plan
 }
 
 /** Projects p onto the line through `origin` along the closest of the given directions (unit vectors, both senses). */
