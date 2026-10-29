@@ -59,7 +59,8 @@ export function buildExample(elements: OverpassElement[]): Example {
   if (!first) throw new Error('example building missing from the fixture')
   const origin = unproject(ringCentroid(first.outer), EXAMPLE_NEAR)
   const { buildings } = parseOverpass(elements, origin)
-  const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!)
+  // The sample apartment is drawn on the palace alone: flooding would add its neighbours and move the facade.
+  const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!, { ids: [first.id] })
   return { buildings, selected, origin, plan: examplePlan(selected, origin), green: parseGreen(elements, origin) }
 }
 

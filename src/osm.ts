@@ -27,6 +27,10 @@ export interface Building {
    */
   members?: Building[]
   sources?: string[]
+  /** On a merged selection: the id of the polygon the user clicked (it cannot be removed from the selection). */
+  anchor?: string
+  /** On a merged selection: the fill stopped at its size cap, so the selection may be incomplete. */
+  capped?: boolean
 }
 
 interface LatLon {
