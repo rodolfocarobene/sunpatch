@@ -38,11 +38,13 @@ export function tileBuildings(features: TileBuilding[], origin: Origin, radiusM:
       const outer = toLocal(polygon[0])
       if (distanceToRing(outer, { x: 0, z: 0 }) > radiusM + JOIN_MARGIN_M) continue
       const height = num(f.properties.render_height, DEFAULT_HEIGHT)
+      // No render_height means the tiles have no height for it either: the 9 m is a guess, as in OSM.
+      const heightSource = typeof f.properties.render_height === 'number' ? 'tile' : 'default'
       let minHeight = num(f.properties.render_min_height, 0)
       if (minHeight >= height) minHeight = 0
       pieces.push({
         featureId: f.id,
-        building: { id, outer, holes: polygon.slice(1).map(toLocal), minHeight, height, heightSource: 'tile', tags: {} },
+        building: { id, outer, holes: polygon.slice(1).map(toLocal), minHeight, height, heightSource, tags: {} },
       })
     }
   }

@@ -1,3 +1,4 @@
+import type { HeightOverrides } from './heights'
 import { project, unproject, type Building, type Origin, type Point } from './osm'
 
 /**
@@ -24,6 +25,11 @@ export interface Plan {
   viewpoint?: Viewpoint
   /** Manual fixes to the selected building's volume (missing balconies, protruding wall parts). */
   edits?: BuildingEdit[]
+  /**
+   * The user's own heights for OSM polygons of the area (the selected building and its neighbours), keyed by
+   * polygon id; they replace the data's heights in the scene. Absent when there are none (and in older plans).
+   */
+  heights?: HeightOverrides
   /** Solar panels, anywhere around the building (inside or outside the outline); [] for none. */
   panels: Panel[]
 }
