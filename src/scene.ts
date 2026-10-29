@@ -1,7 +1,6 @@
 import {
   ACESFilmicToneMapping,
   AmbientLight,
-  ArrowHelper,
   AdditiveBlending,
   BackSide,
   BoxGeometry,
@@ -307,11 +306,6 @@ export function createScene(container: HTMLElement): SunScene {
     world.clear()
   }
 
-  // North arrow on the ground (north = -z), placed beside the buildings.
-  function addNorthArrow(x: number, z: number) {
-    world.add(new ArrowHelper(new Vector3(0, 0, -1), new Vector3(x, 0.05, z), 14, 0xd23030, 4, 3))
-  }
-
   function buildTestScene() {
     addBox(world, HOUSE, 0xe6d9c3)
     // 3 floors: thin dark bands at 3 m and 6 m make the storeys readable.
@@ -324,7 +318,6 @@ export function createScene(container: HTMLElement): SunScene {
       world.add(band)
     }
     for (const n of NEIGHBORS) addBox(world, n, 0xb8b8c0)
-    addNorthArrow(35, 30)
   }
 
   clearWorld()
@@ -499,10 +492,6 @@ export function createScene(container: HTMLElement): SunScene {
       cam.updateProjectionMatrix()
       if (lastSun) update(lastSun)
     }
-    const c = ringCentroid(selected.outer)
-    let half = 5
-    for (const p of selected.outer) half = Math.max(half, Math.abs(p.x - c.x), Math.abs(p.z - c.z))
-    addNorthArrow(c.x + half + 15, c.z + half + 15)
   }
 
   function frameBuilding(b: Building) {
