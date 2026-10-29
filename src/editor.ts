@@ -738,6 +738,7 @@ export function createPlanEditor(
     const presets = document.createElement('div')
     presets.className = 'editor-row'
     presets.style.flexDirection = 'column'
+    presets.style.alignItems = 'stretch'
     const base = floorBase(building!, p)
     presets.append(
       button('Balcony railing', `Vertical, lowest edge ${(base + 1).toFixed(1)} m: a metre above this floor`, () => preset('railing')),
