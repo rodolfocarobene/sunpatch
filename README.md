@@ -23,6 +23,7 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
   recess. Fixes cast shadows like the rest of the building.
 - **Watch the sun move**: pick a date and a time, or press Play to run through the day. A cutaway view hides the
   floors above so you can look into your rooms from outside.
+- **Solar panels**: place panels on a facade, roof or the ground and see their shading and yearly energy.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.
@@ -77,6 +78,10 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      never an apartment wall inside it.
    - **Panel shading**: select a panel (in the Plan, or click it in 3D) to see a card with its direct-sun hours a year,
      the share lost to shading, and a month by hour chart of how much of it is in sun; hover a cell for the figure.
+   - **Panel energy**: the same card gives the energy a year in kWh, as an *ideal* clear-sky figure and one *with local
+     weather*, what shading costs, and a bar chart by month. Open *Assumptions* to change the module efficiency
+     (21%) and system losses (14%). The 3D panel adds up all panels, for example *3 panels, ~1,050 kWh/year with
+     local weather*. It is an estimate: direct sun is traced in 3D, diffuse light is approximated and not shaded.
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
@@ -170,6 +175,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 - Address search by [Nominatim](https://nominatim.org/) and building data by the [Overpass API](https://overpass-api.de/)
   and its mirrors. Please respect their usage policies: the app sends one search per submit and one Overpass
   query per picked building, and caches the results.
+- Weather for the panel energy: monthly clear-sky index from [NASA POWER](https://power.larc.nasa.gov/) climatology
+  (25-year averages). One request per place, rounded to 0.1 degrees, cached in the browser for a month, and made
+  only once a panel exists. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
 
 ## License
 

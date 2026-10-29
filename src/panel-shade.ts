@@ -3,6 +3,7 @@ import type { MeshBVH } from 'three-mesh-bvh'
 import type { Panel } from './plan'
 import { PANEL_THICKNESS, along, facing, footprintDepth, modules } from './panel'
 import { sunDirection } from './sun'
+import { clearSky, diffuseOnPlane, type EnergyIrradiation } from './solar'
 
 // Shading analysis of one solar panel: sample points on its front face, rays toward the sun on 12 representative
 // days of the year, summed into a month x hour matrix and yearly totals. This file is the maths and the tracing
@@ -108,6 +109,8 @@ export interface PanelShade {
   potentialCosHours: number
   /** 1 - annualCosHours / potentialCosHours, 0..1: the energy lost to shading, not just hours. */
   shadingLoss: number
+  /** Clear-sky irradiation per representative day, the input of the energy step (see solar.ts). */
+  irradiation: EnergyIrradiation
   /** Rays cast, and the time the tracing took, milliseconds. */
   rays: number
   ms: number
@@ -135,6 +138,9 @@ export function shadePanel(bvh: MeshBVH, panel: Panel, slots: YearSlots): PanelS
   const monthPotential = new Array<number>(12).fill(0)
   const monthPotentialCos = new Array<number>(12).fill(0)
   const slotHours = SLOT_MINUTES / 60
+  const beam = new Array<number>(12).fill(0)
+  const beamOpen = new Array<number>(12).fill(0)
+  const diffuse = new Array<number>(12).fill(0)
   const perHour = 60 / SLOT_MINUTES
   let rays = 0
   for (let i = 0; i < slots.start.length; i++) {
@@ -146,7 +152,10 @@ export function shadePanel(bvh: MeshBVH, panel: Panel, slots: YearSlots): PanelS
     const cos = dx * normal[0] + dy * normal[1] + dz * normal[2]
     daylight[m][h]++
     up[m][h] += 1 / perHour
+    const sky = clearSky((Math.asin(Math.min(1, dy)) * 180) / Math.PI)
+    diffuse[m] += (diffuseOnPlane(sky, panel.tilt) * slotHours) / 1000
     if (cos <= 0) continue
+    beamOpen[m] += (sky.dni * cos * slotHours) / 1000
     front[m][h]++
     monthPotential[m] += slotHours
     monthPotentialCos[m] += slotHours * cos
@@ -161,6 +170,7 @@ export function shadePanel(bvh: MeshBVH, panel: Panel, slots: YearSlots): PanelS
     lit[m][h] += share
     monthHours[m] += share * slotHours
     monthCos[m] += share * slotHours * cos
+    beam[m] += (share * sky.dni * cos * slotHours) / 1000
   }
   let annualHours = 0
   let potentialHours = 0
@@ -181,6 +191,6 @@ export function shadePanel(bvh: MeshBVH, panel: Panel, slots: YearSlots): PanelS
   const shadingLoss = potentialCosHours > 0 ? Math.max(0, 1 - annualCosHours / potentialCosHours) : 0
   return {
     lit, front, up, monthHours, monthCosHours: monthCos, annualHours, potentialHours, annualCosHours, potentialCosHours, shadingLoss,
-    rays, ms: performance.now() - started,
+    irradiation: { beam, beamOpen, diffuse }, rays, ms: performance.now() - started,
   }
 }

@@ -7,7 +7,7 @@ const grid = (v: number): number[][] => Array.from({ length: 12 }, () => new Arr
 const shade = (): PanelShade => {
   const s: PanelShade = {
     lit: grid(0), front: grid(1), up: grid(1), monthHours: [], monthCosHours: [], annualHours: 1420, potentialHours: 1610,
-    annualCosHours: 0, potentialCosHours: 0, shadingLoss: 0.12, rays: 0, ms: 0,
+    annualCosHours: 0, potentialCosHours: 0, shadingLoss: 0.12, irradiation: { beam: [], beamOpen: [], diffuse: [] }, rays: 0, ms: 0,
   }
   s.lit[5][15] = 0.8
   s.front[5][8] = 0
