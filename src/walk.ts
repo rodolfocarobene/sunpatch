@@ -174,9 +174,8 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
       <span><kbd>Shift</kbd> faster</span>
       <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
       <span><kbd>P</kbd> play</span>
-      <span><kbd>Esc</kbd> exit</span>
-    </div>
-    <button type="button" class="walkExit">Exit walk</button>`
+      <button type="button" class="walkExit">Exit walk <kbd>Esc</kbd></button>
+    </div>`
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
   for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) hud.addEventListener(type, (e) => e.stopPropagation())
   container.appendChild(hud)

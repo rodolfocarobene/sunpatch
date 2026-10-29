@@ -1,10 +1,12 @@
 // Dev page: a 12 x 10 m, 4 x 3 m test building with an apartment on floor 1 (3 windows south, 1 east).
 // /dev/apartment.html?date=2026-12-21&time=13:00&cutaway=1&half=1 (half: apartment covers only the west part),
 // &edits=1 (balcony slab over the south windows on the floor above, plus a notch cut from the NE corner),
+// &windows=edge (windows at the corners, overlapping, and too tall), &fix=1 (apply the editor's window clamping first),
 // &walk=1 (stand inside, looking at the windows; &at=x,z picks the spot).
 import { createScene } from '../src/scene'
 import type { Building, Point } from '../src/osm'
 import type { Plan } from '../src/plan'
+import * as geom from '../src/editor-geom'
 import { sunDirection } from '../src/sun'
 
 const params = new URLSearchParams(location.search)
@@ -58,6 +60,18 @@ const plan: Plan = {
     ],
   }),
 }
+
+if (params.get('windows') === 'edge') {
+  const w = { width: 1.2, sill: 0.9, height: 1.4 }
+  plan.windows = [
+    { ring: 0, edge: 2, t: 0.02, ...w },
+    { ring: 0, edge: 2, t: 0.45, ...w },
+    { ring: 0, edge: 2, t: 0.5, ...w },
+    { ring: 0, edge: 2, t: 0.98, ...w },
+    { ring: 0, edge: 1, t: 0.5, width: 1.2, sill: 2.3, height: 1.4 },
+  ]
+}
+if (params.get('fix') === '1') geom.normalizeWindows(plan)
 
 const sunScene = createScene(document.querySelector<HTMLElement>('#app')!)
 sunScene.setBuildings(buildings, house.id)
