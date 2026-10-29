@@ -27,6 +27,7 @@ import { createSunMapJob } from './sunmap-job'
 import { createSunMapPopover } from './sunmap-popover'
 import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, sunSentence, type View } from './ui'
+import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -39,9 +40,7 @@ const hud = createWalkHud(app, {
   exit: () => sunScene.stopWalk(),
   setMinutes: (minutes) => ui.setMinutes(minutes),
   togglePlay: () => ui.togglePlay(),
-  toggleCutaway: () => ui.toggleCutaway(),
 })
-ui.onCutaway((hidden) => hud.setCutaway(hidden))
 ui.onPlaying((playing) => hud.setPlaying(playing))
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
@@ -125,8 +124,22 @@ sunScene.onFloorClick((at) => {
   if (!at) return closeProbe()
   probePoint = at
   sunScene.setProbe(at)
-  showProbe()
-  if (!popover.open) closeProbe()
+  // Walking, a click is a question about the sun map: it turns the map on, and the answer comes when it is ready.
+  if (!sunMapOn) ui.setSunMap(true)
+  const inGrid = sunResult !== undefined && sampleAt(sunResult.grid, at.x, at.z) !== undefined
+  const outcome = probeOutcome(sunResult !== undefined, inGrid)
+  if (outcome === 'show') showProbe()
+  else if (outcome === 'close') closeProbe()
+})
+let walking = false
+/** Esc: a first press closes an open popover, and while walking the next one leaves walk mode. */
+function escape() {
+  const action = escapeAction({ walking, popoverOpen: popover.open })
+  if (action === 'close-popover') closeProbe()
+  else if (action === 'exit-walk') sunScene.stopWalk()
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !walking) escape() // walking, the walk controls report Esc themselves
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
 if (import.meta.env.DEV) {
@@ -136,15 +149,17 @@ if (import.meta.env.DEV) {
 }
 
 sunScene.setWalkHandlers({
-  change(walking) {
-    hud.show(walking)
-    ui.setWalking(walking)
-    if (walking) closeProbe()
+  change(isWalking) {
+    walking = isWalking
+    hud.show(isWalking)
+    ui.setWalking(isWalking)
+    closeProbe() // a spot marked in one view is not where the camera is in the other
   },
-  exit: () => sunScene.stopWalk(),
+  exit: escape,
   stepTime: (minutes) => ui.stepTime(minutes),
   togglePlay: () => ui.togglePlay(),
   toggleCutaway: () => ui.toggleCutaway(),
+  toggleSunMap: () => ui.toggleSunMap(),
   look: (yaw) => hud.setYaw(yaw),
 })
 ui.onChange((when, sun, strip, place) => {

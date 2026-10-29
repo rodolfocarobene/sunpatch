@@ -145,7 +145,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel[data-view='plan'] #building .detail { display: none; }
 #building .viewHint { display: none; }
 #panel[data-view='map'] #building [data-hint='map'], #panel[data-view='3d'] #building [data-hint='3d'], #panel[data-view='plan'] #building [data-hint='plan'] { display: inline; }
-#panel.walking > :not(#views, #about) { display: none; }
+/* Walking, the panel keeps the tabs and the two floor switches with the sun map legend, nothing else. */
+#panel.walking > :not(#views, #about, section[data-views~='3d']) { display: none; }
+#panel.walking section[data-views~='3d'] > :not(#aptTools) { display: none; }
+#panel.walking #walk, #panel.walking .legendHint { display: none; }
+#panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
+#panel.walking .walkKey { display: inline-block; }
 #sunSummary { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; }
 #sunSummary strong { text-wrap: balance; }
 #sunSummary span { color: var(--muted); font-size: var(--text-sm); }
@@ -216,8 +221,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   font: inherit; font-weight: 600; text-align: center; color: var(--text); background: var(--surface); border-radius: 4px;
 }
 #walkHud kbd + kbd { margin-left: 1px; }
-#walkHud .walkExit, #walkHud .walkFloors { padding: 1px 8px; }
-#walkHud .walkFloors kbd { margin: 0 0 0 4px; }
+#walkHud .walkExit { padding: 1px 8px; }
 #walkHud .walkExit kbd { margin: 0 0 0 4px; }
 #walkHud :focus-visible { outline-color: var(--accent); }
 /* The map's "Use this building" popup, in the same box as the rest of the chrome. */

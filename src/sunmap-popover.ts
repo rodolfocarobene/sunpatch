@@ -27,7 +27,7 @@ const WIDTH = 252
 
 /**
  * A small box at the clicked floor point, with the same day strip as the time slider and the sunny intervals
- * drawn on it. Closes on Esc, on its button, or when the caller hides it (a click elsewhere).
+ * drawn on it. Closes on its button, or when the caller hides it (a click elsewhere, Esc).
  */
 export function createSunMapPopover(container: HTMLElement, onClose: () => void): SunMapPopover {
   const box = document.createElement('div')
@@ -59,9 +59,6 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
   box.querySelector('.spotClose')!.addEventListener('click', close)
   // Clicks inside the box are not clicks on the scene.
   for (const type of ['pointerdown', 'click', 'dblclick'] as const) box.addEventListener(type, (e) => e.stopPropagation())
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen) close()
-  })
 
   function hide() {
     isOpen = false

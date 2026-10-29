@@ -151,7 +151,7 @@ export interface SunScene {
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
   setProbe(at: { x: number; z: number } | null): void
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
-  /** Called with the floor point of a plain click (not a drag) while the sun map shows, or null for a click anywhere else. */
+  /** Called with the floor point of a plain click (not a drag) while the sun map shows or while walking, or null for a click anywhere else. */
   onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
   dispose(): void
 }
@@ -706,6 +706,7 @@ export function createScene(container: HTMLElement): SunScene {
     stepTime: (m) => walkHandlers?.stepTime(m),
     togglePlay: () => walkHandlers?.togglePlay(),
     toggleCutaway: () => walkHandlers?.toggleCutaway(),
+    toggleSunMap: () => walkHandlers?.toggleSunMap(),
   })
 
   function startWalk(at?: { x: number; z: number }): boolean {
@@ -798,11 +799,12 @@ export function createScene(container: HTMLElement): SunScene {
     else if (!selectedIds.has(found.polygon.id)) buildingClick?.(found.polygon.id, { x: found.hit.x, z: found.hit.z })
   })
 
-  // With the sun map showing, a click on the apartment floor reports its point; a click anywhere else reports null
-  // (it closes the popover). Dragging is an orbit or a pan, and a double-click walks (both stay as they were).
+  // A click on the apartment floor reports its point; a click anywhere else reports null (it closes the popover).
+  // In 3D that needs the sun map showing. Walking, it works with the map off too (the caller turns it on).
+  // Dragging is an orbit, a pan or a look, and a double-click walks (all stay as they were).
   let floorClick: ((at: { x: number; z: number } | null) => void) | undefined
   renderer.domElement.addEventListener('click', (e) => {
-    if (walking || !sunMapOn || !overlay || !floorClick || !plan || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    if (!(walking || (sunMapOn && overlay)) || !floorClick || !plan || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
     const hit = seenHit(e.clientX, e.clientY)
     const at = hit && hit.object === floorMesh && insideOutline(plan, { x: hit.point.x, z: hit.point.z }) ? { x: hit.point.x, z: hit.point.z } : null
     floorClick(at)

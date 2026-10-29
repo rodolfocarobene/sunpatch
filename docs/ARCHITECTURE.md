@@ -121,8 +121,8 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
   only the narrow light and redraws the apartment meshes at the same depth, with everything else set to
   `colorWrite = false` so it still occludes and casts shadows.
 - Cutaway hides the part above the apartment from the camera only (`colorWrite`/`depthWrite` off), so it keeps
-  casting shadows into the rooms. Walk mode uses the same state: the panel checkbox "Hide floors above", the
-  walk HUD's "Floors above" button and the `H` key are one switch (`ui.ts` owns it). Hidden, the ceiling is open to
+  casting shadows into the rooms. Walk mode uses the same state: the panel checkbox "Hide floors above" (also
+  shown in the walk panel) and the `H` key are one switch (`ui.ts` owns it). Hidden, the ceiling is open to
   the sky; shown, it is drawn. The floor's sun patches are the same pixels either way, since the sun reaches the
   rooms only through the windows.
 - 3D hover: with the pointer over an unselected building (one raycast per animation frame, none while a button is
@@ -164,6 +164,12 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
 - **Click**: with the map on, a plain click on the floor (`onFloorClick`, not a drag, not through a hidden ceiling)
   marks the point and opens the popover; a click elsewhere or `Esc` closes it. The popover follows the point on
   screen (`onProbeScreen`) and a double-click still walks.
+- **In walk mode** the left panel collapses to the tabs plus the same "Hide floors above" and "Sun map" controls
+  (and the legend, without its hint); `H` and `M` flip them. There is no floors button in the HUD any more: two
+  controls for one state would compete. A plain click on the floor (same `isClick` threshold as 3D, raycast from the
+  walk camera) marks the spot and turns the sun map on if it was off; the popover opens when the result is ready,
+  and not at all for a spot outside the grid (`probeOutcome` in `probe.ts`). `Esc` goes through `escapeAction`: first
+  press closes the popover, the next leaves walk. Entering or leaving walk clears the mark.
 - `window.__sunpatch` and `window.__sunpatchCamera` are exposed in the dev server only, for the visual checks.
 
 ## Testing
