@@ -110,6 +110,7 @@ export function createMapView(
       // The point is the middle of a street piece, not a house: do not offer it as the building.
       const note = document.createElement('p')
       note.textContent = 'This is the street, not a house. Click the building on the map.'
+      note.style.cssText = 'margin: 0; padding-right: 18px; max-width: 200px' // keeps the text clear of the close button
       return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(note)
     }
     const button = document.createElement('button')
