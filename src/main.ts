@@ -144,7 +144,7 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
   site = { buildings, selected, origin }
-  sunScene.setBuildings(buildings, selected.id, { keepCamera })
+  sunScene.setBuildings(buildings, selected, { keepCamera })
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
   else {
     const saved = exampleMode ? null : savedPlanFor(selected)
