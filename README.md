@@ -83,10 +83,12 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    - Select a panel to see a one-sentence summary under its properties, with **Open in Panels** for the full card.
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
-3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
-   **Play**. Keep **Hide floors above** on to see inside.
-   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend gives hours and the share
-   of the day's daylight). Click a spot on the floor to read its hours and times, for example *3 h 10 min of
+3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. The bar at the bottom holds the date (Winter,
+   Equinox, Summer and Today chips, or any date), the time slider with its daylight strip, **Play** and where the
+   sun is. Keep **Hide floors above** on to see inside.
+   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend is one line from 0 h to
+   6 h+; *Share of daylight* opens the percentages). The left panel names the building on one line, for example
+   *Relation 36488 · 9 m · 3 levels*, with its OSM link; **Location and accuracy** is folded away. Click a spot on the floor to read its hours and times, for example *3 h 10 min of
    direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
    recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
    you walk.
@@ -113,7 +115,8 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      system losses 14%; kWp is the panel's rated power, and 1 kWp is about 5 m² of panels). It is an estimate: direct sun is
      traced in 3D, diffuse light is approximated and not shaded.
 5. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
-   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The small panel on
+   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The same date and
+   time bar stays at the bottom, with the key hints above it, and the small panel on
    the left keeps **Hide floors above** (`H`) and **Sun map** (`M`) with its legend; they are the same switches as
    in the 3D panel. Hidden, you see the sky through the ceiling, and the sun still comes in only through the
    windows. Click the floor to read the hours of direct sun at that spot (this turns the sun map on if it is

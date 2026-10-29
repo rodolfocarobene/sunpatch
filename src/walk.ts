@@ -1,7 +1,6 @@
 import type { PerspectiveCamera } from 'three'
 import type { Point } from './osm'
 import type { Plan } from './plan'
-import { DAY_MAX, STEP } from './daylight'
 import type { SunDirection } from './sun'
 import { bandMarker, headingDeg, movePosition, relativeBearing } from './walk-geom'
 
@@ -155,10 +154,6 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
 
 export interface WalkHud {
   show(on: boolean): void
-  setStatus(text: string): void
-  /** Mirrors the panel's time: slider position, label and the day strip's CSS background. */
-  setTime(minutes: number, strip: string): void
-  setPlaying(playing: boolean): void
   /** The sun for the compass band; called whenever the date or time changes. */
   setSun(sun: SunDirection): void
   /** The look direction (walk yaw) for the compass band; cheap to call every frame. */
@@ -167,9 +162,6 @@ export interface WalkHud {
 
 export interface WalkHudHandlers {
   exit(): void
-  /** The slider was dragged to this many minutes of the day. */
-  setMinutes(minutes: number): void
-  togglePlay(): void
 }
 
 const BAND_WIDTH = 320
@@ -195,34 +187,24 @@ function bandTicks(): string {
   return html
 }
 
-export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers): WalkHud {
+/** `dock` is the bottom box that holds the time bar; the key hints go on top of it, the compass into `container`. */
+export function createWalkHud(container: HTMLElement, dock: HTMLElement, handlers: WalkHudHandlers): WalkHud {
   const hud = document.createElement('div')
   hud.id = 'walkHud'
   hud.hidden = true
   hud.innerHTML = `
-    <div class="walkStatus"></div>
-    <div class="walkTime">
-      <button type="button" class="walkPlay" aria-label="Play the day" title="Play the day (P)">Play</button>
-      <div class="timeTrack">
-        <div class="dayStrip" aria-hidden="true"></div>
-        <input class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="Time of day">
-      </div>
-      <output class="walkClock"></output>
-    </div>
     <div class="walkHelp">
       <span><kbd>Drag</kbd> look</span>
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
       <span><kbd>Shift</kbd> faster</span>
       <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
       <span><kbd>P</kbd> play</span>
-      <span><kbd>H</kbd> floors above</span>
-      <span><kbd>M</kbd> sun map</span>
-      <span><kbd>Click</kbd> floor: sun here</span>
+      <span><kbd>Click</kbd> floor: sun</span>
       <button type="button" class="walkExit">Exit walk <kbd>Esc</kbd></button>
     </div>`
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
   for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) hud.addEventListener(type, (e) => e.stopPropagation())
-  container.appendChild(hud)
+  dock.prepend(hud)
   const compass = document.createElement('div')
   compass.id = 'walkCompass'
   compass.hidden = true
@@ -261,19 +243,7 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
     band.dataset.up = String(up)
     caption.textContent = text
   }
-  const status = hud.querySelector('.walkStatus')!
-  const range = hud.querySelector<HTMLInputElement>('.timeRange')!
-  const strip = hud.querySelector<HTMLElement>('.dayStrip')!
-  const clock = hud.querySelector('.walkClock')!
-  const playButton = hud.querySelector<HTMLButtonElement>('.walkPlay')!
   hud.querySelector('.walkExit')!.addEventListener('click', handlers.exit)
-  playButton.addEventListener('click', () => {
-    handlers.togglePlay()
-    playButton.blur()
-  })
-  range.addEventListener('input', () => handlers.setMinutes(Number(range.value)))
-  range.addEventListener('pointerup', () => range.blur())
-  range.addEventListener('change', () => range.blur())
   return {
     show(on) {
       hud.hidden = !on
@@ -288,19 +258,5 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
       yawNow = yaw
       drawCompass()
     },
-    setStatus(text) {
-      status.textContent = text
-    },
-    setTime(minutes, background) {
-      range.value = String(minutes)
-      clock.textContent = formatClock(minutes)
-      strip.style.background = background
-    },
-    setPlaying(playing) {
-      playButton.textContent = playing ? 'Pause' : 'Play'
-      playButton.setAttribute('aria-label', playing ? 'Pause the day' : 'Play the day')
-    },
   }
 }
-
-const formatClock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`

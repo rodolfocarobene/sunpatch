@@ -6,8 +6,12 @@ import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
+import { buildingLine } from './building-line'
 
 const GUIDE_KEY = 'sunpatch.guide'
+const SWITCH_HINT_KEY = 'sunpatch.switchHint'
+const CLOSE_ICON =
+  '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
 
 /** One 24-hour HH:MM format for every time shown in the app. */
 export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
@@ -65,6 +69,8 @@ export interface UI {
   setPanelList(list: PanelList): void
   /** A click on a row of the list. */
   onPanelPick(listener: (id: string) => void): void
+  /** The bottom box with the date and time bar (3D view and walk mode); the walk key hints stack above it. */
+  readonly dock: HTMLElement
   /** Where the panel card is docked: the Panels view of the left panel. */
   readonly cardSlot: HTMLElement
   /** Disables the Walk button while walking. */
@@ -116,43 +122,34 @@ export function createUI(
       <a id="exampleLink" href="?example=milan">Try the Milan example</a>
     </div>
     <p class="hint" id="mapHint" data-views="map" hidden></p>
-    <div data-views="plan 3d">
-      <div id="exampleNote" hidden>
+    <div data-views="plan 3d" id="notes">
+      <div id="exampleNote" class="noteBox" hidden>
         <span>This is a sample apartment in Milan. Pick your own building on the Map.</span>
-        <button id="exampleClose" type="button" aria-label="Dismiss note" title="Dismiss">
-          <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
+        <button id="exampleClose" class="closeX" type="button" aria-label="Dismiss note" title="Dismiss">${CLOSE_ICON}</button>
       </div>
+      <p id="switchHint" class="hint" hidden>
+        <span></span>
+        <button id="switchHintClose" class="closeX" type="button" aria-label="Dismiss hint" title="Dismiss">${CLOSE_ICON}</button>
+      </p>
     </div>
-    <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link" type="button" hidden>See it in 3D</button></p>
+    <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>See it in 3D</button></p>
     <section data-views="3d">
-      <button id="nextStep" class="primary" type="button"></button>
+      <button id="nextStep" class="link next" type="button"></button>
       <div id="aptTools" hidden>
-        <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
-        <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
-        <div id="sunMapLegend" hidden></div>
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
-      </div>
-      <div class="field">
-        <label for="date">Date</label>
-        <div id="presets" role="group" aria-label="Date presets"></div>
-        <input id="date" type="date" value="${dateValue(now)}">
-      </div>
-      <div class="field">
-        <label class="split" for="time">Time <span id="timeLabel" title="Times use your browser's time zone"></span></label>
-        <div class="timeTrack">
-          <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
-          <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
+        <div class="field">
+          <h3 class="groupHead">Show</h3>
+          <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
+          <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
+          <div id="sunMapLegend" hidden></div>
         </div>
       </div>
-      <button id="play" type="button">Play</button>
-      <div id="sunSummary"></div>
       <details id="location">
-        <summary>Location</summary>
+        <summary>Location and accuracy</summary>
         <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
         <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
+        <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
       </details>
-      <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
     </section>
     <section data-views="panels">
       <div class="field">
@@ -167,8 +164,29 @@ export function createUI(
       <div id="cardSlot"></div>
     </section>`
   document.body.appendChild(panel)
+  // One docked bar for date and time, shared by the 3D view and walk mode (the walk key hints stack above it).
+  const dock = document.createElement('div')
+  dock.id = 'dock'
+  dock.hidden = true
+  dock.innerHTML = `
+    <div id="timeBar" role="group" aria-label="Date and time">
+      <div id="sunSummary"></div>
+      <div class="barRow">
+        <div id="presets" role="group" aria-label="Date presets"></div>
+        <input id="date" type="date" aria-label="Date" value="${dateValue(now)}">
+        <button id="play" type="button" title="Play the day (P)">Play</button>
+      </div>
+      <div class="barRow">
+        <div class="timeTrack">
+          <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
+          <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="Time of day" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
+        </div>
+        <span id="timeLabel" title="Times use your browser's time zone"></span>
+      </div>
+    </div>`
+  document.body.appendChild(dock)
 
-  const $ = <T extends HTMLElement>(id: string) => panel.querySelector<T>('#' + id)!
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
   const lat = $<HTMLInputElement>('lat')
   const lon = $<HTMLInputElement>('lon')
   const date = $<HTMLInputElement>('date')
@@ -220,6 +238,30 @@ export function createUI(
   })
   $('planToThree').addEventListener('click', () => onView('3d'))
   $('exampleClose').addEventListener('click', () => ($('exampleNote').hidden = true))
+
+  // The switching hint is for the first visits: once dismissed it stays away.
+  const switchHint = $('switchHint')
+  let hintGone = false
+  let hasBuilding = false
+  let building: Building | null = null
+  try {
+    hintGone = localStorage.getItem(SWITCH_HINT_KEY) === 'gone'
+  } catch { /* storage blocked: the hint shows every time */ }
+  $('switchHintClose').addEventListener('click', () => {
+    hintGone = true
+    try {
+      localStorage.setItem(SWITCH_HINT_KEY, 'gone')
+    } catch { /* not remembered */ }
+    updateSwitchHint()
+  })
+  function updateSwitchHint() {
+    const view = panel.dataset.view
+    switchHint.hidden = hintGone || !hasBuilding || (view !== '3d' && view !== 'plan')
+    if (switchHint.hidden) return
+    const parts = (building?.members?.length ?? 1) > 1
+    switchHint.firstElementChild!.textContent =
+      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift-click to add or remove parts${parts ? ' of your building' : ''}.`
+  }
 
   // The first-run guide: open by default, its collapsed state is remembered.
   const guide = $<HTMLDetailsElement>('guide')
@@ -337,6 +379,13 @@ export function createUI(
 
   for (const el of [lat, lon, date, time]) el.addEventListener('input', refresh)
   time.addEventListener('input', stop)
+  // Walking, the controls hand the keys back to the walk once used.
+  const giveKeysBack = (e: Event) => {
+    if (panel.classList.contains('walking')) (e.target as HTMLElement).blur()
+  }
+  time.addEventListener('pointerup', giveKeysBack)
+  time.addEventListener('change', giveKeysBack)
+  play.addEventListener('click', giveKeysBack)
   refresh()
 
   return {
@@ -349,7 +398,10 @@ export function createUI(
     setBuildingInfo(b) {
       const el = $('building')
       el.hidden = !b
-      if (b) el.innerHTML = buildingInfoHtml(b)
+      building = b
+      hasBuilding = b !== null
+      if (b) renderBuilding(el, b)
+      updateSwitchHint()
     },
     setView(view) {
       for (const b of viewButtons) {
@@ -361,7 +413,9 @@ export function createUI(
         el.hidden = !el.dataset.views!.split(' ').includes(view)
       }
       panel.dataset.view = view
+      dock.hidden = view !== '3d'
       if (view === 'map') updateMapHint()
+      updateSwitchHint()
     },
     setBuildingPicked(isPicked) {
       picked = isPicked
@@ -382,7 +436,7 @@ export function createUI(
         : 'Windows placed.'
       $('planToThree').hidden = step !== 'see'
       nextButton.hidden = step === 'see'
-      nextButton.textContent = step === 'outline' ? 'Next: draw your apartment' : 'Next: place the windows'
+      nextButton.textContent = step === 'outline' ? 'Draw your apartment' : 'Place the windows'
       // Walking needs windows; before that the Next prompt leads, and double-clicking the floor still works.
       walk.hidden = step !== 'see'
     },
@@ -454,6 +508,7 @@ export function createUI(
       panelPickListener = fn
     },
     cardSlot: $('cardSlot'),
+    dock,
     setWalking(walking) {
       walk.disabled = walking
       panel.classList.toggle('walking', walking)
@@ -485,7 +540,7 @@ export function createUI(
   }
 }
 
-/** The sun map legend: the colour ramp with its two scales, hours and share of the day's daylight. */
+/** The sun map legend: one line of ramp from 0 h to 6 h+; the share of the day's daylight sits behind a disclosure. */
 function legendHtml(status: SunMapStatus): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
@@ -495,15 +550,16 @@ function legendHtml(status: SunMapStatus): string {
   const { daylightMinutes, day } = status
   const label = dayLabel(day.getMonth(), day.getDate())
   if (daylightMinutes === 0) return `<span class="legendHead">No daylight on ${label}</span>`
-  // Hours along the bar (6 h and more share the lightest colour) and, under them, what each is of today's daylight.
+  // Hours along the bar (6 h and more share the lightest colour) and, behind the disclosure, what each is of today's daylight.
   const hours = [0, 2, 4, 6]
   const share = (h: number) => (h * 60 <= daylightMinutes ? `${Math.round((h * 6000) / daylightMinutes)}%` : '\u2013')
   return (
-    `<span class="legendHead">Direct sun on ${label}</span>` +
-    `<div class="legendBar" style="background:${sunGradient()}"></div>` +
+    `<span class="legendHead" title="Click the floor to see the hours at a spot">Direct sun on ${label}</span>` +
+    `<div class="legendLine"><span>0 h</span><div class="legendBar" style="background:${sunGradient()}"></div><span>6 h+</span></div>` +
+    `<details class="legendMore"><summary>Share of daylight</summary>` +
     `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
     `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
-    `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span>`
+    `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span></details>`
   )
 }
 
@@ -526,37 +582,20 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
   )
 }
 
-const HEIGHT_SOURCE = {
-  tag: 'from height tag',
-  levels: 'from levels x 3 m',
-  default: 'default, no data',
-  tile: 'from map tiles',
-}
-
-function buildingInfoHtml(b: Building): string {
-  const osmPath = b.id.split('#')[0]
-  const min = b.minHeight > 0 ? `, starts at ${b.minHeight.toFixed(1)} m` : ''
-  const levels = b.levels !== undefined ? `<br>Levels: ${b.levels}` : '<br>Levels: unknown'
-  const source = b.id.startsWith('tile/')
-    ? 'Map-tile outline, not an OSM object'
-    : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
+/** The building's identity on one line (and its name or address above it); the OSM text is set as text, not HTML. */
+function renderBuilding(el: HTMLElement, b: Building) {
+  const line = buildingLine(b)
+  const row = document.createElement('div')
+  row.className = 'buildLine'
+  const id = line.href ? Object.assign(document.createElement('a'), { href: line.href, target: '_blank', rel: 'noreferrer', textContent: line.label, title: 'Open in OpenStreetMap' }) : document.createTextNode(line.label)
+  const facts = Object.assign(document.createElement('span'), { textContent: ` \u00b7 ${line.facts.join(' \u00b7 ')}`, title: line.heightNote })
+  row.append(id, facts)
+  const extra: HTMLElement[] = []
+  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: 'Stopped at a large selection; shift-click to trim it.' }))
+  // The Map view says how to grow the selection; 3D and Plan have the dismissible switching hint instead.
   const parts = b.members?.length ?? 1
-  const lead = parts > 1 ? `Your building: ${parts} parts \u00b7 ` : ''
-  // One line per view: the map keeps its wording, 3D and Plan say how to switch.
-  const hint =
-    `<span class="viewHint" data-hint="map">${parts > 1 ? `${lead}Shift-click in 3D to add or remove parts` : 'Shift-click a neighbour in 3D to add it'}</span>` +
-    `<span class="viewHint" data-hint="3d">${lead}Click another building to switch \u00b7 Shift-click to add/remove parts</span>` +
-    `<span class="viewHint" data-hint="plan">${lead}With Select, click a grey building to switch</span>`
-  const capped = b.capped ? '<br>Stopped at a large selection; shift-click to trim it.' : ''
-  return (
-    `<strong>Selected building</strong>` +
-    `<br>${source}` +
-    `<br><span class="parts">${hint}</span>${capped}` +
-    `<span class="detail"><br>` +
-    `Height: ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})` +
-    levels +
-    `</span>`
-  )
+  extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: parts > 1 ? 'Shift-click in 3D to add or remove parts.' : 'Shift-click a neighbour in 3D to add it.' }))
+  el.replaceChildren(...(line.title ? [Object.assign(document.createElement('strong'), { textContent: line.title })] : []), row, ...extra)
 }
 
 function formatMinutes(min: number): string {
