@@ -3,6 +3,7 @@ import { fromPairs, polygonsOf, toPairs } from './edits'
 import {
   buildingContains,
   distanceToRing,
+  partsCover,
   pointInPolygon,
   ringArea,
   ringCentroid,
@@ -41,6 +42,8 @@ export const MAX_SELECTION_POLYGONS = 60
 export const MAX_SELECTION_RADIUS_M = 250
 /** A polygon with at least this share of its area inside another one belongs with it. */
 const OVERLAP_SHARE = 0.5
+/** A piece with at least this share of its footprint inside a taller one is not drawn separately. */
+const BURIED_SHARE = 0.97
 /** Holes of the union smaller than this are gaps between outlines, not courtyards. */
 const MIN_HOLE_AREA_M2 = 2
 const COLLINEAR = Math.sin((5 * Math.PI) / 180)
@@ -149,6 +152,16 @@ function near(a: Building, b: Building): boolean {
 function partIn(part: Building, outline: Building): boolean {
   if (!near(part, outline)) return false
   return buildingContains(outline, ringCentroid(part.outer)) || shareInside(part, outline) >= OVERLAP_SHARE
+}
+
+/** The piece lies inside another one, in footprint and in height: drawing it too only stacks coincident faces. */
+function buried(m: Building, index: number, pieces: Building[]): boolean {
+  return pieces.some((o, j) => {
+    if (o === m || o.minHeight > m.minHeight + 1e-6 || o.height < m.height - 1e-6) return false
+    const same = o.minHeight === m.minHeight && o.height === m.height
+    // Identical heights: the earlier piece stays, so one of two twins is always kept.
+    return (!same || j < index) && near(m, o) && shareInside(m, o) >= BURIED_SHARE
+  })
 }
 
 /** Outlines related to `b` by relation, address or overlap (not by their parts). */
@@ -278,9 +291,10 @@ export function mergeSelection(all: Building[], seed: Building, options: Selecti
   const union = unionFootprint(group, anchor)
   if (!union) return seed
   const used = union.used
-  // An outline whose parts are in the group is only their footprint: it is not drawn itself.
+  // An outline whose parts are in the group and cover it is only their footprint: it is not drawn itself.
   const parts = used.filter(isPart)
-  const members = used.filter((b) => isPart(b) || !parts.some((p) => partIn(p, b)))
+  const drawn = used.filter((b) => isPart(b) || !partsCover(b, parts.filter((p) => partIn(p, b))))
+  const members = drawn.filter((m, i) => !buried(m, i, drawn))
   if (used.length === 1) return seed
   const primary = used.filter((b) => !isPart(b)).sort((a, b) => footprintArea(b) - footprintArea(a))[0] ?? used[0]
   const tallest = [...members].sort((a, b) => b.height - a.height)[0]

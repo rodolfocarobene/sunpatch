@@ -1,3 +1,5 @@
+import polygonClipping, { type MultiPolygon, type Polygon } from 'polygon-clipping'
+
 export interface Point {
   x: number
   z: number
@@ -137,13 +139,31 @@ export function partsOf(outline: Building, buildings: Building[]): Building[] {
   return buildings.filter((b) => isPart(b) && buildingContains(outline, ringCentroid(b.outer)))
 }
 
+/** Parts must cover at least this share of an outline for the outline to be only their footprint. */
+export const PARTS_COVER_SHARE = 0.9
+
+/** The parts (a part tag, centroid inside) together cover most of the outline's area. */
+export function partsCover(outline: Building, parts: Building[]): boolean {
+  if (parts.length === 0) return false
+  const pairs = (r: Point[]): [number, number][] => r.map((p) => [p.x, p.z])
+  const polygon = (b: Building): Polygon => [pairs(b.outer), ...b.holes.map(pairs)]
+  const ring = (r: [number, number][]) => ringArea(r.map(([x, z]) => ({ x, z })))
+  const area = (multi: MultiPolygon) =>
+    multi.reduce((sum, [outer, ...holes]) => sum + ring(outer) - holes.reduce((h, r) => h + ring(r), 0), 0)
+  const own = area([polygon(outline)])
+  if (own < 1e-6) return true
+  const union = polygonClipping.union(polygon(parts[0]), ...parts.slice(1).map(polygon))
+  return area(polygonClipping.intersection(polygon(outline), union)) / own >= PARTS_COVER_SHARE
+}
+
 /**
- * OSM Simple 3D Buildings: an outline that has parts is only a footprint and must not be
- * rendered, otherwise it overlaps (z-fights with) its parts.
+ * OSM Simple 3D Buildings: an outline whose parts cover it is only a footprint and must not be rendered,
+ * otherwise it overlaps (z-fights with) its parts. An outline the parts only partly cover (a tower part on a
+ * podium that is mapped as the outline alone) is a building in its own right and stays.
  */
 export function hiddenOutlines(buildings: Building[]): Set<string> {
   return new Set(
-    buildings.filter((b) => !isPart(b) && partsOf(b, buildings).length > 0).map((b) => b.id),
+    buildings.filter((b) => !isPart(b) && partsCover(b, partsOf(b, buildings))).map((b) => b.id),
   )
 }
 

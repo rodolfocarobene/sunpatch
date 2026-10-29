@@ -142,13 +142,17 @@ describe('parseOverpass', () => {
 describe('hiddenOutlines', () => {
   const els: OverpassElement[] = [
     { type: 'way', id: 1, tags: { building: 'yes' }, geometry: square(0, 0, 0.001) },
-    { type: 'way', id: 2, tags: { 'building:part': 'yes' }, geometry: square(0, 0, 0.0004) },
+    { type: 'way', id: 2, tags: { 'building:part': 'yes' }, geometry: square(0, 0, 0.001) },
     { type: 'way', id: 3, tags: { building: 'yes' }, geometry: square(0.01, 0.01, 0.0004) },
+    // A podium outline with one small tower part on it: the parts do not cover it.
+    { type: 'way', id: 4, tags: { building: 'yes' }, geometry: square(0.02, 0.02, 0.001) },
+    { type: 'way', id: 5, tags: { 'building:part': 'yes' }, geometry: square(0.02, 0.02, 0.0003) },
   ]
   const { buildings } = parseOverpass(els, ll(0, 0))
 
-  it('hides only outlines that contain parts', () => {
+  it('hides only outlines that their parts cover', () => {
     expect([...hiddenOutlines(buildings)]).toEqual(['way/1'])
     expect(partsOf(buildings[0], buildings).map((b) => b.id)).toEqual(['way/2'])
+    expect(partsOf(buildings[3], buildings).map((b) => b.id)).toEqual(['way/5'])
   })
 })
