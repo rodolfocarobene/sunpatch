@@ -287,7 +287,7 @@ export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { title: st
   const basis = e.weather === undefined ? 'clear sky, no weather data' : `with local weather (ideal ${round10(e.ideal)})`
   return {
     title: surfaceLabel(s),
-    figure: `~${round10(e.weather ?? e.ideal)} kWh/kWp/yr`,
+    figure: `~${round10(e.weather ?? e.ideal)} kWh a year per kW of panels`,
     detail: `${basis} · shading loss ${loss}`,
   }
 }

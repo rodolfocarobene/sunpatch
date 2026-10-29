@@ -133,13 +133,13 @@ export function createPlanEditor(
   {
     autosave = () => true,
     onSwitch,
-    panelCard,
+    panelSummary,
     onPanelSelect,
   }: {
     autosave?: () => boolean
     onSwitch?: (buildingId: string, at: Point) => void
-    /** The shading card, a box at the bottom left of the Plan view (it shows itself while a panel is selected). */
-    panelCard?: HTMLElement
+    /** A box under the properties box in the right column, for the compact summary of the selected panel (the caller shows and hides it). */
+    panelSummary?: HTMLElement
     /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
     onPanelSelect?: (id: string | null) => void
   } = {},
@@ -160,9 +160,8 @@ export function createPlanEditor(
   statusLine.setAttribute('role', 'status')
   const statusText = document.createElement('span')
   statusLine.appendChild(statusText)
-  side.append(toolbar, props)
+  side.append(toolbar, props, ...(panelSummary ? [panelSummary] : []))
   root.append(svg, side, statusLine)
-  if (panelCard) root.append(panelCard)
   container.appendChild(root)
 
   let building: Building | undefined

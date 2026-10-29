@@ -23,8 +23,9 @@ import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
 import { dayLabel, minutesOfDay } from './daylight'
-import { createPanelCard, formatKwh, type CardState } from './panel-card'
+import { createPanelCard, formatKwh, type CardState, type EnergyView } from './panel-card'
 import { createPanelTotals } from './panel-totals'
+import { panelInside, referenceEnergy, referenceLine, verdict } from './panel-verdict'
 import { DEFAULT_ASSUMPTIONS, panelEnergy, type Assumptions } from './solar'
 import { DAYS_IN_MONTH, type PanelShade } from './panel-shade'
 import { climateKey, loadClimate, type Climate } from './weather'
@@ -77,20 +78,28 @@ let suitPicked: number | null = null
 let suitKeep = false
 let suitTimer: number | undefined
 
-// Panel shading: the selected panel (in the Plan editor or clicked in 3D) is analysed in a worker and shown on a card.
+// Panel shading: the selected panel (in the Plan editor, in the Panels list or clicked in the Panels view) is analysed in a
+// worker. The card in the Panels view shows it; the Plan view shows only a one-sentence summary under the panel's properties.
 const shadeJob = createPanelShadeJob()
-const cardOptions = { onAssumptions: setAssumptions, onRetry: retryClimate }
-const sceneCard = createPanelCard({ onClose: () => selectPanel(null), ...cardOptions })
-sceneCard.el.id = 'panelCard3d'
-app.appendChild(sceneCard.el)
-const planCard = createPanelCard(cardOptions)
+const card = createPanelCard({ onClose: () => selectPanel(null), onAssumptions: setAssumptions, onRetry: retryClimate })
+ui.cardSlot.appendChild(card.el)
+const planSummary = document.createElement('div')
+planSummary.className = 'editor-box planSummary'
+planSummary.hidden = true
+planSummary.innerHTML = '<h4>Selected panel</h4><p></p><button type="button">Open in Panels</button>'
+const planSummaryText = planSummary.querySelector('p')!
+planSummary.querySelector('button')!.addEventListener('click', () => setView('panels'))
 let selectedPanel: string | null = null
 /** Key of the request last sent, so repeated asks for the same scene and panel do not restart the card. */
 let shadeAsked = ''
 
 function showCards(state: CardState) {
-  sceneCard.set(state)
-  planCard.set(state)
+  card.set(state)
+  planSummaryText.textContent =
+    state.status === 'ready' ? state.energy.verdict.sentence
+    : state.status === 'error' ? state.message
+    : 'Working out the sun on this panel\u2026'
+  planSummary.hidden = view !== 'plan' || state.status === 'idle' || selectedPanel === null
 }
 
 // Energy: the shading analysis gives clear-sky irradiation, NASA POWER (one request per place, once a panel exists)
@@ -140,6 +149,17 @@ function setAssumptions(next: Assumptions) {
   paintSuitability()
 }
 
+/** What the card shows for a panel: the figures, the sentence and the yardstick. */
+function energyView(panel: Plan['panels'][number], shade: PanelShade, area: number): EnergyView {
+  const energy = panelEnergy(shade.irradiation, area, assumptions, DAYS_IN_MONTH, climate?.clearness)
+  const weather = climate ? 'ready' : climateStatus === 'error' ? 'error' : 'loading'
+  const inside = site ? panelInside(panel, site.selected) : false
+  const reference = sunDay
+    ? referenceLine(referenceEnergy(panel, sunDay.lat, sunDay.lon, sunDay.when.getFullYear(), assumptions, climate?.clearness), climate !== undefined, sunDay.lat)
+    : null
+  return { energy, weather, assumptions, area, verdict: verdict({ energy, weather, shadingLoss: shade.shadingLoss, inside }), reference }
+}
+
 function renderEnergy() {
   if (lastShade && selectedPanel === lastShade.panel.id) {
     const { shade, panel } = lastShade
@@ -147,31 +167,33 @@ function renderEnergy() {
     showCards({
       status: 'ready',
       shade,
-      energy: {
-        energy: panelEnergy(shade.irradiation, area, assumptions, DAYS_IN_MONTH, climate?.clearness),
-        weather: climate ? 'ready' : climateStatus === 'error' ? 'error' : 'loading',
-        assumptions,
-        area,
-      },
+      energy: energyView(panel, shade, area),
     })
   }
   renderTotals()
 }
 
-/** The line in the 3D panel: every panel's energy added up, once all are analysed. */
+/** The Panels list: a row per panel with its yearly energy once analysed, and every panel's energy added up. */
 function renderTotals() {
   const panels = plan?.panels ?? []
   const shades = totals.shades()
-  if (panels.length === 0 || totals.busy() || panels.some((p) => !shades.has(p.id))) return ui.setPanelTotals(null)
-  let ideal = 0
-  let weather = 0
+  const energies = new Map<string, { ideal: number; weather?: number }>()
   for (const p of panels) {
-    const e = panelEnergy(shades.get(p.id)!.irradiation, panelArea(p), assumptions, DAYS_IN_MONTH, climate?.clearness)
-    ideal += e.ideal
-    weather += e.weather ?? 0
+    const shade = shades.get(p.id)
+    if (shade) energies.set(p.id, panelEnergy(shade.irradiation, panelArea(p), assumptions, DAYS_IN_MONTH, climate?.clearness))
   }
-  const count = `${panels.length} ${panels.length === 1 ? 'panel' : 'panels'}`
-  ui.setPanelTotals(climate ? `${count} \u00b7 ~${formatKwh(weather)}/year with local weather` : `${count} \u00b7 ~${formatKwh(ideal)}/year, clear sky`)
+  const figure = (e: { ideal: number; weather?: number }) => (climate && e.weather !== undefined ? e.weather : e.ideal)
+  const items = panels.map((p, i) => {
+    const e = energies.get(p.id)
+    return { id: p.id, label: `Panel ${i + 1}`, detail: e ? `${formatKwh(figure(e))} a year` : 'Analysing\u2026' }
+  })
+  let total: string | null = null
+  if (panels.length > 0 && !totals.busy() && energies.size === panels.length) {
+    const sum = [...energies.values()].reduce((t, e) => t + figure(e), 0)
+    const count = `${panels.length} ${panels.length === 1 ? 'panel' : 'panels'}`
+    total = `${count} \u00b7 ~${formatKwh(sum)} a year${climate ? ' with local weather' : ', clear sky'}`
+  }
+  ui.setPanelList({ items, selected: selectedPanel, total })
 }
 
 function requestTotals() {
@@ -187,6 +209,7 @@ function selectPanel(id: string | null) {
   if (id === selectedPanel) return
   selectedPanel = id
   shadeAsked = ''
+  renderTotals()
   if (id) requestShade()
   else {
     shadeJob.stop()
@@ -414,7 +437,7 @@ function escape() {
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || walking) return
   if (suitPopover.open) return closeSuitPick()
-  if (view === '3d' && selectedPanel && !popover.open) selectPanel(null)
+  if (view === 'panels' && selectedPanel && !popover.open) selectPanel(null)
   else escape() // walking, the walk controls report Esc themselves
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
@@ -459,10 +482,13 @@ let exampleMode = new URLSearchParams(location.search).get('example') === 'milan
 const editor = createPlanEditor(document.body, setPlan, {
   autosave: () => !exampleMode,
   onSwitch: (id, at) => switchTo(id, at),
-  panelCard: planCard.el,
+  panelSummary: planSummary,
   onPanelSelect: selectPanel,
 })
-sunScene.onPanelClick(selectPanel)
+sunScene.onPanelClick((id) => {
+  if (view === 'panels') selectPanel(id) // in 3D a panel is just part of the scene
+})
+ui.onPanelPick(selectPanel)
 sunScene.onPartClick(togglePartAt)
 sunScene.onBuildingClick((id, at) => switchTo(id, at))
 const chip = createStatusChip(app, () => last && void refine(last, current))
@@ -489,15 +515,27 @@ function walkInside() {
   sunScene.startWalk()
 }
 
+/** The Panels view needs a plan to hold the panels: the whole floor, as when the editor opens first. */
+function ensurePlan(): boolean {
+  if (!site) return false
+  if (!plan) setPlan(defaultPlan(site.selected, site.origin))
+  return true
+}
+
 function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
+  if (next === 'panels' && !ensurePlan()) return
   view = next
-  app.hidden = next !== '3d'
+  const scene3d = next === '3d' || next === 'panels' // one scene and one camera for both
+  app.hidden = !scene3d
   mapView.setVisible(next === 'map')
   editor.setVisible(next === 'plan')
-  sunScene.setActive(next === '3d')
-  if (next === '3d') sunScene.resize()
+  sunScene.setActive(scene3d)
+  if (scene3d) sunScene.resize()
+  if (next !== 'panels') ui.setSuitability(false) // the map belongs to the Panels view
   ui.setView(next)
+  renderTotals()
+  planSummary.hidden = next !== 'plan' || selectedPanel === null
 }
 
 interface Pick {
@@ -562,7 +600,7 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   ui.setBuildingInfo(selected)
   ui.setBuildingPicked(true)
   if (view === 'plan') openEditor()
-  else setView('3d')
+  else if (view !== 'panels') setView('3d') // the Panels view stays put when another building is picked in 3D
 }
 
 const NEIGHBOR_RADIUS_M = 60
