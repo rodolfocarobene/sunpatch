@@ -206,12 +206,43 @@ export function floodSelection(all: Building[], seed: Building, click?: Point): 
 export const selectionGroup = (all: Building[], seed: Building, click?: Point): Building[] =>
   floodSelection(all, seed, click).group
 
+/** Grids tried to close the gaps between outlines that only nearly touch (map-tile polygons are rounded). */
+const SNAP_GRIDS: [number, number, number][] = [
+  [0.4, 0, 0],
+  [0.4, 0.2, 0.2],
+  [0.4, 0.1, 0.3],
+  [0.4, 0.3, 0.1],
+]
+
+function snapped(polygon: Polygon, [g, ox, oz]: [number, number, number]): Polygon {
+  const ring = (r: [number, number][]) => {
+    const pts = r.map(([x, z]): [number, number] => [Math.round(x / g - ox) * g + ox * g, Math.round(z / g - oz) * g + oz * g])
+    return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
+  }
+  return polygon.map(ring).filter((r) => r.length >= 3)
+}
+
+/**
+ * Union of polygons. Outlines that touch exactly union as they are; when the result is still in several
+ * pieces, the coordinates are snapped to a coarse grid (a few offsets) to close the hairline gaps, and the
+ * attempt with the fewest pieces wins.
+ */
+export function closedUnion(polygons: Polygon[]): MultiPolygon {
+  let best = polygonClipping.union(polygons[0], ...polygons.slice(1))
+  for (const grid of SNAP_GRIDS) {
+    if (best.length <= 1) break
+    const tried = polygonClipping.union(snapped(polygons[0], grid), ...polygons.slice(1).map((p) => snapped(p, grid)))
+    if (tried.length < best.length) best = tried
+  }
+  return best
+}
+
 /** Union of footprints as one polygon (the component under `anchor`); gaps between outlines are closed. */
 export function unionFootprint(
   pieces: Building[],
   anchor: Point,
 ): { outer: Point[]; holes: Point[][]; used: Building[] } | undefined {
-  const merged = polygonClipping.union(polygonOf(pieces[0]), ...pieces.slice(1).map(polygonOf))
+  const merged = closedUnion(pieces.map(polygonOf))
   const polygons = polygonsOf(merged)
   const chosen =
     polygons.find((p) => pointInPolygon(anchor, p.outer)) ??

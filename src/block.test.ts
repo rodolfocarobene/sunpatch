@@ -127,6 +127,16 @@ describe('selectionGroup', () => {
   })
 })
 
+describe('closed union', () => {
+  it('joins outlines that miss each other by a few centimetres', () => {
+    const a = make('way/1', rect(0, 0, 10, 10))
+    const b = make('way/2', rect(10.03, 0.01, 20, 10.02))
+    const merged = mergeSelection([a, b], a)
+    expect(merged.sources).toHaveLength(2)
+    expect(ringArea(merged.outer)).toBeCloseTo(200, -1)
+  })
+})
+
 describe('togglePart', () => {
   const a = make('way/1', rect(0, 0, 10, 10), {}, { height: 12 })
   const b = make('way/2', rect(10, 0, 20, 10), {}, { height: 20 })

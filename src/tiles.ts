@@ -1,5 +1,4 @@
-import polygonClipping from 'polygon-clipping'
-import { MIN_TOUCH_M, sharedWallLength, touching } from './block'
+import { closedUnion, MIN_TOUCH_M, sharedWallLength, touching } from './block'
 import { polygonsOf, toPairs } from './edits'
 import type { TileBuilding } from './geocode'
 import { distanceToRing, project, type Building, type Origin, type Point } from './osm'
@@ -83,9 +82,7 @@ export function joinPieces(pieces: { building: Building; featureId?: string | nu
   pieces.forEach((p, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), p.building]))
   return [...groups.values()].flatMap((group) => {
     if (group.length === 1) return group
-    const regions = polygonsOf(
-      polygonClipping.union(...(group.map((b) => [toPairs(b.outer), ...b.holes.map(toPairs)]) as [never, ...never[]])),
-    )
+    const regions = polygonsOf(closedUnion(group.map((b) => [toPairs(b.outer), ...b.holes.map(toPairs)])))
     // A seam that does not close (rounding at the border) leaves the pieces as they are.
     if (regions.length !== 1) return group
     return [{ ...group[0], outer: regions[0].outer, holes: regions[0].holes }]
