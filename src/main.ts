@@ -35,7 +35,9 @@ const hud = createWalkHud(app, {
   exit: () => sunScene.stopWalk(),
   setMinutes: (minutes) => ui.setMinutes(minutes),
   togglePlay: () => ui.togglePlay(),
+  toggleCutaway: () => ui.toggleCutaway(),
 })
+ui.onCutaway((hidden) => hud.setCutaway(hidden))
 ui.onPlaying((playing) => hud.setPlaying(playing))
 sunScene.setWalkHandlers({
   change(walking) {
@@ -45,6 +47,7 @@ sunScene.setWalkHandlers({
   exit: () => sunScene.stopWalk(),
   stepTime: (minutes) => ui.stepTime(minutes),
   togglePlay: () => ui.togglePlay(),
+  toggleCutaway: () => ui.toggleCutaway(),
 })
 ui.onChange((when, sun, strip) => {
   hud.setStatus(`${dayLabel(when.getMonth(), when.getDate())} \u00b7 ${sunSentence(sun, 'up')}`)

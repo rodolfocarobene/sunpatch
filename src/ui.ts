@@ -29,6 +29,10 @@ export interface UI {
   setExample(on: boolean): void
   /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
   setPlanActive(active: boolean): void
+  /** The "Hide floors above" state, shared with the walk HUD: set it, flip it, or hear about changes. */
+  setCutaway(on: boolean): void
+  toggleCutaway(): void
+  onCutaway(listener: (hidden: boolean) => void): void
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -133,7 +137,12 @@ export function createUI(
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const cutaway = $<HTMLInputElement>('cutaway')
-  cutaway.addEventListener('change', () => onCutaway(cutaway.checked))
+  let cutawayListener: ((hidden: boolean) => void) | undefined
+  const applyCutaway = () => {
+    onCutaway(cutaway.checked)
+    cutawayListener?.(cutaway.checked)
+  }
+  cutaway.addEventListener('change', applyCutaway)
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
@@ -310,7 +319,19 @@ export function createUI(
     },
     setPlanActive(active) {
       $('aptTools').hidden = !active
-      if (active) onCutaway(cutaway.checked)
+      if (active) applyCutaway()
+    },
+    setCutaway(on) {
+      cutaway.checked = on
+      applyCutaway()
+    },
+    toggleCutaway() {
+      cutaway.checked = !cutaway.checked
+      applyCutaway()
+    },
+    onCutaway(fn) {
+      cutawayListener = fn
+      fn(cutaway.checked)
     },
     setWalking(walking) {
       walk.disabled = walking
@@ -358,10 +379,12 @@ function buildingInfoHtml(b: Building): string {
     ? 'Map-tile outline, not an OSM object'
     : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
   const parts = b.members?.length ?? 1
+  const lead = parts > 1 ? `Your building: ${parts} parts \u00b7 ` : ''
+  // One line per view: the map keeps its wording, 3D and Plan say how to switch.
   const hint =
-    parts > 1
-      ? `Your building: ${parts} parts \u00b7 Shift-click in 3D to add or remove parts`
-      : 'Shift-click a neighbour in 3D to add it'
+    `<span class="viewHint" data-hint="map">${parts > 1 ? `${lead}Shift-click in 3D to add or remove parts` : 'Shift-click a neighbour in 3D to add it'}</span>` +
+    `<span class="viewHint" data-hint="3d">${lead}Click another building to switch \u00b7 Shift-click to add/remove parts</span>` +
+    `<span class="viewHint" data-hint="plan">${lead}With Select, click a grey building to switch</span>`
   const capped = b.capped ? '<br>Stopped at a large selection; shift-click to trim it.' : ''
   return (
     `<strong>Selected building</strong>` +

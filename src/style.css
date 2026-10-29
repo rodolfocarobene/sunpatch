@@ -112,6 +112,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #aptTools { display: flex; flex-direction: column; gap: 10px; }
 #building { padding-bottom: 10px; border-bottom: 1px solid var(--line); line-height: 1.4; }
 #panel[data-view='plan'] #building .detail { display: none; }
+#building .viewHint { display: none; }
+#panel[data-view='map'] #building [data-hint='map'], #panel[data-view='3d'] #building [data-hint='3d'], #panel[data-view='plan'] #building [data-hint='plan'] { display: inline; }
 #panel.walking > :not(#views, #about) { display: none; }
 #sunSummary { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; }
 #sunSummary strong { text-wrap: balance; }
@@ -183,7 +185,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
   font: inherit; font-weight: 600; text-align: center; color: var(--text); background: var(--surface); border-radius: 4px;
 }
 #walkHud kbd + kbd { margin-left: 1px; }
-#walkHud .walkExit { padding: 1px 8px; }
+#walkHud .walkExit, #walkHud .walkFloors { padding: 1px 8px; }
+#walkHud .walkFloors kbd { margin: 0 0 0 4px; }
 #walkHud .walkExit kbd { margin: 0 0 0 4px; }
 #walkHud :focus-visible { outline-color: var(--accent); }
 /* The map's "Use this building" popup, in the same box as the rest of the chrome. */
