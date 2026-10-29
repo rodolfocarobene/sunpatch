@@ -55,8 +55,8 @@ const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
 // Building heights: the hover note says where a height came from, the right-click box (or the building line's button) changes it.
-const hoverTip = createHoverTip(app)
-const heightPopover = createHeightPopover(app, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
+const hoverTip = createHoverTip(document.body)
+const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
 let sunResult: SunMapResult | undefined
 /** Where the user clicked, kept so the popover can be redone when the result changes. */
@@ -541,6 +541,8 @@ function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   view = next
+  heightPopover.hide()
+  hoverTip.hide()
   const scene3d = next === '3d' || next === 'panels' // one scene and one camera for both
   app.hidden = !scene3d
   mapView.setVisible(next === 'map')

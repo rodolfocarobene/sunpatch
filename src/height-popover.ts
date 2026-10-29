@@ -11,7 +11,7 @@ const WIDTH = 272
 /** What the form shows for a building: the title, the line under it, and whether the height is the user's own. */
 export function heightHeading(b: Building): { title: string; now: string; mine: boolean } {
   const line = buildingLine(b)
-  const was = b.dataHeight ? `The data had ${b.dataHeight.height.toFixed(1)} m (${b.dataHeight.heightSource === 'default' ? 'a guess' : 'from OpenStreetMap'}).` : ''
+  const was = b.dataHeight ? `The data had ${Math.round(b.dataHeight.height * 10) / 10} m (${b.dataHeight.heightSource === 'default' ? 'a guess' : 'from OpenStreetMap'}).` : ''
   const now = [`${Math.round(b.height * 10) / 10} m`, line.source].filter(Boolean).join(' · ')
   return { title: line.title ? `${line.title} · ${line.label}` : line.label, now: was ? `${now}. ${was}` : now, mine: b.heightSource === 'user' }
 }

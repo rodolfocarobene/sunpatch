@@ -41,7 +41,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
 | `block.ts` | The selection model: flood fill over touching, overlapping and related polygons into the selected `Building` with `members` and `sources`; shift-click trimming; restoring a saved selection. |
-| `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights, picking helpers. |
+| `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights and their `HeightSource` (`tag`, `levels`, `default`, `tile`, `parts`, `user`), picking helpers. |
+| `heights.ts`, `hatch.ts`, `height-popover.ts` | Building heights: the user's overrides (`plan.heights`, applied to the parsed polygons, floors or metres), what counts as a guessed height, the striped material that marks those in 3D, the right-click Height box and the hover note. |
 | `trees.ts` | Trees: green areas and mapped trees from Overpass, seeded Poisson-ish scatter (clear of buildings, capped at 1500 within 300 m), two `InstancedMesh`es that cast shadows. |
 | `footprint.ts` | Extrudes footprints into three.js geometry. |
 | `sun.ts` | Sun direction vector from SunCalc, compass names. |
@@ -105,6 +106,37 @@ touch). `selectBuilding` in `src/block.ts` turns the clicked polygon into one se
 `tiles.ts` also joins tile pieces of one building (`joinPieces`): same heights, touching or overlapping, same
 feature id (without ids: a wall along a constant longitude or latitude, or a buffer overlap).
 
+## Building heights
+
+OSM often lacks `height` and `building:levels`, and the 9 m fallback then makes neighbour shadows wrong. Two things
+deal with it:
+
+- **Flagging** (`isGuessed`): a polygon whose `heightSource` is `default` (including a map-tile building without
+  `render_height`) or `parts` (an outline raised from the parts floating above it) is guessed. `scene.ts` draws those with
+  `hatchedMaterial` (`hatch.ts`), a standard material that darkens the albedo along diagonal world-space stripes
+  (period 1.6 m, widening in steps from afar so they never shimmer); lighting and shadows are the plain material's, so
+  they cast and receive normally. One shared uniform (`hatchStrength`) is the "Mark guessed heights" switch, so toggling
+  does not rebuild anything and does not touch the scene version. The selected building is not striped while its
+  apartment is in the scene (its info line says it instead). The hover note (`hoverLines`) and the building line give
+  the source ("height guessed: 9 m default").
+- **Overrides** (`heights.ts`): `main.ts` keeps `site.raw` (the polygons as the data has them) and `site.buildings`
+  (`applyHeights(raw, heights)`: height, `minHeight`, `levels` replaced, `heightSource: 'user'`, `dataHeight` remembers the
+  data's value). A merged selection is rebuilt from its polygons by `reselect` (the same `mergeSelection` call as
+  after a pick), so a part's override changes the selection's height and `levels`. Entered in floors, an override
+  sets `levels` and the height is `minHeight + floors x 3 m`; entered in metres it drops `levels`. Everything downstream
+  reads `site.buildings` or the scene: `sunScene.setBuildings` rebuilds the world (version bump, so the sun map, panel
+  shading and suitability caches, which key on `sceneVersion`, are invalid and rerun; suitability samples come from
+  `site.buildings`). If the selected building's height changed, the plan's `floorHeight` is reset to the new
+  `defaultFloorHeight` and `floor` clamped to the new level count, which is what the cutaway ("Hide floors above") reads.
+  Overrides are saved with the plan; an edit with no plan yet creates the default plan for the selected building (as
+  the Panels view does), without moving the camera. In `show()` the working set is the saved plan's overrides over the
+  ones already in memory, pruned to polygons that exist in the new data (`keepKnown`), so edits made around one building
+  carry to the next building picked nearby. Overrides are keyed by polygon id, so a map-tile preview edit does not carry
+  to the OSM data (different ids).
+- **Gesture**: right-click a building (without dragging, which pans) opens the Height box; the selected building also has
+  an Edit height button on its info line. Plain click, shift-click, floor click and double-click are taken; Alt-click is
+  often grabbed by window managers.
+
 ## The plan model
 
 A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
@@ -113,6 +145,10 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
   built inward from it, `FACADE_THICKNESS` thick.
 - Windows reference an outline edge (`ring`, `edge`) and a position `t` along it, so they move with the outline.
 - `edits` are building-level prisms (`add` or `cut`) with absolute heights above the ground.
+- `heights` are the user's own heights for OSM polygons of the area, `{ [polygonId]: { height, minHeight?, levels? } }`:
+  the selected building and its neighbours alike, so they live with the plan (export, import and `rebasePlan` carry
+  them; they are metres, so rebasing leaves them as they are). `validatePlan` drops entries that are not usable and
+  older plans without the field load as before. See "Building heights" below.
 - `panels` are solar panels (`Panel` in `plan.ts`): a row of `count` modules centred at `x`, `z`, with `elevation`
   (lowest edge above the ground, metres), `tilt` (0 flat, 90 vertical) and `azimuth` (degrees clockwise from north
   that the front faces). They may lie outside the outline. Older plans without `panels` load as `[]` (`validatePlan`),

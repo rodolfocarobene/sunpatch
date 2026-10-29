@@ -185,8 +185,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #heightPopover .spotClose:hover { background: var(--bg-band); color: var(--text); }
 #heightPopover .hpRow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-#heightPopover .hpRow label { display: flex; align-items: center; gap: 6px; flex: 1; }
-#heightPopover .hpValue { width: 70px; min-width: 0; }
+#heightPopover .hpRow label { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+#heightPopover .hpValue { width: 64px; min-width: 0; box-sizing: border-box; }
 #heightPopover select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
 #heightPopover button:not(.spotClose) { font: inherit; padding: 5px 10px; cursor: pointer; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); }
 #heightPopover button:not(.spotClose):hover { background: var(--bg-band); border-color: var(--accent-strong); }

@@ -269,7 +269,8 @@ export function createUI(
     const button = (e.target as HTMLElement).closest<HTMLButtonElement>('button.editHeight')
     if (!button) return
     const r = button.getBoundingClientRect()
-    editHeightListener?.({ x: r.left + r.width / 2, y: r.bottom })
+    // Beside the panel, not over it: the box opens below the button, in the scene's space.
+    editHeightListener?.({ x: panel.getBoundingClientRect().right + 8 + 136, y: r.bottom })
   })
   let hintGone = false
   let hasBuilding = false
