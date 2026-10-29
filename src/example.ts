@@ -1,5 +1,6 @@
 import { mergeSelection } from './block'
 import { buildingContains, parseOverpass, ringCentroid, unproject, type Building, type Origin, type OverpassElement, type Point } from './osm'
+import { parseGreen, type Green } from './trees'
 import { defaultPlan, type Plan } from './plan'
 import { yawOf } from './walk-geom'
 
@@ -14,6 +15,7 @@ export interface Example {
   selected: Building
   origin: Origin
   plan: Plan
+  green: Green
 }
 
 const inside = (ring: Point[], p: Point) => buildingContains({ outer: ring, holes: [] } as unknown as Building, p)
@@ -58,7 +60,7 @@ export function buildExample(elements: OverpassElement[]): Example {
   const origin = unproject(ringCentroid(first.outer), EXAMPLE_NEAR)
   const { buildings } = parseOverpass(elements, origin)
   const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!)
-  return { buildings, selected, origin, plan: examplePlan(selected, origin) }
+  return { buildings, selected, origin, plan: examplePlan(selected, origin), green: parseGreen(elements, origin) }
 }
 
 /** Loaded on demand so the normal app does not carry the fixture. */

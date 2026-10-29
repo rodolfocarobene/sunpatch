@@ -40,6 +40,7 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
 | `block.ts` | The selection model: merges the polygons of one building (parts, relation rings, address, overlap) into the selected `Building` with `members` and `sources`. |
 | `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights, picking helpers. |
+| `trees.ts` | Trees: green areas and mapped trees from Overpass, seeded Poisson-ish scatter (clear of buildings, capped at 1500 within 300 m), two `InstancedMesh`es that cast shadows. |
 | `footprint.ts` | Extrudes footprints into three.js geometry. |
 | `sun.ts` | Sun direction vector from SunCalc, compass names. |
 | `plan.ts` | The `Plan` data model (outline, walls, windows, viewpoint, building edits) and helpers. |
