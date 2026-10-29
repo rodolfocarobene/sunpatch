@@ -21,6 +21,11 @@ export type SunMapStatus =
   | { kind: 'ready'; daylightMinutes: number; day: Date }
   | { kind: 'error'; message: string }
 
+export type SuitabilityStatus =
+  | { kind: 'computing'; progress: number; updating?: boolean }
+  | { kind: 'ready'; max: number; ticks: number[]; weather: boolean; count: number }
+  | { kind: 'error'; message: string }
+
 export interface UI {
   setLocation(lat: number, lon: number): void
   /** Where the place search form is mounted (the Map view panel). */
@@ -46,6 +51,10 @@ export interface UI {
   toggleSunMap(): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
+  /** The "Panel suitability" switch (off by default): hear about changes, set it, and fill the legend under it. */
+  onSuitability(listener: (on: boolean) => void): void
+  setSuitability(on: boolean): void
+  setSuitabilityStatus(status: SuitabilityStatus): void
   /** The line with every panel's energy in the 3D panel; null hides it. */
   setPanelTotals(text: string | null): void
   /** Disables the Walk button while walking. */
@@ -111,6 +120,8 @@ export function createUI(
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
         <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
         <div id="sunMapLegend" hidden></div>
+        <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
+        <div id="suitLegend" hidden></div>
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
       <div class="field">
@@ -169,6 +180,17 @@ export function createUI(
     sunMapListener?.(sunMap.checked)
   }
   sunMap.addEventListener('change', applySunMap)
+  const suit = $<HTMLInputElement>('suit')
+  const suitLegend = $('suitLegend')
+  let suitListener: ((on: boolean) => void) | undefined
+  const applySuit = () => {
+    suitLegend.hidden = !suit.checked
+    // The map needs the whole building (facade and roof), so the floors above stay while it shows.
+    cutaway.disabled = suit.checked
+    cutaway.title = suit.checked ? 'The floors above stay visible while the panel suitability map shows' : ''
+    suitListener?.(suit.checked)
+  }
+  suit.addEventListener('change', applySuit)
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
@@ -374,6 +396,17 @@ export function createUI(
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
     },
+    onSuitability(fn) {
+      suitListener = fn
+    },
+    setSuitability(on) {
+      if (suit.checked === on) return
+      suit.checked = on
+      applySuit()
+    },
+    setSuitabilityStatus(status) {
+      suitLegend.innerHTML = suitabilityLegendHtml(status)
+    },
     setPanelTotals(text) {
       const el = panel.querySelector<HTMLElement>('#panelTotals')!
       el.hidden = text === null
@@ -429,6 +462,25 @@ function legendHtml(status: SunMapStatus): string {
     `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
     `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
     `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span>`
+  )
+}
+
+/** The suitability legend: the ramp in kWh/kWp/yr, and what the colours assume. */
+function suitabilityLegendHtml(status: SuitabilityStatus): string {
+  if (status.kind === 'computing') {
+    const pct = Math.round(status.progress * 100)
+    const head = status.updating ? 'Updating the panel map' : 'Computing the panel map'
+    return `<span class="legendHead" role="status">${head}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
+  }
+  if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
+  const top = status.ticks[status.ticks.length - 1]
+  const tick = (t: number) => `<span>${t.toLocaleString('en')}${t === top ? '+' : ''}</span>`
+  return (
+    `<span class="legendHead">Yearly energy per kWp, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
+    `<div class="legendBar" style="background:${sunGradient()}"></div>` +
+    `<div class="legendTicks">${status.ticks.map(tick).join('')}</div>` +
+    `<span class="legendUnit muted">kWh/kWp/yr</span>` +
+    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Click one for details.</span>`
   )
 }
 
