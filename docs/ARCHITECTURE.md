@@ -47,6 +47,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `sun.ts` | Sun direction vector from SunCalc, compass names. |
 | `plan.ts` | The `Plan` data model (outline, walls, windows, viewpoint, building edits) and helpers. |
 | `editor.ts`, `editor-draw.ts`, `editor-geom.ts`, `editor.css` | 2D plan editor: tools, snapping, undo, import/export, autosave, validation. |
+| `panel.ts`, `panel-mesh.ts` | Solar panels: geometry (corners from tilt and azimuth, plan footprint, rotate handle), snapping to facade edges, presets; the 3D slabs. |
 | `apartment.ts` | Plan → geometry: blocks below/above, rest of the storey, facade walls with window openings, interior walls, glass. |
 | `edits.ts` | Building fixes: carving cuts per height range and adding prisms (`polygon-clipping`). |
 | `scene.ts` | three.js scene: buildings, lights, shadows, cutaway, sun disc, sky, two-pass apartment rendering, walk mode. |
@@ -108,6 +109,12 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
   built inward from it, `FACADE_THICKNESS` thick.
 - Windows reference an outline edge (`ring`, `edge`) and a position `t` along it, so they move with the outline.
 - `edits` are building-level prisms (`add` or `cut`) with absolute heights above the ground.
+- `panels` are solar panels (`Panel` in `plan.ts`): a row of `count` modules centred at `x`, `z`, with `elevation`
+  (lowest edge above the ground, metres), `tilt` (0 flat, 90 vertical) and `azimuth` (degrees clockwise from north
+  that the front faces). They may lie outside the outline. Older plans without `panels` load as `[]` (`validatePlan`),
+  and `rebasePlan` moves them. In 3D (`panelMeshes`) each module is a 4 cm box that casts and receives shadows, with
+  edge lines for the frame, floating (what carries it is not modelled); being shadow casters they are occluders in the
+  sun map. They are added to the world beside the apartment, so the second pass and the cutaway leave them alone.
 - Plans are saved in `localStorage` under `sun-in-house:plan:<buildingId>` and carry their own `origin`;
   `rebasePlan` moves them to the current scene origin. In example mode (`?example=milan`) nothing is loaded from or
   saved to `localStorage` until the user picks a building on the map.

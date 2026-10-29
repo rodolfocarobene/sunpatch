@@ -73,7 +73,7 @@ describe('the window opening lets the sun through', () => {
   const building: Building = { id: 'way/1', outer, holes: [], minHeight: 0, height: 12, heightSource: 'tag', tags: {} }
   const window: Window = { ring: 0, edge: 0, t: 0.5, width: 1.2, sill: 0.9, height: 1.4 }
   const plan: Plan = {
-    version: 1, buildingId: 'way/1', origin: { lat: 45, lon: 9 }, floor: 1, floorHeight: 3, outline: { outer, holes: [] }, walls: [], windows: [window],
+    version: 1, buildingId: 'way/1', origin: { lat: 45, lon: 9 }, floor: 1, floorHeight: 3, outline: { outer, holes: [] }, walls: [], windows: [window], panels: [],
   }
   // The facade wall on edge 0 (z = 0, interior toward +z), floor at y = 3: window x 4.4..5.6, y 3.9..5.3.
   const bvh = buildBvh(collectOccluders([casting(facadeWall(plan, building, 0, 0)!.wall)]))

@@ -34,6 +34,7 @@ const plan = (outer: Point[], holes: Point[][] = [], walls: Plan['walls'] = []):
   outline: { outer, holes },
   walls,
   windows: [],
+  panels: [],
 })
 
 const samples = (g: Grid) => Array.from({ length: g.count }, (_, i) => ({ x: g.xs[i], z: g.zs[i] }))

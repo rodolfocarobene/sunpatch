@@ -1,9 +1,10 @@
 import { ringCentroid } from './osm'
 import type { Building, Point } from './osm'
-import type { Plan, Viewpoint } from './plan'
+import type { Panel, Plan, Viewpoint } from './plan'
 import { floorBase, ringOf } from './plan'
 import type { Snap } from './editor-geom'
 import { startPosition, windowYaw } from './walk-geom'
+import { panelFootprint, panelTip, facing, footprintDepth } from './panel'
 
 export interface View {
   /** Scene point shown at the centre of the SVG. */
@@ -16,7 +17,7 @@ export interface View {
 }
 
 export interface Selection {
-  kind: 'window' | 'wall' | 'edit' | 'viewpoint'
+  kind: 'window' | 'wall' | 'edit' | 'viewpoint' | 'panel'
   /** Unused (0) for the viewpoint. */
   index: number
 }
@@ -60,6 +61,8 @@ export interface Draft {
   wallStart?: Point
   cursor?: Point
   snap?: Snap
+  /** Panel tool: where a click would put a panel. */
+  panel?: Panel
 }
 
 export interface Scene {
@@ -86,6 +89,9 @@ const C = {
   accent: '#f5a623',
   accentStrong: '#b45f06',
 }
+const PANEL_FILL = '#2c3d5c'
+const PANEL_STROKE = '#16213a'
+const PANEL_EDGE = '#8ea2c4'
 export const NORTH_ARROW_POS = { x: 320, y: 56 }
 export const SCALE_BAR_POS = { x: 300, y: 56 }
 
@@ -198,6 +204,8 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     }
   }
 
+  plan.panels.forEach((p, i) => drawPanel(root, p, px, s.selection?.kind === 'panel' && s.selection.index === i))
+  if (s.draft.panel) drawPanel(root, s.draft.panel, px, false, 0.55)
   drawViewpoint(root, s, px)
   drawDraft(root, s, px)
   drawOverlay(svg, v)
@@ -239,6 +247,31 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
       }
     }
   })
+}
+
+/** Slate blue module(s) at the footprint of their tilt, a tick for the facing direction, a rotate handle when selected. */
+function drawPanel(root: SVGElement, p: Panel, px: number, selected: boolean, opacity = 1): void {
+  const g = svgEl(root, 'g', { 'data-role': 'panel', opacity })
+  const title = svgEl(g, 'title', {})
+  title.textContent = `Solar panel: tilt ${Math.round(p.tilt)} deg, faces ${Math.round(p.azimuth)} deg, lowest edge ${p.elevation.toFixed(1)} m`
+  const ring = panelFootprint(p, Math.max(0.1, 5 * px))
+  const d = pathOf([ring])
+  if (selected) svgEl(g, 'path', { d, fill: C.accent, stroke: C.accent, 'stroke-width': 10 * px, 'stroke-linejoin': 'round', opacity: 0.85 })
+  svgEl(g, 'path', { d, fill: PANEL_FILL, stroke: PANEL_STROKE, 'stroke-width': 1.5 * px, 'stroke-linejoin': 'round' })
+  // Front edge: a lighter line on the side the glass faces, then the tick beyond it.
+  const f = facing(p.azimuth)
+  const reach = Math.max(footprintDepth(p), Math.max(0.1, 5 * px)) / 2
+  const front = { x: p.x + f.x * reach, z: p.z + f.z * reach }
+  svgEl(g, 'line', { x1: ring[0].x, y1: ring[0].z, x2: ring[1].x, y2: ring[1].z, stroke: PANEL_EDGE, 'stroke-width': 2 * px })
+  svgEl(g, 'line', {
+    x1: front.x, y1: front.z, x2: front.x + f.x * 9 * px, y2: front.z + f.z * 9 * px,
+    stroke: PANEL_STROKE, 'stroke-width': 2.5 * px, 'stroke-linecap': 'round',
+  })
+  if (selected) {
+    const tip = panelTip(p)
+    svgEl(g, 'line', { x1: front.x, y1: front.z, x2: tip.x, y2: tip.z, stroke: C.accentStrong, 'stroke-width': 1.5 * px, 'stroke-dasharray': `${4 * px} ${3 * px}` })
+    svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
+  }
 }
 
 function drawViewpoint(root: SVGElement, s: Scene, px: number): void {

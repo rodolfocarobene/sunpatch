@@ -70,6 +70,10 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    - **Window**: click on an outline edge. With **Select** you can drag a window along its wall and edit its size.
    - **Building fix**: draw a shape, choose Add or Cut, and set its heights or use a preset such as
      *Balcony slab on this floor*.
+   - **Panel** (`P`): click to place a solar panel anywhere, inside or outside the outline. Near a wall it snaps and
+     faces outward (vertical); elsewhere it faces south at 30 degrees. Drag to move, drag the white dot to turn,
+     and set tilt, facing, height and modules in the box (presets: *Balcony railing*, *Roof stand*, *Ground*).
+     Panels show in 3D, cast shadows, and count in the sun map.
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press

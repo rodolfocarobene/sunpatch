@@ -75,7 +75,7 @@ describe('a north-facing window', () => {
   // Edge 0 runs along z = 0: the north wall (north is -z). Wide French window.
   const plan: Plan = {
     version: 1, buildingId: 'way/1', origin: { lat: 45.46, lon: 9.19 }, floor: 1, floorHeight: 3, outline: { outer, holes: [] },
-    walls: [], windows: [{ ring: 0, edge: 0, t: 0.5, width: 4, sill: 0.3, height: 2.2 }],
+    walls: [], windows: [{ ring: 0, edge: 0, t: 0.5, width: 4, sill: 0.3, height: 2.2 }], panels: [],
   }
   const g = apartmentGeometry(building, plan)
   const world = casting([...g.shell, ...g.ceiling, g.floor, ...g.walls, ...g.added, ...g.addedAbove])
