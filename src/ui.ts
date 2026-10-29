@@ -1,9 +1,10 @@
 import SunCalc from 'suncalc'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
-import { activePreset, dateValue, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
+import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
+import { duration, sunGradient } from './sunmap'
 
 const ACCURACY_URL = 'https://github.com/rodolfocarobene/sunpatch#accuracy-and-limitations'
 const GUIDE_KEY = 'sunpatch.guide'
@@ -14,6 +15,11 @@ export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
 export type View = 'map' | 'plan' | '3d'
+
+export type SunMapStatus =
+  | { kind: 'computing'; progress: number }
+  | { kind: 'ready'; daylightMinutes: number; day: Date }
+  | { kind: 'error'; message: string }
 
 export interface UI {
   setLocation(lat: number, lon: number): void
@@ -33,6 +39,10 @@ export interface UI {
   setCutaway(on: boolean): void
   toggleCutaway(): void
   onCutaway(listener: (hidden: boolean) => void): void
+  /** The "Sun map" switch (off by default): hear about changes. */
+  onSunMap(listener: (on: boolean) => void): void
+  /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
+  setSunMapStatus(status: SunMapStatus): void
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -42,8 +52,8 @@ export interface UI {
   setWhen(date: string, minutes: number): void
   /** Sets the time of day from the walk slider (minutes, snapped) and stops Play. */
   setMinutes(minutes: number): void
-  /** Called after every sun update with the date and time, and the day strip's CSS background. */
-  onChange(listener: (when: Date, sun: SunDirection, strip: string) => void): void
+  /** Called after every sun update with the date and time, the day strip's CSS background and the place the sun was computed for. */
+  onChange(listener: (when: Date, sun: SunDirection, strip: string, place: { lat: number; lon: number }) => void): void
   /** Called when Play starts or stops. */
   onPlaying(listener: (playing: boolean) => void): void
 }
@@ -94,6 +104,8 @@ export function createUI(
       <button id="nextStep" class="primary" type="button"></button>
       <div id="aptTools" hidden>
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
+        <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map</label>
+        <div id="sunMapLegend" hidden></div>
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
       <div class="field">
@@ -143,6 +155,13 @@ export function createUI(
     cutawayListener?.(cutaway.checked)
   }
   cutaway.addEventListener('change', applyCutaway)
+  const sunMap = $<HTMLInputElement>('sunMap')
+  const legend = $('sunMapLegend')
+  let sunMapListener: ((on: boolean) => void) | undefined
+  sunMap.addEventListener('change', () => {
+    legend.hidden = !sunMap.checked
+    sunMapListener?.(sunMap.checked)
+  })
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
@@ -170,7 +189,7 @@ export function createUI(
     mapHint.textContent = text
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
-  let listener: ((when: Date, sun: SunDirection, strip: string) => void) | undefined
+  let listener: ((when: Date, sun: SunDirection, strip: string, place: { lat: number; lon: number }) => void) | undefined
   let playListener: ((playing: boolean) => void) | undefined
 
   function currentDate(): Date | null {
@@ -202,7 +221,7 @@ export function createUI(
     updatePresets(when.getFullYear(), la)
     const sun = sunDirection(when, la, lo)
     onSun(sun)
-    listener?.(when, sun, strip.style.background)
+    listener?.(when, sun, strip.style.background, { lat: la, lon: lo })
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = formatTime(times.sunrise)
     const set = formatTime(times.sunset)
@@ -333,6 +352,12 @@ export function createUI(
       cutawayListener = fn
       fn(cutaway.checked)
     },
+    onSunMap(fn) {
+      sunMapListener = fn
+    },
+    setSunMapStatus(status) {
+      legend.innerHTML = legendHtml(status)
+    },
     setWalking(walking) {
       walk.disabled = walking
       panel.classList.toggle('walking', walking)
@@ -362,6 +387,28 @@ export function createUI(
       refresh()
     },
   }
+}
+
+/** The sun map legend: the colour ramp with its two scales, hours and share of the day's daylight. */
+function legendHtml(status: SunMapStatus): string {
+  if (status.kind === 'computing') {
+    const pct = Math.round(status.progress * 100)
+    return `<span class="legendHead" role="status">Computing the sun map\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
+  }
+  if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
+  const { daylightMinutes, day } = status
+  const label = dayLabel(day.getMonth(), day.getDate())
+  if (daylightMinutes === 0) return `<span class="legendHead">No daylight on ${label}</span>`
+  // Hours along the bar (6 h and more share the lightest colour) and, under them, what each is of today's daylight.
+  const hours = [0, 2, 4, 6]
+  const share = (h: number) => (h * 60 <= daylightMinutes ? `${Math.round((h * 6000) / daylightMinutes)}%` : '\u2013')
+  return (
+    `<span class="legendHead">Direct sun on ${label}</span>` +
+    `<div class="legendBar" style="background:${sunGradient()}"></div>` +
+    `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
+    `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
+    `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span>`
+  )
 }
 
 const HEIGHT_SOURCE = {

@@ -24,6 +24,8 @@ map click ──► tiles.ts (instant preview from vector tiles) ──► scene
           └─► overpass.ts (mirrors, timeout, cache) ──► osm.ts parseOverpass ──► scene.setBuildings (keepCamera)
 Plan view ──► editor.ts (SVG) ──► Plan (plan.ts, autosaved) ──► scene.setPlan ──► apartment.ts + edits.ts
 time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
+Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts ──► Web Worker (sunmap.worker.ts, BVH rays)
+                                                  └──► scene.setSunMap (floor overlay) + popover on click
 ```
 
 `src/main.ts` owns the app state (current view, picked site, current plan) and wires the modules together.
@@ -49,6 +51,9 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 | `edits.ts` | Building fixes: carving cuts per height range and adding prisms (`polygon-clipping`). |
 | `scene.ts` | three.js scene: buildings, lights, shadows, cutaway, sun disc, sky, two-pass apartment rendering, walk mode. |
 | `walk.ts`, `walk-geom.ts` | First-person controls and HUD; collision, start position and look direction. |
+| `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
+| `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
+| `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 
 ## The selection model
 
@@ -123,6 +128,43 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
 - 3D hover: with the pointer over an unselected building (one raycast per animation frame, none while a button is
   down or in walk mode) the cursor becomes a pointer and the polygon gets a faint amber tint and edges.
 - Interior brightness from bounced light is approximated with an emissive term proportional to daylight.
+
+## Sun map
+
+The sun map answers "how long is this spot of the floor in direct sun on this date?" for the whole apartment.
+
+- **Sampling** (`floorGrid`): a grid of 0.25 m (coarser above 6000 samples) over the plan outline. A cell centre is
+  a sample when it is inside the outline, outside the courtyards, at least `FACADE_THICKNESS` from every outline
+  edge, and outside the footprint of every interior wall (`isFloor`, built on `wallsOf` from `walk-geom.ts`).
+- **Time**: one slot per 5 minutes of the local day (the slider's grid) where the sun is above the horizon, with
+  the sun taken at the slot's middle (`sunSlots`), so a run of lit slots reads in round times without a bias at
+  either end. Daylight minutes are the slot count times 5; the share of daylight is minutes over that.
+- **Rays**: each sample sends a ray from 5 cm above the floor toward the sun in every slot; it is lit when
+  nothing is hit (`seesSun`, `raycastFirst`, double sided). The occluders are collected from the scene itself
+  (`collectOccluders`): every visible mesh with `castShadow` set, which is what the shadow maps draw. That includes
+  the apartment's walls, window reveals and the facade with its openings, the slab and the storey around it, the
+  cutaway "floors above" (hidden from the camera by `colorWrite` but still there), the selected building's other
+  parts, neighbours, building fixes and trees (`InstancedMesh`es expanded one copy per instance). Window glass
+  never sets `castShadow`, so it lets the sun through. Ten thousand triangles is typical.
+- **Worker** (`sunmap.worker.ts`): the triangles go over once per scene and the worker builds the BVH once and keeps
+  it; each date only sends the sample points and sun directions. Results (a lit flag per sample and slot) come back
+  as one `Uint8Array`; minutes, intervals (`litIntervals`) and the share per spot are derived from it on demand.
+- **Caching and staleness** (`sunmap-job.ts`): results are cached per (scene version, date, place). `scene.sceneVersion()`
+  goes up whenever `populate()` rebuilds the world (new buildings, plan, edits) or trees change, which also covers
+  plan edits; the date and place come from the UI. Requests are debounced (250 ms), one runs at a time, and the
+  newest request waits for it. Moving the time slider never recomputes. While a map computes, the old overlay is
+  removed (it would show another day) and the legend shows progress.
+- **Overlay** (`scene.ts`, `paintSunMap`): the plan outline as one flat mesh just above the floor, textured with one
+  texel per grid cell and filtered smoothly; cells that are not floor take their nearest floor colour so nothing
+  fades at walls. It is registered in `aptLines`, so the two-pass render draws it in the second pass, over the
+  floor that pass repaints, and it stays visible while walking (fainter, so the patches show through). At 80%
+  opacity the live sun patches still show faintly under it. Colour is by hours (`SUN_STOPS`, 0 to `FULL_SUN_MINUTES`
+  = 6 h), not by share, so December and June maps read on one scale; the legend gives the share of the day's daylight
+  for the same hours.
+- **Click**: with the map on, a plain click on the floor (`onFloorClick`, not a drag, not through a hidden ceiling)
+  marks the point and opens the popover; a click elsewhere or `Esc` closes it. The popover follows the point on
+  screen (`onProbeScreen`) and a double-click still walks.
+- `window.__sunpatch` and `window.__sunpatchCamera` are exposed in the dev server only, for the visual checks.
 
 ## Testing
 

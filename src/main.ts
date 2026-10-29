@@ -18,15 +18,19 @@ import {
 import { carrySelection, restoreSelection, selectBuilding, togglePart } from './block'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { nextStep } from './next-step'
-import { defaultPlan, rebasePlan, type Plan } from './plan'
+import { defaultPlan, floorBase, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
 import { dayLabel, minutesOfDay } from './daylight'
+import { createSunMapJob } from './sunmap-job'
+import { createSunMapPopover } from './sunmap-popover'
+import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, sunSentence, type View } from './ui'
 import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
+const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
@@ -39,10 +43,103 @@ const hud = createWalkHud(app, {
 })
 ui.onCutaway((hidden) => hud.setCutaway(hidden))
 ui.onPlaying((playing) => hud.setPlaying(playing))
+// Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
+const sunJob = createSunMapJob()
+const popover = createSunMapPopover(app, closeProbe)
+let sunMapOn = false
+let sunResult: SunMapResult | undefined
+/** Where the user clicked, kept so the popover can be redone when the result changes. */
+let probePoint: Point | undefined
+/** The date, strip and place the sun was last computed for; the sun map follows them. */
+let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
+let sunKey = ''
+let sunTimer: number | undefined
+
+/** Asks for the sun map after the current synchronous changes (a pick sets buildings, then the plan) are done. */
+function scheduleSunMap() {
+  window.clearTimeout(sunTimer)
+  sunTimer = window.setTimeout(requestSunMap, 0)
+}
+
+function requestSunMap() {
+  if (!sunMapOn || !site || !plan || !sunDay) return
+  const { selected } = site
+  const { when, lat, lon } = sunDay
+  sunJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan,
+    floorY: floorBase(selected, plan),
+    day: when,
+    lat,
+    lon,
+    occluders: () => sunScene.occluders(),
+  })
+}
+
+function closeProbe() {
+  probePoint = undefined
+  popover.hide()
+  sunScene.setProbe(null)
+}
+
+function showProbe() {
+  if (!sunResult || !probePoint || !sunDay) return
+  const sample = sampleAt(sunResult.grid, probePoint.x, probePoint.z)
+  if (sample === undefined) return closeProbe()
+  popover.show(spotStats(sunResult, sample), sunDay.strip, minutesOfDay(sunDay.when))
+}
+
+sunJob.onState((state) => {
+  if (!sunMapOn) return
+  if (state.status === 'computing') {
+    // An old map would show the wrong day while the new one runs.
+    sunResult = undefined
+    sunScene.setSunMap(null)
+    if (popover.open) closeProbe()
+    ui.setSunMapStatus({ kind: 'computing', progress: state.progress })
+  } else if (state.status === 'ready') {
+    sunResult = state.result
+    sunScene.setSunMap({ grid: state.result.grid, minutes: sampleMinutes(state.result) })
+    ui.setSunMapStatus({ kind: 'ready', daylightMinutes: state.result.daylightMinutes, day: sunDay?.when ?? new Date() })
+    showProbe()
+  } else if (state.status === 'error') ui.setSunMapStatus({ kind: 'error', message: state.message })
+})
+ui.onSunMap((on) => {
+  sunMapOn = on
+  sunScene.setSunMapVisible(on)
+  if (on) scheduleSunMap()
+  else {
+    sunJob.stop()
+    sunResult = undefined
+    sunScene.setSunMap(null)
+    closeProbe()
+  }
+})
+sunScene.onSceneChange(() => {
+  sunKey = ''
+  sunResult = undefined
+  closeProbe()
+  if (sunMapOn) scheduleSunMap()
+})
+sunScene.onFloorClick((at) => {
+  if (!at) return closeProbe()
+  probePoint = at
+  sunScene.setProbe(at)
+  showProbe()
+  if (!popover.open) closeProbe()
+})
+sunScene.onProbeScreen((at) => popover.moveTo(at))
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    __sunpatch: { scene: sunScene, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+  })
+}
+
 sunScene.setWalkHandlers({
   change(walking) {
     hud.show(walking)
     ui.setWalking(walking)
+    if (walking) closeProbe()
   },
   exit: () => sunScene.stopWalk(),
   stepTime: (minutes) => ui.stepTime(minutes),
@@ -50,10 +147,18 @@ sunScene.setWalkHandlers({
   toggleCutaway: () => ui.toggleCutaway(),
   look: (yaw) => hud.setYaw(yaw),
 })
-ui.onChange((when, sun, strip) => {
+ui.onChange((when, sun, strip, place) => {
   hud.setSun(sun)
   hud.setStatus(`${dayLabel(when.getMonth(), when.getDate())} \u00b7 ${sunSentence(sun, 'up')}`)
   hud.setTime(minutesOfDay(when), strip)
+  sunDay = { when, strip, ...place }
+  popover.setNow(minutesOfDay(when))
+  // Only another day or place needs a new sun map; the time slider just moves along it.
+  const key = `${dateKey(when)} ${place.lat} ${place.lon}`
+  if (key !== sunKey) {
+    sunKey = key
+    if (sunMapOn) scheduleSunMap()
+  }
 })
 const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
