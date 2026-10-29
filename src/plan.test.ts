@@ -33,6 +33,15 @@ describe('rebasePlan', () => {
     expect(moved.edits![0].top).toBe(3.2)
   })
 
+  it('moves the panels too', () => {
+    const shift = project(a.lat, a.lon, b)
+    const withPanel = { ...plan, panels: [{ id: 'p', x: 3, z: 4, elevation: 1, width: 1.13, height: 1.72, tilt: 30, azimuth: 180 }] }
+    const moved = rebasePlan(withPanel, b)
+    expect(moved.panels[0].x).toBeCloseTo(3 + shift.x, 3)
+    expect(moved.panels[0].z).toBeCloseTo(4 + shift.z, 3)
+    expect(moved.panels[0].tilt).toBe(30)
+  })
+
   it('returns the same plan for the same origin', () => {
     expect(rebasePlan(plan, { ...a })).toBe(plan)
   })

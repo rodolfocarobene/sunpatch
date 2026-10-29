@@ -161,9 +161,25 @@ describe('validatePlan', () => {
     outline: { outer: sq, holes: [] },
     walls: [{ a: sq[0], b: sq[2], thickness: 0.1 }],
     windows: [{ ring: 0, edge: 1, t: 0.5, width: 1.2, sill: 0.9, height: 1.4 }],
+    panels: [],
   }
+  const panel = { id: 'p1', x: 4, z: -1, elevation: 4, width: 1.13, height: 1.72, tilt: 90, azimuth: 0, count: 2 }
   it('accepts a valid plan', () => {
     expect(validatePlan(JSON.parse(JSON.stringify(plan)))).toEqual({ plan })
+  })
+  it('round-trips panels through JSON export and import', () => {
+    const withPanels: Plan = { ...plan, panels: [panel, { ...panel, id: 'p2', tilt: 30, azimuth: 180, count: undefined }] }
+    expect(validatePlan(JSON.parse(JSON.stringify(withPanels)))).toEqual({ plan: withPanels })
+  })
+  it('loads an old plan without panels as having none', () => {
+    const { panels: _omit, ...old } = plan
+    expect(validatePlan(JSON.parse(JSON.stringify(old)))).toEqual({ plan })
+  })
+  it('rejects bad panels', () => {
+    for (const bad of [{ ...panel, tilt: 95 }, { ...panel, width: 0 }, { ...panel, count: 0 }, { ...panel, x: NaN }, { ...panel, id: '' }]) {
+      expect(validatePlan({ ...plan, panels: [bad] })).toHaveProperty('error')
+    }
+    expect(validatePlan({ ...plan, panels: 'x' })).toHaveProperty('error')
   })
   it('rejects bad input', () => {
     expect(validatePlan(null)).toHaveProperty('error')

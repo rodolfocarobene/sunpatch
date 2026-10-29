@@ -13,6 +13,7 @@ const plan = (outer = square(20), windows: Plan['windows'] = []): Plan => ({
   outline: { outer, holes: [] },
   walls: [],
   windows,
+  panels: [],
 })
 const win = { ring: 0, edge: 0, t: 0.5, width: 1.2, sill: 0.9, height: 1.4 }
 

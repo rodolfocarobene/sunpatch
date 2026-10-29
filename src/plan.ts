@@ -24,6 +24,29 @@ export interface Plan {
   viewpoint?: Viewpoint
   /** Manual fixes to the selected building's volume (missing balconies, protruding wall parts). */
   edits?: BuildingEdit[]
+  /** Solar panels, anywhere around the building (inside or outside the outline); [] for none. */
+  panels: Panel[]
+}
+
+/**
+ * A row of `count` solar modules side by side. `x`/`z` is the centre of the row's footprint in the plan;
+ * `elevation` is the height of the lowest edge above the ground.
+ */
+export interface Panel {
+  id: string
+  x: number
+  z: number
+  /** Height of the lowest edge above the ground, metres. */
+  elevation: number
+  /** Module size in metres: `width` along the row, `height` up the slope. */
+  width: number
+  height: number
+  /** Degrees from horizontal: 0 is flat, 90 is vertical (railing, facade). */
+  tilt: number
+  /** Degrees clockwise from north that the front of the panel faces. */
+  azimuth: number
+  /** Modules in the row, 1 when absent. */
+  count?: number
 }
 
 export interface Viewpoint {
@@ -100,6 +123,7 @@ export function defaultPlan(b: Building, origin: Origin, floor = 0): Plan {
     outline: { outer: b.outer.map((p) => ({ ...p })), holes: b.holes.map((h) => h.map((p) => ({ ...p }))) },
     walls: [],
     windows: [],
+    panels: [],
   }
 }
 
@@ -119,6 +143,7 @@ export function rebasePlan(plan: Plan, origin: Origin): Plan {
     outline: { outer: plan.outline.outer.map(move), holes: plan.outline.holes.map((h) => h.map(move)) },
     walls: plan.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
     ...(plan.viewpoint && { viewpoint: { ...plan.viewpoint, ...move(plan.viewpoint) } }),
+    panels: plan.panels.map((p) => ({ ...p, ...move(p) })),
     ...(plan.edits && { edits: plan.edits.map((e) => ({ ...e, outline: e.outline.map(move) })) }),
   }
 }

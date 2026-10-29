@@ -263,7 +263,16 @@ export function validatePlan(value: unknown): { plan: Plan } | { error: string }
       if (!isNum(e.bottom) || !isNum(e.top) || e.bottom >= e.top) return { error: 'Invalid edit heights' }
     }
   }
-  return { plan: p }
+  const panels = p.panels ?? []
+  if (!Array.isArray(panels)) return { error: 'Invalid panels' }
+  for (const q of panels) {
+    if (!q || typeof q.id !== 'string' || !q.id || !isPoint(q)) return { error: 'Invalid panel' }
+    if (!isNum(q.elevation) || !isNum(q.azimuth)) return { error: 'Invalid panel position' }
+    if (!isNum(q.width) || q.width <= 0 || !isNum(q.height) || q.height <= 0) return { error: 'Invalid panel size' }
+    if (!isNum(q.tilt) || q.tilt < 0 || q.tilt > 90) return { error: 'Invalid panel tilt' }
+    if (q.count !== undefined && (!Number.isInteger(q.count) || q.count < 1)) return { error: 'Invalid panel count' }
+  }
+  return { plan: { ...p, panels } }
 }
 
 export interface FitRect {
