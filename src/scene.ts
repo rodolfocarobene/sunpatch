@@ -41,6 +41,7 @@ import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
+import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
@@ -100,6 +101,8 @@ export interface SunScene {
   setBuildings(buildings: Building[], selectedId: string, options?: { keepCamera?: boolean }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
   setPlan(plan: Plan | null, options?: { close?: boolean }): void
+  /** Replaces the trees (local metres, same origin as the buildings); an empty list removes them. */
+  setTrees(trees: Tree[]): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
   setCutaway(on: boolean): void
   /** Enters first person in the apartment at scene point `at` (default: the plan's viewpoint, else a clear spot near the middle); false without a plan. */
@@ -222,6 +225,9 @@ export function createScene(container: HTMLElement): SunScene {
 
   const world = new Group()
   scene.add(world)
+  // Trees live outside `world`: they depend on the OSM answer, not on the plan, and populate() must not drop them.
+  let treeGroup = new Group()
+  scene.add(treeGroup)
 
   const hemi = new HemisphereLight(0xdfe9f5, 0x7d8a6c, 0.35)
   const ambient = new AmbientLight(0xfff3e0, 0.1)
@@ -597,6 +603,13 @@ export function createScene(container: HTMLElement): SunScene {
     startWalk({ x: hit.point.x, z: hit.point.z })
   })
 
+  function setTrees(trees: Tree[]) {
+    scene.remove(treeGroup)
+    disposeTreeGroup(treeGroup)
+    treeGroup = buildTreeGroup(trees)
+    scene.add(treeGroup)
+  }
+
   function setCutaway(on: boolean) {
     cutaway = on
     applyCutaway()
@@ -672,6 +685,7 @@ export function createScene(container: HTMLElement): SunScene {
     update,
     setBuildings,
     setPlan,
+    setTrees,
     setCutaway,
     startWalk,
     stopWalk,

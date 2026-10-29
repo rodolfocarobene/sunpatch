@@ -19,6 +19,7 @@ import { nextStep } from './next-step'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
+import { parseGreen, scatterTrees } from './trees'
 import { dayLabel } from './daylight'
 import { createUI, sunSentence, TIME_FORMAT, type View } from './ui'
 import { createWalkHud } from './walk'
@@ -57,8 +58,9 @@ if (exampleMode) void openExample()
 else mapView.focusSearch() // the search is the first thing to do on the map
 
 async function openExample() {
-  const { buildings, selected, origin, plan: examplePlan } = await loadExample()
+  const { buildings, selected, origin, plan: examplePlan, green } = await loadExample()
   show(buildings, selected, origin, false)
+  sunScene.setTrees(scatterTrees(green, buildings))
   setPlan(examplePlan, true)
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
   ui.setExample(true)
@@ -107,6 +109,7 @@ function pick(lat: number, lon: number) {
     const buildings = tileBuildings(features, origin, RADIUS_M)
     const selected = buildings.find((b) => b.id === hit.id)!
     last.origin = origin
+    sunScene.setTrees([]) // the old trees belong to the old origin
     show(buildings, selected, origin, false)
     mapView.setLoading(false)
   } else {
@@ -187,6 +190,7 @@ async function refine({ clicked, origin }: Pick, token: number) {
       return
     }
     show(buildings, selected, sceneOrigin, hasPreview)
+    sunScene.setTrees(scatterTrees(parseGreen(elements, sceneOrigin), buildings))
     if (hasPreview) chip.done('Detailed OSM data loaded')
     else mapView.setStatus('Click on a building to pick it.')
   } catch (err) {

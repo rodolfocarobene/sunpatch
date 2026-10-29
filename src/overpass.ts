@@ -72,7 +72,12 @@ export async function fetchBuildingElements(
   const around = `(around:${QUERY_RADIUS_M},${lat},${lon})`
   const query =
     `[out:json][timeout:20];(way["building"]${around};relation["building"]${around};` +
-    `way["building:part"]${around};relation["building:part"]${around};);out geom;`
+    `way["building:part"]${around};relation["building:part"]${around};` +
+    // Green areas and mapped trees, for the tree scatter (src/trees.ts); parseOverpass ignores them.
+    `way["leisure"~"^(park|garden)$"]${around};relation["leisure"~"^(park|garden)$"]${around};` +
+    `way["landuse"~"^(grass|forest|meadow|village_green)$"]${around};relation["landuse"~"^(grass|forest|meadow|village_green)$"]${around};` +
+    `way["natural"~"^(wood|scrub|tree_row)$"]${around};relation["natural"~"^(wood|scrub)$"]${around};` +
+    `node["natural"="tree"]${around};);out geom;`
   let last = ''
   for (const url of options.endpoints ?? ENDPOINTS) {
     try {

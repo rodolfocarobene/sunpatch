@@ -260,7 +260,7 @@ export function scatterTrees(
 // --- rendering ---------------------------------------------------------------------------------
 
 // Muted greens that sit on the warm plaster and grey-green ground of the scene.
-const CANOPY = new Color(0x62804f)
+const CANOPY = new Color(0x71915a)
 const TRUNK = new Color(0x6a5a48)
 
 /** Two InstancedMeshes (trunks, canopies); both cast and receive shadows from the wide sun light. */

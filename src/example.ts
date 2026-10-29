@@ -1,4 +1,5 @@
 import { buildingContains, parseOverpass, ringCentroid, unproject, type Building, type Origin, type OverpassElement, type Point } from './osm'
+import { parseGreen, type Green, type GreenArea } from './trees'
 import { defaultPlan, type Plan } from './plan'
 import { yawOf } from './walk-geom'
 
@@ -13,6 +14,7 @@ export interface Example {
   selected: Building
   origin: Origin
   plan: Plan
+  green: Green
 }
 
 const inside = (ring: Point[], p: Point) => buildingContains({ outer: ring, holes: [] } as unknown as Building, p)
@@ -50,6 +52,23 @@ export function examplePlan(selected: Building, origin: Origin): Plan {
   }
 }
 
+/**
+ * The fixture has no green areas (it is the Duomo square), so the sample brings a sample garden across the
+ * street from the apartment's windows (18 to 90 m out from the facade, 120 m wide). Trees only grow where no
+ * building is, so it fills the gaps between them.
+ */
+export function sampleGarden(plan: Plan): GreenArea {
+  const [a, b] = plan.outline.outer
+  const c = plan.outline.outer.reduce((m, p) => ({ x: m.x + p.x / 4, z: m.z + p.z / 4 }), { x: 0, z: 0 })
+  const len = Math.hypot(b.x - a.x, b.z - a.z)
+  const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }
+  let out = { x: u.z, z: -u.x }
+  if (out.x * (a.x - c.x) + out.z * (a.z - c.z) < 0) out = { x: -out.x, z: -out.z }
+  const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }
+  const at = (s: number, d: number) => ({ x: mid.x + u.x * s + out.x * d, z: mid.z + u.z * s + out.z * d })
+  return { id: 'sample/garden', outer: [at(-60, 18), at(60, 18), at(60, 90), at(-60, 90)], holes: [], spacing: 9 }
+}
+
 /** Builds the example scene data from Overpass elements, the same way a map pick does. */
 export function buildExample(elements: OverpassElement[]): Example {
   const first = parseOverpass(elements, EXAMPLE_NEAR).buildings.find((b) => b.id.startsWith(EXAMPLE_BUILDING))
@@ -57,7 +76,10 @@ export function buildExample(elements: OverpassElement[]): Example {
   const origin = unproject(ringCentroid(first.outer), EXAMPLE_NEAR)
   const { buildings } = parseOverpass(elements, origin)
   const selected = buildings.find((b) => b.id === first.id)!
-  return { buildings, selected, origin, plan: examplePlan(selected, origin) }
+  const plan = examplePlan(selected, origin)
+  const green = parseGreen(elements, origin)
+  if (!green.areas.length) green.areas.push(sampleGarden(plan))
+  return { buildings, selected, origin, plan, green }
 }
 
 /** Loaded on demand so the normal app does not carry the fixture. */
