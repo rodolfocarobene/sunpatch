@@ -26,6 +26,7 @@ const server = await createServer({ root: root.pathname, server: { port: 5183, s
 await server.listen()
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 let frameCount = 0
+let assembled = false
 const marks = {} // frame index where each narrated segment starts, for the GIF cut
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
@@ -67,7 +68,10 @@ try {
   })
   const caption = (text) => page.evaluate((t) => { const c = document.getElementById('demo-caption'); c.textContent = t; c.hidden = !t }, text)
   const cursor = { x: 640, y: 360 }
-  const showCursor = (x, y) => page.evaluate(([a, b]) => { const c = document.getElementById('demo-cursor'); c.style.left = a + 'px'; c.style.top = b + 'px' }, [x, y])
+  const showCursor = (x, y) => page.evaluate(([a, b]) => {
+    let c = document.getElementById('demo-cursor')
+    if (!c) { c = document.createElement('div'); c.id = 'demo-cursor'; document.body.appendChild(c) } // the app can rebuild body children
+    c.style.left = a + 'px'; c.style.top = b + 'px' }, [x, y])
   const hideCursor = () => showCursor(-50, -50)
   /** Glides the real pointer and the fake cursor to (x, y), one frame per step. */
   async function glide(x, y, steps = 4) {
@@ -228,7 +232,7 @@ try {
   g = await planGeo()
   await snap(6)
 
-  await clickEl(page.getByRole('button', { name: 'Outline', exact: true }))
+  await clickEl(page.getByRole('button', { name: /^Outline\b/ }))
   const corners = [at(8, 0), at(20, 0), at(20, 10), at(8, 10)]
   for (const c of corners) { const q = px(c); await clickAt(q.x, q.y, { steps: 4 }) }
   const q0 = px(corners[0])
@@ -236,7 +240,7 @@ try {
   await page.waitForTimeout(300)
   await snap(8)
 
-  await clickEl(page.getByRole('button', { name: 'Window', exact: true }))
+  await clickEl(page.getByRole('button', { name: /^Window\b/ }))
   for (const s of [10.4, 14, 17.6]) {
     const q = px(at(s, 0))
     await clickAt(q.x, q.y, { steps: 4, hold: 2 })
@@ -248,9 +252,13 @@ try {
     }
     await snap(3)
   }
-  await clickEl(page.getByRole('button', { name: 'Wall', exact: true }))
+  await clickEl(page.getByRole('button', { name: /^Wall\b/ }))
+  // Walls chain: two clicks make the first wall, Esc ends the chain.
   for (const [s, d] of [[8, 6], [14, 6]]) { const q = px(at(s, d)); await clickAt(q.x, q.y, { steps: 4, hold: 3 }) }
-  await clickEl(page.getByRole('button', { name: 'Select', exact: true }))
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(200)
+  await snap(4)
+  await clickEl(page.getByRole('button', { name: /^Select\b/ }))
   // drag the automatic camera marker (where "Walk inside" starts) deeper into the room
   const cam = await page.evaluate(() => {
     const t = [...document.querySelectorAll('.editor svg title')].find((e) => e.textContent.startsWith('This is where Walk inside'))
@@ -281,6 +289,9 @@ try {
   await caption('3 · Watch the sun move')
   marks.sun = frameCount
   await clickEl(page.locator('#views [data-view="3d"]'))
+  await page.waitForTimeout(1000)
+  await snap(4)
+  await clickEl(page.locator('#presets button[data-id="winter"]'), { steps: 6, hold: 4 }) // 21 Dec
   await hideCursor()
   await page.waitForTimeout(1500)
   await snap(6)
@@ -293,13 +304,15 @@ try {
   }
   // The start view is the app's own framing of the building (SE side, ~35 deg). Move the apartment to the right of
   // the panel, tilt a little and zoom until the sun patches are readable but neighbours and their shadows stay in view.
-  await rightDrag(510, 400, 700, 360)
+  await rightDrag(510, 400, 655, 358) // apartment onto the orbit centre (it sits at ~495,397 in the start view), so zooming keeps it in view
   await page.mouse.move(640, 360)
   await page.mouse.down()
-  await page.mouse.move(640, 374, { steps: 6 })
+  await page.mouse.move(640, 385, { steps: 6 })
   await page.mouse.up()
   await page.mouse.move(640, 360)
   await page.mouse.wheel(0, -2100)
+  await page.waitForTimeout(300)
+  await page.mouse.wheel(0, -900)
   await page.waitForTimeout(800)
   await setTime(10 * 60 + 30)
   await page.waitForTimeout(1500)
@@ -309,7 +322,7 @@ try {
     await setTime(t)
     await page.waitForTimeout(250)
     await snap(3)
-    if (t === 12 * 60 + 30) await still('cutaway')
+    if (t === 13 * 60) await still('cutaway')
   }
   await snap(10)
   if (STOP === 'sun') break segments
@@ -338,12 +351,35 @@ try {
   await lookDrag(-140, 0, 6)
   await snap(4)
   await lookDrag(60, 0, 3)
-  for (let k = 0; k < 8; k++) { // ] steps the sun by 15 minutes
+  for (let k = 0; k < 3; k++) { // ] steps the sun by 15 minutes
     await page.keyboard.press(']')
     await page.waitForTimeout(250)
     await snap(3)
   }
-  await snap(6)
+  // drag the HUD time slider: to the afternoon, then back towards noon
+  await page.waitForSelector('#walkHud .timeRange', { state: 'visible' })
+  const slider = page.locator('#walkHud .timeRange')
+  const sb = await slider.boundingBox()
+  const thumbX = (min) => sb.x + 8 + (min / 1435) * (sb.width - 16)
+  const sy = sb.y + sb.height / 2
+  await glide(thumbX(13 * 60 + 15), sy, 5)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    const x = thumbX(13 * 60 + 15 + ((15.5 * 60 - 13.25 * 60) * i) / 12)
+    await page.mouse.move(x, sy); await showCursor(x, sy)
+    await page.waitForTimeout(150)
+    await snap(2)
+  }
+  await snap(4)
+  for (let i = 1; i <= 12; i++) {
+    const x = thumbX(15.5 * 60 - ((15.5 * 60 - 11.5 * 60) * i) / 12)
+    await page.mouse.move(x, sy); await showCursor(x, sy)
+    await page.waitForTimeout(150)
+    await snap(2)
+  }
+  await page.mouse.up()
+  await hideCursor()
+  await snap(8)
   await page.keyboard.press('Escape')
   await page.waitForTimeout(1500)
   await snap(14)
@@ -352,10 +388,11 @@ try {
   // ---- 6. assemble ---------------------------------------------------------------------------
   marks.end = frameCount
   await assemble()
+  assembled = true
   }
 } finally {
   await browser.close()
   await server.close()
-  if (STOP) console.log(`frames kept in ${framesDir} (${frameCount})`)
+  if (STOP || !assembled) console.log(`frames kept in ${framesDir} (${frameCount})`)
   else rmSync(framesDir, { recursive: true, force: true })
 }
