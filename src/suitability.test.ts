@@ -183,18 +183,20 @@ describe('place a panel preset', () => {
 
 describe('legend and popover text', () => {
   it('stretches the scale to the spots found, on round ticks', () => {
-    expect(rampScale([650, 1010, 1390])).toEqual({ min: 500, max: 1500, ticks: [500, 750, 1000, 1250, 1500], observed: [650, 1390] })
+    expect(rampScale([650, 1010, 1390])).toEqual({ min: 650, max: 1400, ticks: [750, 1000, 1250], observed: [650, 1390] })
   })
 
-  it('keeps a tight range tight and a wide one to five intervals', () => {
+  it('keeps a tight range tight and thins the ticks over a wide one', () => {
     const tight = rampScale([1280, 1330])
     expect(tight.min).toBe(1250)
     expect(tight.max).toBe(1350)
     expect(tight.ticks).toEqual([1250, 1300, 1350])
     const wide = rampScale([80, 1900])
-    expect(wide).toMatchObject({ min: 0, max: 2000, ticks: [0, 500, 1000, 1500, 2000] })
+    expect(wide).toMatchObject({ min: 50, max: 1900, ticks: [500, 1000, 1500] })
     expect(rampScale([700, 700])).toMatchObject({ min: 700, max: 750 })
     expect(rampScale([]).ticks.length).toBeGreaterThan(1)
+    // The Milan example: shaded ground and facade at 183, open roofs at 1,394.
+    expect(rampScale([183, 940, 1394])).toMatchObject({ min: 150, max: 1400, ticks: [250, 500, 750, 1000, 1250] })
   })
 
   it('writes the observed range for the legend', () => {

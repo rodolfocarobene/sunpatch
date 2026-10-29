@@ -28,7 +28,7 @@ export type SunMapStatus =
 
 export type SuitabilityStatus =
   | { kind: 'computing'; progress: number; updating?: boolean }
-  | { kind: 'ready'; ticks: number[]; observed: [number, number]; weather: boolean; count: number }
+  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; weather: boolean; count: number }
   | { kind: 'error'; message: string }
 
 export interface PanelList {
@@ -578,13 +578,14 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
     return `<span class="legendHead" role="status">${head}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
-  const tick = (t: number) => `<span>${t.toLocaleString('en')}</span>`
+  const at = (t: number) => (((t - status.min) / (status.max - status.min)) * 100).toFixed(1)
+  const tick = (t: number) => `<span style="left:${at(t)}%">${t.toLocaleString('en')}</span>`
   return (
     `<span class="legendHead">Energy a year for each kW of panels, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
-    `<div class="legendTicks">${status.ticks.map(tick).join('')}</div>` +
+    `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
-    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). The colours stretch over the range found here. The whole building is shown: floors above the apartment are not hidden. Click a spot for details.</span>`
+    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Colours span the range found here. The whole building is shown, floors above the apartment included. Click a spot for details.</span>`
   )
 }
 

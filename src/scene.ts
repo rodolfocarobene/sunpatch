@@ -295,7 +295,7 @@ export function createScene(container: HTMLElement): SunScene {
   scene.add(treeGroup)
 
   const hemi = new HemisphereLight(0xdfe9f5, 0x7d8a6c, 0.35)
-  const ambient = new AmbientLight(0xfff3e0, 0.1)
+  const ambient = new AmbientLight(0xfff3e0, 0.12)
   scene.add(hemi, ambient)
 
   const sunLight = new DirectionalLight(0xfff4e0, 3)
@@ -338,7 +338,7 @@ export function createScene(container: HTMLElement): SunScene {
     sunDisc.material.color.copy(SUN_LOW).lerp(SUN_WHITE, Math.min(1, Math.max(0, (sun.altitudeDeg - 2) / 10)))
     daylight = t
     applyGlow()
-    hemi.intensity = 0.05 + 0.45 * t
+    hemi.intensity = 0.07 + 0.55 * t
     sunLight.intensity = aptLight.intensity = 3 * Math.min(1, sun.altitudeDeg / 5)
   }
 

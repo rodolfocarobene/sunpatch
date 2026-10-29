@@ -303,7 +303,7 @@ function paintSuitability() {
   const colors = new Float32Array(samples.length * 3)
   figures.forEach((v, i) => colors.set(suitabilityColor(v, min, max), i * 3))
   sunScene.setSuitability({ samples, colors })
-  ui.setSuitabilityStatus({ kind: 'ready', ticks, observed, weather: climate !== undefined, count: samples.length })
+  ui.setSuitabilityStatus({ kind: 'ready', min, max, ticks, observed, weather: climate !== undefined, count: samples.length })
   if (suitPicked !== null) showSuitPick()
 }
 
@@ -445,7 +445,7 @@ window.addEventListener('keydown', (e) => {
 sunScene.onProbeScreen((at) => popover.moveTo(at))
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    __sunpatch: { scene: sunScene, selectPanel, shadeJob, suit: () => suitResult, plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+    __sunpatch: { scene: sunScene, selectPanel, shadeJob, suit: () => suitResult, suitFigures: () => suitEnergy.map((e) => e.weather ?? e.ideal), plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
   })
 }
 
