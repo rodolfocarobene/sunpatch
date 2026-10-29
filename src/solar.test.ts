@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import fixture from '../fixtures/nasa-power-milan.json'
 import { BoxGeometry, Mesh } from 'three'
 import type { Panel } from './plan'
 import { DAYS_IN_MONTH, shadePanel, yearSlots } from './panel-shade'
@@ -9,7 +9,6 @@ import { airMass, clearSky, DEFAULT_ASSUMPTIONS, panelEnergy } from './solar'
 import { clearClimateMemory, climateKey, loadClimate, parseClimate } from './weather'
 
 const MILAN = { lat: 45.4627, lon: 9.191 }
-const fixture = JSON.parse(readFileSync(new URL('../fixtures/nasa-power-milan.json', import.meta.url), 'utf8'))
 const climate = parseClimate(fixture)
 const slots = yearSlots(MILAN.lat, MILAN.lon, 2025)
 const open = buildBvh(Float32Array.from([1000, -50, 1000, 1001, -50, 1000, 1000, -50, 1001]))

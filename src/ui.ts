@@ -46,6 +46,8 @@ export interface UI {
   toggleSunMap(): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
+  /** The line with every panel's energy in the 3D panel; null hides it. */
+  setPanelTotals(text: string | null): void
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -125,6 +127,7 @@ export function createUI(
       </div>
       <button id="play" type="button">Play</button>
       <div id="sunSummary"></div>
+      <p id="panelTotals" class="note" hidden></p>
       <details id="location">
         <summary>Location</summary>
         <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
@@ -370,6 +373,11 @@ export function createUI(
     },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
+    },
+    setPanelTotals(text) {
+      const el = panel.querySelector<HTMLElement>('#panelTotals')!
+      el.hidden = text === null
+      el.textContent = text ?? ''
     },
     setWalking(walking) {
       walk.disabled = walking

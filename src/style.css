@@ -311,3 +311,30 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #panelCard3d { position: fixed; top: 12px; right: 12px; }
 .editor > .panelCard { left: 12px; bottom: 16px; }
+
+/* Panel card: energy. */
+.panelCard .energy { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.panelCard .energy h5 { margin: 0; font-size: var(--text-xs); font-weight: 650; color: var(--muted); text-transform: none; }
+.panelCard .energyMain { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.panelCard .energyBig { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.panelCard .energyIdeal { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.panelCard .energyIdeal strong { color: var(--text); font-weight: 650; }
+.panelCard .energyShading { color: var(--text); }
+.panelCard .energyChart { margin-top: 4px; }
+.panelCard .energyBars { display: block; width: 100%; height: auto; overflow: visible; }
+.panelCard .realBar { fill: var(--accent-strong); }
+.panelCard .idealMark { fill: none; stroke: var(--muted); stroke-opacity: 0.55; stroke-width: 1; }
+.panelCard .baseline { stroke: var(--line); stroke-width: 1; }
+.panelCard .barLabel { font-size: 10px; fill: var(--muted); }
+.panelCard .energyBars rect[tabindex]:hover { fill: rgba(31, 42, 55, 0.06); }
+.panelCard .energyKey { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); }
+.panelCard .energyKey span { display: inline-flex; align-items: center; gap: 5px; }
+.panelCard .swatch { width: 10px; height: 10px; border-radius: 2px; box-sizing: border-box; }
+.panelCard .swatch.real { background: var(--accent-strong); }
+.panelCard .swatch.ideal { border: 1px solid var(--muted); opacity: 0.7; }
+.panelCard .assumptions { margin-top: 4px; }
+.panelCard .assumptions summary { cursor: pointer; color: var(--muted); }
+.panelCard .assumeFields { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.panelCard .assumeFields label { display: flex; align-items: center; gap: 6px; }
+.panelCard .assumeFields input { width: 56px; margin-left: auto; }
+#panelTotals { margin: 4px 0 0; font-variant-numeric: tabular-nums; }

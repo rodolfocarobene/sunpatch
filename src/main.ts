@@ -23,7 +23,12 @@ import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
 import { dayLabel, minutesOfDay } from './daylight'
-import { createPanelCard, type CardState } from './panel-card'
+import { createPanelCard, formatKwh, type CardState } from './panel-card'
+import { createPanelTotals } from './panel-totals'
+import { DEFAULT_ASSUMPTIONS, panelEnergy, type Assumptions } from './solar'
+import { DAYS_IN_MONTH, type PanelShade } from './panel-shade'
+import { climateKey, loadClimate, type Climate } from './weather'
+import { modules } from './panel'
 import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-job'
 import { createSunMapJob } from './sunmap-job'
 import { createSunMapPopover } from './sunmap-popover'
@@ -58,10 +63,11 @@ let sunTimer: number | undefined
 
 // Panel shading: the selected panel (in the Plan editor or clicked in 3D) is analysed in a worker and shown on a card.
 const shadeJob = createPanelShadeJob()
-const sceneCard = createPanelCard({ onClose: () => selectPanel(null) })
+const cardOptions = { onAssumptions: setAssumptions, onRetry: retryClimate }
+const sceneCard = createPanelCard({ onClose: () => selectPanel(null), ...cardOptions })
 sceneCard.el.id = 'panelCard3d'
 app.appendChild(sceneCard.el)
-const planCard = createPanelCard()
+const planCard = createPanelCard(cardOptions)
 let selectedPanel: string | null = null
 /** Key of the request last sent, so repeated asks for the same scene and panel do not restart the card. */
 let shadeAsked = ''
@@ -69,6 +75,93 @@ let shadeAsked = ''
 function showCards(state: CardState) {
   sceneCard.set(state)
   planCard.set(state)
+}
+
+// Energy: the shading analysis gives clear-sky irradiation, NASA POWER (one request per place, once a panel exists)
+// gives the monthly weather factor, and the assumptions turn both into kWh.
+let assumptions: Assumptions = { ...DEFAULT_ASSUMPTIONS }
+let climate: Climate | undefined
+let climateAt = ''
+let climateStatus: 'idle' | 'loading' | 'error' = 'idle'
+let lastShade: { shade: PanelShade; panel: Plan['panels'][number] } | undefined
+const totals = createPanelTotals(renderTotals)
+const panelArea = (p: Plan['panels'][number]): number => p.width * p.height * modules(p)
+
+function ensureClimate() {
+  if (!sunDay || !plan || plan.panels.length === 0) return
+  const place = climateKey(sunDay.lat, sunDay.lon)
+  if (climateAt === place.key && climateStatus !== 'idle') return
+  climateAt = place.key
+  climate = undefined
+  climateStatus = 'loading'
+  loadClimate(place.lat, place.lon).then(
+    (c) => {
+      if (climateAt !== place.key) return
+      climate = c
+      climateStatus = 'idle'
+      renderEnergy()
+    },
+    () => {
+      if (climateAt !== place.key) return
+      climateStatus = 'error'
+      renderEnergy()
+    },
+  )
+  renderEnergy()
+}
+
+function retryClimate() {
+  climateAt = ''
+  climateStatus = 'idle'
+  ensureClimate()
+}
+
+function setAssumptions(next: Assumptions) {
+  assumptions = next
+  renderEnergy()
+}
+
+function renderEnergy() {
+  if (lastShade && selectedPanel === lastShade.panel.id) {
+    const { shade, panel } = lastShade
+    const area = panelArea(panel)
+    showCards({
+      status: 'ready',
+      shade,
+      energy: {
+        energy: panelEnergy(shade.irradiation, area, assumptions, DAYS_IN_MONTH, climate?.clearness),
+        weather: climate ? 'ready' : climateStatus === 'error' ? 'error' : 'loading',
+        assumptions,
+        area,
+      },
+    })
+  }
+  renderTotals()
+}
+
+/** The line in the 3D panel: every panel's energy added up, once all are analysed. */
+function renderTotals() {
+  const panels = plan?.panels ?? []
+  const shades = totals.shades()
+  if (panels.length === 0 || totals.busy() || panels.some((p) => !shades.has(p.id))) return ui.setPanelTotals(null)
+  let ideal = 0
+  let weather = 0
+  for (const p of panels) {
+    const e = panelEnergy(shades.get(p.id)!.irradiation, panelArea(p), assumptions, DAYS_IN_MONTH, climate?.clearness)
+    ideal += e.ideal
+    weather += e.weather ?? 0
+  }
+  const count = `${panels.length} ${panels.length === 1 ? 'panel' : 'panels'}`
+  ui.setPanelTotals(climate ? `${count} \u00b7 ~${formatKwh(weather)}/year with local weather` : `${count} \u00b7 ~${formatKwh(ideal)}/year, clear sky`)
+}
+
+function requestTotals() {
+  if (!sunDay || !plan) return
+  totals.update(
+    { sceneVersion: sunScene.sceneVersion(), lat: sunDay.lat, lon: sunDay.lon, year: sunDay.when.getFullYear(), occluders: () => sunScene.occluders() },
+    plan.panels,
+  )
+  ensureClimate()
 }
 
 function selectPanel(id: string | null) {
@@ -83,6 +176,7 @@ function selectPanel(id: string | null) {
 }
 
 function requestShade() {
+  requestTotals()
   if (!selectedPanel || !sunDay) return
   const panel = plan?.panels.find((p) => p.id === selectedPanel)
   if (!panel) return selectPanel(null)
@@ -101,8 +195,16 @@ function requestShade() {
 }
 
 shadeJob.onState((state) => {
-  if (state.status === 'ready') showCards({ status: 'ready', shade: state.shade })
-  else if (state.status === 'computing') showCards({ status: 'computing' })
+  if (state.status === 'ready') {
+    const panel = plan?.panels.find((p) => p.id === selectedPanel)
+    if (!panel) return
+    lastShade = { shade: state.shade, panel: { ...panel } }
+    renderEnergy()
+  }
+  else if (state.status === 'computing') {
+    lastShade = undefined
+    showCards({ status: 'computing' })
+  }
   else if (state.status === 'error') showCards({ status: 'error', message: state.message })
 })
 
@@ -228,6 +330,7 @@ ui.onChange((when, sun, strip, place) => {
   if (key !== sunKey) {
     sunKey = key
     if (sunMapOn) scheduleSunMap()
+    requestShade()
   }
 })
 const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
