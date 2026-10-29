@@ -50,6 +50,49 @@ describe('tileBuildings', () => {
   })
 })
 
+describe('tile pieces', () => {
+  // One building, 0.0002 deg wide, cut at lon 9.0001 (a tile border): two pieces meeting on the cut.
+  const left = square(9, 45, 0.0001)
+  const right = square(9.0001, 45, 0.0001)
+  const tall = { render_height: 22 }
+
+  it('joins the pieces that share a feature id into one footprint', () => {
+    const out = tileBuildings([{ id: 7, ...poly([left], tall) }, { id: 7, ...poly([right], tall) }], O, 250)
+    expect(out).toHaveLength(1)
+    expect(out[0].height).toBe(22)
+    const xs = out[0].outer.map((p) => p.x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(15.6, 0)
+    expect(out[0].outer).toHaveLength(4)
+  })
+
+  it('joins pieces without ids when they meet on a line of constant longitude', () => {
+    expect(tileBuildings([poly([left], tall), poly([right], tall)], O, 250)).toHaveLength(1)
+  })
+
+  it('joins pieces that overlap by the tile buffer', () => {
+    const wide = [[9.00009, 45], [9.00019, 45], [9.00019, 45.0001], [9.00009, 45.0001], [9.00009, 45]]
+    expect(tileBuildings([{ id: 3, ...poly([left], tall) }, { id: 3, ...poly([wide], tall) }], O, 250)).toHaveLength(1)
+  })
+
+  it('keeps pieces apart when the ids differ or the heights differ', () => {
+    expect(tileBuildings([{ id: 1, ...poly([left], tall) }, { id: 2, ...poly([right], tall) }], O, 250)).toHaveLength(2)
+    expect(tileBuildings([poly([left], tall), poly([right], { render_height: 9 })], O, 250)).toHaveLength(2)
+  })
+
+  it('does not join without ids when the shared wall is not on a tile line', () => {
+    // Two triangles sharing the diagonal of the square.
+    const lower = [[9, 45], [9.0001, 45], [9, 45.0001], [9, 45]]
+    const upper = [[9.0001, 45], [9.0001, 45.0001], [9, 45.0001], [9.0001, 45]]
+    expect(tileBuildings([poly([lower], tall), poly([upper], tall)], O, 250)).toHaveLength(2)
+  })
+
+  it('joins a chain of pieces cut at two borders', () => {
+    const third = square(9.0002, 45, 0.0001)
+    const out = tileBuildings([1, 1, 1].map((id, i) => ({ id, ...poly([[left, right, third][i]], tall) })), O, 250)
+    expect(out).toHaveLength(1)
+  })
+})
+
 describe('snapBuilding', () => {
   const buildings = tileBuildings([poly([square(9, 45)])], O, 250)
   it('finds the building containing the point', () => {
