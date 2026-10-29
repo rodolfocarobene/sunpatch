@@ -1,3 +1,4 @@
+import { freeBand, popoverTop } from './popover-place'
 const GAP = 18
 const WIDTH = 284
 
@@ -63,10 +64,10 @@ export function createSuitabilityPopover(container: HTMLElement, handlers: { onC
       }
       box.style.visibility = ''
       const height = box.offsetHeight
-      const below = at.y - height - GAP < 8
+      const { minTop, maxBottom } = freeBand()
       const left = Math.min(window.innerWidth - WIDTH / 2 - 8, Math.max(WIDTH / 2 + 8, at.x))
       box.style.left = `${left}px`
-      box.style.top = `${below ? at.y + GAP : at.y - height - GAP}px`
+      box.style.top = `${popoverTop(at.y, height, GAP, minTop, maxBottom)}px`
     },
     hide,
     get open() {
