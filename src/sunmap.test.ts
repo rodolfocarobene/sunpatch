@@ -3,6 +3,7 @@ import { daylight, STEP } from './daylight'
 import { FACADE_THICKNESS, type Plan } from './plan'
 import type { Point } from './osm'
 import {
+  FULL_SUN_MINUTES,
   SUN_STOPS,
   duration,
   clock,
@@ -156,7 +157,9 @@ describe('result helpers', () => {
   })
 
   it('says it in words', () => {
-    expect(spotSentence(spotStats(result, 0))).toEqual({ headline: '15 min of direct sun', detail: '75% of daylight · 10:00–10:10, 10:15–10:20' })
+    expect(spotSentence(spotStats(result, 0))).toEqual({
+      headline: '15 min of direct sun', share: '75% of daylight', intervals: ['10:00–10:10', '10:15–10:20'],
+    })
     expect(spotSentence(spotStats(result, 1)).headline).toBe('No direct sun here')
     expect(duration(190)).toBe('3 h 10 min')
     expect(duration(120)).toBe('2 h')
@@ -165,12 +168,12 @@ describe('result helpers', () => {
   })
 
   it('paints non-floor cells with the nearest floor colour', () => {
-    const texels = heatTexels(grid, Float32Array.from([20, 0]), 20)
+    const texels = heatTexels(grid, Float32Array.from([FULL_SUN_MINUTES, 0]))
     const rgba = (c: number) => Array.from(texels.subarray(c * 4, c * 4 + 4))
-    expect(rgba(0)).toEqual([...sunColor(1), 255])
+    expect(rgba(0)).toEqual([...sunColor(FULL_SUN_MINUTES), 255])
     expect(rgba(2)).toEqual([...sunColor(0), 255])
     // The cell between them (not floor) takes one of its neighbours' colours and is opaque
-    expect([[...sunColor(1), 255], [...sunColor(0), 255]]).toContainEqual(rgba(1))
+    expect([[...sunColor(FULL_SUN_MINUTES), 255], [...sunColor(0), 255]]).toContainEqual(rgba(1))
   })
 })
 
@@ -178,10 +181,10 @@ describe('sun ramp', () => {
   const luminance = ([r, g, b]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b
   it('runs from slate to pale yellow and gets lighter at every stop', () => {
     expect(sunColor(0)).toEqual([0x34, 0x40, 0x5a])
-    expect(sunColor(1)).toEqual([0xff, 0xf0, 0xbf])
+    expect(sunColor(FULL_SUN_MINUTES)).toEqual([0xff, 0xf0, 0xbf])
     const lum = SUN_STOPS.map(([, hex]) => luminance([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))))
     for (let i = 1; i < lum.length; i++) expect(lum[i]).toBeGreaterThan(lum[i - 1])
     expect(sunColor(-1)).toEqual(sunColor(0))
-    expect(sunColor(2)).toEqual(sunColor(1))
+    expect(sunColor(2 * FULL_SUN_MINUTES)).toEqual(sunColor(FULL_SUN_MINUTES))
   })
 })

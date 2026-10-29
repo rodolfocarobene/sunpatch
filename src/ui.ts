@@ -39,9 +39,8 @@ export interface UI {
   setCutaway(on: boolean): void
   toggleCutaway(): void
   onCutaway(listener: (hidden: boolean) => void): void
-  /** The "Sun map" switch (off by default): hear about changes, or set it. */
+  /** The "Sun map" switch (off by default): hear about changes. */
   onSunMap(listener: (on: boolean) => void): void
-  setSunMap(on: boolean): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
   /** Disables the Walk button while walking. */
@@ -356,11 +355,6 @@ export function createUI(
     onSunMap(fn) {
       sunMapListener = fn
     },
-    setSunMap(on) {
-      sunMap.checked = on
-      legend.hidden = !on
-      sunMapListener?.(on)
-    },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
     },
@@ -403,13 +397,17 @@ function legendHtml(status: SunMapStatus): string {
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
   const { daylightMinutes, day } = status
-  if (daylightMinutes === 0) return `<span class="legendHead">No daylight on ${dayLabel(day.getMonth(), day.getDate())}</span>`
+  const label = dayLabel(day.getMonth(), day.getDate())
+  if (daylightMinutes === 0) return `<span class="legendHead">No daylight on ${label}</span>`
+  // Hours along the bar (6 h and more share the lightest colour) and, under them, what each is of today's daylight.
+  const hours = [0, 2, 4, 6]
+  const share = (h: number) => (h * 60 <= daylightMinutes ? `${Math.round((h * 6000) / daylightMinutes)}%` : '\u2013')
   return (
-    `<span class="legendHead">Direct sun on ${dayLabel(day.getMonth(), day.getDate())}</span>` +
+    `<span class="legendHead">Direct sun on ${label}</span>` +
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
-    `<div class="legendTicks"><span>0 h</span><span>${duration(daylightMinutes / 2)}</span><span>${duration(daylightMinutes)}</span></div>` +
-    `<div class="legendTicks muted"><span>0%</span><span>50%</span><span>100% of daylight</span></div>` +
-    `<span class="legendHint">Click the floor to see the hours at a spot.</span>`
+    `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
+    `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
+    `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span>`
   )
 }
 

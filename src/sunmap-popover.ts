@@ -1,11 +1,14 @@
 import { DAY_MAX } from './daylight'
 import { clock, duration, type SpotStats } from './sunmap'
 
-/** The text of the popover: the answer first ("3 h 10 min of direct sun"), then the share and the times. */
-export function spotSentence(stats: SpotStats): { headline: string; detail: string } {
-  if (stats.minutes === 0) return { headline: 'No direct sun here', detail: 'on this day' }
-  const times = stats.intervals.map((i) => `${clock(i.from)}–${clock(i.to)}`).join(', ')
-  return { headline: `${duration(stats.minutes)} of direct sun`, detail: `${Math.round(stats.share * 100)}% of daylight · ${times}` }
+/** The text of the popover: the answer first ("3 h 10 min of direct sun"), then the share and each interval. */
+export function spotSentence(stats: SpotStats): { headline: string; share: string; intervals: string[] } {
+  if (stats.minutes === 0) return { headline: 'No direct sun here', share: 'on this day', intervals: [] }
+  return {
+    headline: `${duration(stats.minutes)} of direct sun`,
+    share: `${Math.round(stats.share * 100)}% of daylight`,
+    intervals: stats.intervals.map((i) => `${clock(i.from)}–${clock(i.to)}`),
+  }
 }
 
 export interface SunMapPopover {
@@ -71,9 +74,17 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
 
   return {
     show(stats, background, minutesNow) {
-      const { headline, detail: text } = spotSentence(stats)
+      const { headline, share, intervals } = spotSentence(stats)
       head.textContent = headline
-      detail.textContent = text
+      // Each interval stays on one line; they wrap between each other.
+      detail.replaceChildren(
+        share,
+        ...intervals.flatMap((t, k) => {
+          const span = document.createElement('span')
+          span.textContent = t + (k < intervals.length - 1 ? ',' : '')
+          return [k === 0 ? ' · ' : ' ', span]
+        }),
+      )
       strip.style.background = background
       sun.replaceChildren(
         ...stats.intervals.map((i) => {

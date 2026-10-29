@@ -99,7 +99,7 @@ sunJob.onState((state) => {
     ui.setSunMapStatus({ kind: 'computing', progress: state.progress })
   } else if (state.status === 'ready') {
     sunResult = state.result
-    sunScene.setSunMap({ grid: state.result.grid, minutes: sampleMinutes(state.result), daylightMinutes: state.result.daylightMinutes })
+    sunScene.setSunMap({ grid: state.result.grid, minutes: sampleMinutes(state.result) })
     ui.setSunMapStatus({ kind: 'ready', daylightMinutes: state.result.daylightMinutes, day: sunDay?.when ?? new Date() })
     showProbe()
   } else if (state.status === 'error') ui.setSunMapStatus({ kind: 'error', message: state.message })
@@ -129,7 +129,11 @@ sunScene.onFloorClick((at) => {
   if (!popover.open) closeProbe()
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
-if (import.meta.env.DEV) Object.assign(window, { __sunpatch: { scene: sunScene, result: () => sunResult } })
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    __sunpatch: { scene: sunScene, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+  })
+}
 
 sunScene.setWalkHandlers({
   change(walking) {

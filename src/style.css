@@ -115,8 +115,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #sunMapLegend .legendHead { font-weight: 600; }
 #sunMapLegend .legendBar { height: 10px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; margin-top: 2px; }
 #sunMapLegend .legendBar.busy { background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
-#sunMapLegend .legendTicks { display: grid; grid-template-columns: 1fr auto 1fr; font-variant-numeric: tabular-nums; }
-#sunMapLegend .legendTicks span:last-child { justify-self: end; }
+#sunMapLegend .legendTicks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
 #sunMapLegend .legendTicks.muted { color: var(--muted); font-size: var(--text-xs); }
 #sunMapLegend .legendHint { margin-top: 4px; color: var(--muted); font-size: var(--text-xs); }
 
@@ -128,6 +127,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #spotPopover .spotHead { padding-right: 20px; font-size: 14px; font-variant-numeric: tabular-nums; }
 #spotPopover .spotDetail { color: var(--muted); font-variant-numeric: tabular-nums; }
+#spotPopover .spotDetail span { white-space: nowrap; }
 #spotPopover .spotClose {
   position: absolute; top: 6px; right: 6px; padding: 4px; line-height: 0; cursor: pointer;
   color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius-control);

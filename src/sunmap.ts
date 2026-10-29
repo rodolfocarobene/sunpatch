@@ -192,25 +192,28 @@ export function duration(minutes: number): string {
 
 // --- colours ------------------------------------------------------------------------------------
 
+/** The ramp is in hours, not in share of the day, so a December map and a June map read on the same scale. */
+export const FULL_SUN_MINUTES = 360
+
 /**
- * Sequential ramp for "how much direct sun": deep slate (none) through amber to pale warm yellow (all day).
- * Lightness (OKLCH L about 0.37, 0.49, 0.58, 0.70, 0.83, 0.95) rises at every stop, so the order survives greyscale
- * and colour-blindness, and the light end is the sun.
+ * Sequential ramp for "how much direct sun": deep slate (none) through amber to pale warm yellow (6 h or more,
+ * what gardeners call full sun). Lightness (OKLCH L about 0.37, 0.49, 0.58, 0.70, 0.83, 0.95) rises at every stop, so
+ * the order survives greyscale and colour-blindness, and the light end is the sun.
  */
 export const SUN_STOPS: [number, string][] = [
   [0, '#34405a'],
-  [0.2, '#5b5f78'],
-  [0.4, '#9a6f45'],
-  [0.6, '#d98f1c'],
-  [0.8, '#f8bc4a'],
+  [0.1, '#5b5f78'],
+  [0.25, '#9a6f45'],
+  [0.5, '#d98f1c'],
+  [0.75, '#f8bc4a'],
   [1, '#fff0bf'],
 ]
 
 const rgb = (hex: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
 
-/** Colour of a share of daylight, 0..1, interpolated between the stops. */
-export function sunColor(t: number): [number, number, number] {
-  const x = Math.min(1, Math.max(0, t))
+/** Colour for this many minutes of direct sun, interpolated between the stops. */
+export function sunColor(minutes: number): [number, number, number] {
+  const x = Math.min(1, Math.max(0, minutes / FULL_SUN_MINUTES))
   let i = 1
   while (i < SUN_STOPS.length - 1 && SUN_STOPS[i][0] < x) i++
   const [t0, c0] = SUN_STOPS[i - 1]
@@ -228,7 +231,7 @@ export const sunGradient = () => `linear-gradient(to right, ${SUN_STOPS.map(([t,
  * RGBA texels (one per grid cell, row 0 = smallest z) of the sun map. Cells that are not floor take the colour of
  * the nearest floor cell, so a smoothly filtered texture does not fade out at the walls.
  */
-export function heatTexels(grid: Grid, minutes: Float32Array, daylightMinutes: number): Uint8Array {
+export function heatTexels(grid: Grid, minutes: Float32Array): Uint8Array {
   const { cols, rows, index } = grid
   const source = new Int32Array(cols * rows).fill(-1)
   let frontier: number[] = []
@@ -258,7 +261,7 @@ export function heatTexels(grid: Grid, minutes: Float32Array, daylightMinutes: n
   const out = new Uint8Array(cols * rows * 4)
   for (let k = 0; k < source.length; k++) {
     if (source[k] < 0) continue // no floor at all
-    const [r, g, b] = sunColor(sunShare(minutes[source[k]], daylightMinutes))
+    const [r, g, b] = sunColor(minutes[source[k]])
     out.set([r, g, b, 255], k * 4)
   }
   return out

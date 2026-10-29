@@ -146,7 +146,7 @@ export interface SunScene {
   /** Called after the scene content changed; the sun map is stale then. */
   onSceneChange(handler: () => void): void
   /** Paints the sun map on the apartment floor; null removes it. */
-  setSunMap(map: { grid: Grid; minutes: Float32Array; daylightMinutes: number } | null): void
+  setSunMap(map: { grid: Grid; minutes: Float32Array } | null): void
   /** Shows or hides the painted sun map (also in first person). */
   setSunMapVisible(on: boolean): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
@@ -382,7 +382,7 @@ export function createScene(container: HTMLElement): SunScene {
   let version = 0
   let sceneChange: (() => void) | undefined
   let sunMapOn = false
-  let sunMapData: { grid: Grid; minutes: Float32Array; daylightMinutes: number } | null = null
+  let sunMapData: { grid: Grid; minutes: Float32Array } | null = null
   let overlay: Mesh | undefined
   let probe: { x: number; z: number } | null = null
   let probeMark: Group | undefined
@@ -521,8 +521,8 @@ export function createScene(container: HTMLElement): SunScene {
       overlay = undefined
     }
     if (!sunMapData || !plan || !selectedBuilding) return
-    const { grid, minutes, daylightMinutes } = sunMapData
-    const texture = new DataTexture(heatTexels(grid, minutes, daylightMinutes), grid.cols, grid.rows, RGBAFormat)
+    const { grid, minutes } = sunMapData
+    const texture = new DataTexture(heatTexels(grid, minutes), grid.cols, grid.rows, RGBAFormat)
     texture.colorSpace = SRGBColorSpace
     texture.magFilter = texture.minFilter = LinearFilter
     texture.generateMipmaps = false
@@ -556,7 +556,7 @@ export function createScene(container: HTMLElement): SunScene {
   function paintProbe() {
     if (probeMark) {
       world.remove(probeMark)
-      aptLines = aptLines.filter((l) => l.line !== probeMark)
+      aptLines = aptLines.filter((l) => l.line.parent !== probeMark)
       for (const child of probeMark.children) {
         const mesh = child as Mesh
         mesh.geometry.dispose()
@@ -568,12 +568,13 @@ export function createScene(container: HTMLElement): SunScene {
     if (!probe || !plan || !selectedBuilding) return
     const flatRing = (inner: number, outer: number, color: number) => flat(color, new RingGeometry(inner, outer, 32).rotateX(-Math.PI / 2))
     probeMark = new Group()
-    probeMark.add(flatRing(0.13, 0.19, PROBE_RING), flatRing(0.08, 0.13, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.035, 16).rotateX(-Math.PI / 2)))
+    probeMark.add(flatRing(0.17, 0.25, PROBE_RING), flatRing(0.1, 0.17, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.045, 16).rotateX(-Math.PI / 2)))
     probeMark.position.set(probe.x, floorBase(selectedBuilding, plan) + SUNMAP_LIFT + 0.004, probe.z)
     probeMark.renderOrder = 1
     for (const child of probeMark.children) child.renderOrder = 1
     world.add(probeMark)
-    aptLines.push({ line: probeMark, kind: 'sunmap' })
+    // Each ring is itself an apartment line: the second pass leaves those meshes drawn, not the group around them.
+    for (const child of probeMark.children) aptLines.push({ line: child, kind: 'sunmap' })
   }
 
   // Where the marked point is on screen, so a popover can follow it while the camera moves.
@@ -961,6 +962,8 @@ export function createScene(container: HTMLElement): SunScene {
     reportProbe()
   }
   renderer.setAnimationLoop(render)
+  // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
+  if (import.meta.env.DEV) Object.assign(window, { __sunpatchCamera: camera })
 
   return {
     update,
