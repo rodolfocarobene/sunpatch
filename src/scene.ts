@@ -6,7 +6,16 @@ import {
   BackSide,
   BoxGeometry,
   CanvasTexture,
+  CircleGeometry,
   Color,
+  DataTexture,
+  LinearFilter,
+  RGBAFormat,
+  RingGeometry,
+  Shape,
+  ShapeGeometry,
+  SRGBColorSpace,
+  Path,
   Float32BufferAttribute,
   MeshBasicMaterial,
   SphereGeometry,
@@ -42,6 +51,8 @@ import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
+import { collectOccluders } from './sunmap-trace'
+import { heatTexels, type Grid } from './sunmap'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
@@ -72,6 +83,13 @@ const OUTLINE_WIDTH = 0.3
 const HOVER_OPACITY = 0.28
 const HOVER_EDGE_OPACITY = 0.9
 const APARTMENT_SHADOW_MAP = 2048
+// Sun map overlay: a hair above the floor (the floor slab's top is the floor height), see-through enough that the
+// live sun patches still show faintly, and fainter again in first person where it would hide them.
+const SUNMAP_LIFT = 0.012
+const SUNMAP_OPACITY = 0.8
+const SUNMAP_WALK_OPACITY = 0.55
+const PROBE_COLOR = 0x1f2a37
+const PROBE_RING = 0xfffdf8
 const SKY_DAY = new Color(0x8fbfe8)
 const SKY_NIGHT = new Color(0x0b1020)
 const SKY_HORIZON_DAY = new Color(0xf1ece0)
@@ -121,6 +139,21 @@ export interface SunScene {
   onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
+  /** Changes whenever anything that can shade the apartment is rebuilt (buildings, plan, edits) or replaced (trees). */
+  sceneVersion(): number
+  /** Triangles (nine numbers each) of everything that casts a shadow, for the sun map's rays. */
+  occluders(): Float32Array
+  /** Called after the scene content changed; the sun map is stale then. */
+  onSceneChange(handler: () => void): void
+  /** Paints the sun map on the apartment floor; null removes it. */
+  setSunMap(map: { grid: Grid; minutes: Float32Array; daylightMinutes: number } | null): void
+  /** Shows or hides the painted sun map (also in first person). */
+  setSunMapVisible(on: boolean): void
+  /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
+  setProbe(at: { x: number; z: number } | null): void
+  onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
+  /** Called with the floor point of a plain click (not a drag) while the sun map shows, or null for a click anywhere else. */
+  onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
   dispose(): void
 }
 
@@ -338,13 +371,23 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
   let floorMesh: Mesh | undefined
   let solidMeshes: Mesh[] = []
   let selectedIds = new Set<string>()
+  // Sun map: the overlay painted on the floor, the marker of the clicked point, and the version the job caches by.
+  let version = 0
+  let sceneChange: (() => void) | undefined
+  let sunMapOn = false
+  let sunMapData: { grid: Grid; minutes: Float32Array; daylightMinutes: number } | null = null
+  let overlay: Mesh | undefined
+  let probe: { x: number; z: number } | null = null
+  let probeMark: Group | undefined
+  let probeHandler: ((at: { x: number; y: number; visible: boolean } | null) => void) | undefined
+  let probeShown = ''
 
   // Faces sit a hair behind their own edge lines so the lines do not flicker.
   function offsetFaces<T extends MeshStandardMaterial>(material: T): T {
@@ -445,7 +488,8 @@ export function createScene(container: HTMLElement): SunScene {
   /** Edge lines of the apartment; the ceiling's follow the ceiling (hidden by cutaway), the ghost outline shows when the floors above are not hidden. */
   function showAptLines(on: boolean) {
     for (const { line, kind } of aptLines) {
-      const shown = kind === 'ceiling' ? !cutaway : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : true
+      const shown =
+        kind === 'ceiling' ? !cutaway : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : kind === 'sunmap' ? sunMapOn : true
       line.visible = on && shown
     }
   }
@@ -457,10 +501,117 @@ export function createScene(container: HTMLElement): SunScene {
     return { c, radius }
   }
 
+  const flat = (color: number, geometry: BufferGeometry) =>
+    new Mesh(geometry, new MeshBasicMaterial({ color, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
+
+  function applyOverlayOpacity() {
+    if (overlay) (overlay.material as MeshBasicMaterial).opacity = walking ? SUNMAP_WALK_OPACITY : SUNMAP_OPACITY
+  }
+
+  // The floor outline as one flat mesh textured with the sun map (one texel per grid cell, smoothly filtered), a
+  // hair above the floor. It is an apartment line (aptLines) so the two-pass render draws it in the second pass,
+  // over the floor that pass repaints.
+  function paintSunMap() {
+    if (overlay) {
+      world.remove(overlay)
+      aptLines = aptLines.filter((l) => l.line !== overlay)
+      overlay.geometry.dispose()
+      ;(overlay.material as MeshBasicMaterial).map?.dispose()
+      ;(overlay.material as MeshBasicMaterial).dispose()
+      overlay = undefined
+    }
+    if (!sunMapData || !plan || !selectedBuilding) return
+    const { grid, minutes, daylightMinutes } = sunMapData
+    const texture = new DataTexture(heatTexels(grid, minutes, daylightMinutes), grid.cols, grid.rows, RGBAFormat)
+    texture.colorSpace = SRGBColorSpace
+    texture.magFilter = texture.minFilter = LinearFilter
+    texture.generateMipmaps = false
+    texture.needsUpdate = true
+    const ring = (r: { x: number; z: number }[]) => r.map((p) => new Vector2(p.x, -p.z))
+    const shape = new Shape(ring(plan.outline.outer))
+    for (const hole of plan.outline.holes) shape.holes.push(new Path(ring(hole)))
+    const geometry = new ShapeGeometry(shape)
+    geometry.rotateX(-Math.PI / 2)
+    const position = geometry.getAttribute('position')
+    const uv = new Float32Array(position.count * 2)
+    for (let i = 0; i < position.count; i++) {
+      uv[i * 2] = (position.getX(i) - grid.minX) / (grid.cols * grid.cell)
+      uv[i * 2 + 1] = (position.getZ(i) - grid.minZ) / (grid.rows * grid.cell)
+    }
+    geometry.setAttribute('uv', new Float32BufferAttribute(uv, 2))
+    overlay = new Mesh(
+      geometry,
+      new MeshBasicMaterial({
+        map: texture, transparent: true, depthWrite: false, toneMapped: false, side: DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      }),
+    )
+    overlay.position.y = floorBase(selectedBuilding, plan) + SUNMAP_LIFT
+    applyOverlayOpacity()
+    world.add(overlay)
+    aptLines.push({ line: overlay, kind: 'sunmap' })
+  }
+
+  // A small target on the clicked spot: a dark ring inside a light one, readable on every colour of the ramp.
+  function paintProbe() {
+    if (probeMark) {
+      world.remove(probeMark)
+      aptLines = aptLines.filter((l) => l.line !== probeMark)
+      for (const child of probeMark.children) {
+        const mesh = child as Mesh
+        mesh.geometry.dispose()
+        ;(mesh.material as MeshBasicMaterial).dispose()
+      }
+      probeMark = undefined
+    }
+    probeShown = ''
+    if (!probe || !plan || !selectedBuilding) return
+    const flatRing = (inner: number, outer: number, color: number) => flat(color, new RingGeometry(inner, outer, 32).rotateX(-Math.PI / 2))
+    probeMark = new Group()
+    probeMark.add(flatRing(0.13, 0.19, PROBE_RING), flatRing(0.08, 0.13, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.035, 16).rotateX(-Math.PI / 2)))
+    probeMark.position.set(probe.x, floorBase(selectedBuilding, plan) + SUNMAP_LIFT + 0.004, probe.z)
+    probeMark.renderOrder = 1
+    for (const child of probeMark.children) child.renderOrder = 1
+    world.add(probeMark)
+    aptLines.push({ line: probeMark, kind: 'sunmap' })
+  }
+
+  // Where the marked point is on screen, so a popover can follow it while the camera moves.
+  const probeScreen = new Vector3()
+  function reportProbe() {
+    if (!probeHandler) return
+    if (!probeMark || !selectedBuilding || !plan) {
+      if (probeShown) probeHandler(null)
+      probeShown = ''
+      return
+    }
+    probeScreen.copy(probeMark.position).project(camera)
+    const rect = renderer.domElement.getBoundingClientRect()
+    const x = Math.round((probeScreen.x * 0.5 + 0.5) * rect.width + rect.left)
+    const y = Math.round((-probeScreen.y * 0.5 + 0.5) * rect.height + rect.top)
+    const visible = probeScreen.z < 1 && Math.abs(probeScreen.x) <= 1 && Math.abs(probeScreen.y) <= 1
+    const key = `${x} ${y} ${visible}`
+    if (key === probeShown) return
+    probeShown = key
+    probeHandler({ x, y, visible })
+  }
+
+  function removeSunMap() {
+    if (overlay) (overlay.material as MeshBasicMaterial).map?.dispose()
+    overlay = undefined
+    probeMark = undefined
+    probe = null
+    probeShown = ''
+    probeHandler?.(null)
+  }
+
   function populate() {
     stopWalk()
     clearHover()
+    removeSunMap()
     clearWorld()
+    version++
+    sceneChange?.()
     apartmentMeshes = new Set()
     aptLines = []
     glassMeshes = []
@@ -584,6 +735,7 @@ export function createScene(container: HTMLElement): SunScene {
     walk.start(plan, floorBase(selected, plan), start.pos, start.yaw)
     applyCutaway()
     applyGlow()
+    applyOverlayOpacity()
     renderer.domElement.style.cursor = 'grab'
     walkHandlers?.change(true)
     return true
@@ -603,6 +755,7 @@ export function createScene(container: HTMLElement): SunScene {
     renderer.domElement.style.cursor = ''
     applyCutaway()
     applyGlow()
+    applyOverlayOpacity()
     walkHandlers?.change(false)
   }
 
@@ -625,13 +778,17 @@ export function createScene(container: HTMLElement): SunScene {
   let downAt: { x: number; y: number } | undefined
   renderer.domElement.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }))
   // The building polygon under the pointer and the scene point hit, or undefined (sky, ground, glass, hidden floors).
-  function polygonAt(clientX: number, clientY: number): { polygon: Building; hit: Vector3; dir: Vector3 } | undefined {
+  // The first thing the camera sees under the pointer: not glass, not an overlay, not a hidden (cutaway) block.
+  function seenHit(clientX: number, clientY: number) {
     const rect = renderer.domElement.getBoundingClientRect()
     const ndc = new Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
     raycaster.setFromCamera(ndc, camera)
     const seen = (o: Object3D) =>
       o instanceof Mesh && !glassMeshes.includes(o) && [o.material].flat().every((m) => m.colorWrite && !m.transparent)
-    const hit = raycaster.intersectObjects(world.children, true).find((h) => seen(h.object))
+    return raycaster.intersectObjects(world.children, true).find((h) => seen(h.object))
+  }
+  function polygonAt(clientX: number, clientY: number): { polygon: Building; hit: Vector3; dir: Vector3 } | undefined {
+    const hit = seenHit(clientX, clientY)
     if (!hit) return undefined
     // A wall hit lies on the polygon's edge: step a little way along the ray, into the building.
     const dir = raycaster.ray.direction
@@ -649,6 +806,16 @@ export function createScene(container: HTMLElement): SunScene {
     if (!found) return
     if (e.shiftKey) partClick?.(found.polygon.id)
     else if (!selectedIds.has(found.polygon.id)) buildingClick?.(found.polygon.id, { x: found.hit.x, z: found.hit.z })
+  })
+
+  // With the sun map showing, a click on the apartment floor reports its point; a click anywhere else reports null
+  // (it closes the popover). Dragging is an orbit or a pan, and a double-click walks (both stay as they were).
+  let floorClick: ((at: { x: number; z: number } | null) => void) | undefined
+  renderer.domElement.addEventListener('click', (e) => {
+    if (walking || !sunMapOn || !overlay || !floorClick || !plan || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    const hit = seenHit(e.clientX, e.clientY)
+    const at = hit && hit.object === floorMesh && insideOutline(plan, { x: hit.point.x, z: hit.point.z }) ? { x: hit.point.x, z: hit.point.z } : null
+    floorClick(at)
   })
 
   // Hover cue for switching buildings: a pointer cursor and an amber tint on an unselected building. One raycast
@@ -719,6 +886,8 @@ export function createScene(container: HTMLElement): SunScene {
     disposeTreeGroup(treeGroup)
     treeGroup = buildTreeGroup(trees)
     scene.add(treeGroup)
+    version++
+    sceneChange?.()
   }
 
   function setCutaway(on: boolean) {
@@ -789,6 +958,7 @@ export function createScene(container: HTMLElement): SunScene {
     renderer.render(scene, camera)
     if (twoPass) renderApartmentPass()
     for (const g of glassMeshes) g.visible = true
+    reportProbe()
   }
   renderer.setAnimationLoop(render)
 
@@ -803,6 +973,29 @@ export function createScene(container: HTMLElement): SunScene {
     },
     onBuildingClick(handler) {
       buildingClick = handler
+    },
+    sceneVersion: () => version,
+    occluders: () => collectOccluders([world, treeGroup]),
+    onSceneChange(handler) {
+      sceneChange = handler
+    },
+    setSunMap(map) {
+      sunMapData = map
+      paintSunMap()
+    },
+    setSunMapVisible(on) {
+      sunMapOn = on
+    },
+    setProbe(at) {
+      probe = at
+      paintProbe()
+      if (!at) reportProbe()
+    },
+    onProbeScreen(handler) {
+      probeHandler = handler
+    },
+    onFloorClick(handler) {
+      floorClick = handler
     },
     startWalk,
     stopWalk,
