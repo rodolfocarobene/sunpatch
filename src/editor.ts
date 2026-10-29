@@ -12,6 +12,7 @@ import {
   fitBounds,
   chainStep,
   nearestEdge,
+  neighborAt,
   projectOnSegment,
   ringSegments,
   selfIntersects,
@@ -20,6 +21,7 @@ import {
   validatePlan,
 } from './editor-geom'
 import type { Segment, Snap } from './editor-geom'
+import { isClick } from './click'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
@@ -30,6 +32,8 @@ export interface PlanEditor {
   /** Shows `building` (and faint `neighbors` footprints for context) and edits `plan`. */
   open(building: Building, neighbors: Building[], plan: Plan): void
   setVisible(visible: boolean): void
+  /** Shows a message in the status line until the next action. */
+  notify(text: string): void
   getPlan(): Plan
 }
 
@@ -71,7 +75,7 @@ export function loadSavedPlan(buildingId: string): Plan | null {
   }
 }
 
-function savePlan(plan: Plan): void {
+export function savePlan(plan: Plan): void {
   try {
     localStorage.setItem(storageKey(plan.buildingId), JSON.stringify(plan))
   } catch {
@@ -120,7 +124,7 @@ export function createPlanEditor(
   container: HTMLElement,
   onChange: (plan: Plan) => void,
   /** autosave() false keeps edits out of localStorage (the built-in example). */
-  { autosave = () => true }: { autosave?: () => boolean } = {},
+  { autosave = () => true, onSwitch }: { autosave?: () => boolean; onSwitch?: (buildingId: string, at: Point) => void } = {},
 ): PlanEditor {
   const root = document.createElement('div')
   root.className = 'editor'
@@ -155,6 +159,9 @@ export function createPlanEditor(
   let needsFit = false
   let visible = false
   let message: { text: string; kind: 'info' | 'error' } | undefined
+  // Select tool: the neighbour under the cursor (a click switches to it) and a neighbour pressed on, awaiting release.
+  let hoverId: string | undefined
+  let pressed: { id: string; x: number; y: number } | undefined
   let newKind: BuildingEdit['kind'] = 'add'
 
   // --- toolbar: Tools, Floor, File ---
@@ -240,6 +247,8 @@ export function createPlanEditor(
 
   function setTool(t: Tool): void {
     tool = t
+    hoverId = pressed = undefined
+    svg.style.cursor = ''
     draft = { outline: [] }
     root.dataset.tool = t
     for (const [name, b] of toolButtons) b.setAttribute('aria-pressed', String(name === t))
@@ -804,6 +813,8 @@ export function createPlanEditor(
       return render()
     }
     selection = null
+    const neighbor = onSwitch && building ? neighborAt(building, neighbors, p) : undefined
+    pressed = neighbor && { id: neighbor.id, x: e.clientX, y: e.clientY }
     startPan(e)
     render()
   }
@@ -851,6 +862,7 @@ export function createPlanEditor(
       return startPan(e)
     }
     if (e.button !== 0) return
+    pressed = undefined
     svg.setPointerCapture(e.pointerId)
     if (tool === 'select') selectDown(e)
     else if (tool === 'outline') outlineClick(e)
@@ -874,7 +886,18 @@ export function createPlanEditor(
       const snap = wallPoint(e, draft.wallStart)
       draft.cursor = snap.point
       draft.snap = snap
+    } else if (tool === 'select' && onSwitch && building) {
+      const id = neighborAt(building, neighbors, eventPoint(e))?.id
+      if (id === hoverId) return
+      hoverId = id
+      svg.style.cursor = id ? 'pointer' : ''
     } else return
+    render()
+  })
+  svg.addEventListener('pointerleave', () => {
+    if (hoverId === undefined) return
+    hoverId = undefined
+    svg.style.cursor = ''
     render()
   })
 
@@ -889,7 +912,13 @@ export function createPlanEditor(
       commit(current, d.before)
     }
   }
-  svg.addEventListener('pointerup', endDrag)
+  svg.addEventListener('pointerup', (e) => {
+    // Pressed on a neighbour and released without moving: switch to it (a drag was a pan).
+    const click = pressed && isClick({ x: pressed.x, y: pressed.y }, { x: e.clientX, y: e.clientY }) ? pressed : undefined
+    pressed = undefined
+    endDrag()
+    if (click && building) onSwitch?.(click.id, eventPoint(e))
+  })
   svg.addEventListener('pointercancel', endDrag)
 
   svg.addEventListener('dblclick', () => {
@@ -970,8 +999,8 @@ export function createPlanEditor(
     if (!visible || !building || !plan) return
     if (!measure()) return
     if (needsFit) fit()
-    drawScene(svg, { building, neighbors, plan, view, selection, draft })
-    statusText.textContent = message?.text ?? HELP[tool]
+    drawScene(svg, { building, neighbors, plan, view, selection, draft, hover: hoverId })
+    statusText.textContent = hoverId ? 'Click to switch to this building' : (message?.text ?? HELP[tool])
     statusLine.dataset.kind = message?.kind ?? 'info'
     updateFloorBox()
     updateProps()
@@ -1002,6 +1031,9 @@ export function createPlanEditor(
         needsFit = needsFit || !view.w
         render()
       }
+    },
+    notify(text) {
+      setMessage(text)
     },
     getPlan() {
       if (!plan) throw new Error('Plan editor has no plan: call open() first')

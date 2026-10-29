@@ -122,6 +122,8 @@ export function highlightFeature(hit: GeoHit): PolygonFeature | null {
 type Ring = [number, number][]
 
 export interface TileBuilding {
+  /** Feature id; the pieces of one building cut at tile borders share it. */
+  id?: string | number
   geometry: { type: string; coordinates: unknown }
   properties: Record<string, unknown>
 }

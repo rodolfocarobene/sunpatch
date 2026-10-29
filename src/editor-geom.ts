@@ -1,5 +1,5 @@
 import { FACADE_THICKNESS, SLAB_THICKNESS, ringOf, type Plan, type Window } from './plan'
-import type { Point } from './osm'
+import { buildingContains, pickBuilding, type Building, type Point } from './osm'
 
 export type Segment = [Point, Point]
 
@@ -294,4 +294,10 @@ export function fitBounds(
   const dx = free.left + areaW / 2 - w / 2
   const dy = free.top + areaH / 2 - h / 2
   return { cx: (x0 + x1) / 2 - dx / scale, cz: (z0 + z1) / 2 - dy / scale, scale }
+}
+
+/** The neighbouring building under `p` (plan metres), or none when `p` is on the selected building or on empty ground. */
+export function neighborAt(selected: Pick<Building, 'outer' | 'holes'>, neighbors: Building[], p: Point): Building | undefined {
+  if (buildingContains(selected as Building, p)) return undefined
+  return pickBuilding(neighbors, p)
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { apartmentGeometry, edgeOpenings, facadeWall, facadeWalls, interiorWalls, remainderRanges, restOfFloorPolygons, wallFrame } from './apartment'
-import type { Building, Point } from './osm'
-import { FACADE_THICKNESS, SLAB_THICKNESS, type Plan, type Window } from './plan'
+import murat from '../fixtures/overpass-milan-via-murat.json'
+import { selectBuilding } from './block'
+import { parseOverpass, project, type Building, type OverpassElement, type Point } from './osm'
+import { FACADE_THICKNESS, SLAB_THICKNESS, defaultPlan, type Plan, type Window } from './plan'
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Point[] => [
   { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
@@ -274,5 +276,25 @@ describe('apartmentGeometry of a selection made of several pieces', () => {
     const single = apartmentGeometry({ ...building, height: 9 }, floorPlan(rect(0, 0, 5, 6)))
     expect(single.shell).toHaveLength(2)
     expect(single.ceiling).toHaveLength(1)
+  })
+})
+
+describe('a selection of touching buildings (via Murat 60)', () => {
+  const click = { lat: 45.50058, lon: 9.19057 }
+  const selected = selectBuilding(parseOverpass(murat.elements as unknown as OverpassElement[], click).buildings, project(click.lat, click.lon, click))!
+  const plan = defaultPlan(selected, click, 3)
+  const g = apartmentGeometry(selected, plan)
+  const top = plan.floor * plan.floorHeight + plan.floorHeight
+
+  it('is cut piece by piece: nothing of any member stands above the apartment ceiling except in the cutaway group', () => {
+    expect(selected.members!.length).toBeGreaterThan(3)
+    expect(Math.max(...g.shell.map((s) => bounds(s).max.y))).toBeLessThanOrEqual(top - SLAB_THICKNESS + 1e-6)
+  })
+
+  it('sends the floors above of every member that is taller than the apartment to the cutaway group', () => {
+    const roofs = g.ceiling.map((c) => bounds(c).max.y)
+    for (const m of selected.members!.filter((x) => x.height > top + 0.5)) {
+      expect(roofs.some((y) => Math.abs(y - m.height) < 1e-6)).toBe(true)
+    }
   })
 })

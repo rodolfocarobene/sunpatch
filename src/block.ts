@@ -2,6 +2,7 @@ import polygonClipping, { type MultiPolygon, type Polygon } from 'polygon-clippi
 import { fromPairs, polygonsOf, toPairs } from './edits'
 import {
   buildingContains,
+  distanceToRing,
   pointInPolygon,
   ringArea,
   ringCentroid,
@@ -14,22 +15,30 @@ import {
  * One building is often mapped as several OSM polygons: an outline plus `building:part`s with their own
  * heights, a multipolygon relation with several outer rings, or the same footprint drawn twice. Picking
  * one of them must select all of them, otherwise the apartment is cut out of the wrong volume and the
- * floors above stay behind. The rule is deliberately narrow, because in Milan a block is a ring of
- * touching buildings and joining everything that touches would select the whole block:
+ * floors above stay behind. Neighbouring volumes of different height are often separate ways that merely
+ * touch, so the selection is a flood fill over a graph of polygons. Two polygons are linked when:
  *
- *   - same OSM relation (the outer rings of one multipolygon);
- *   - same street + house number (both tagged);
- *   - `building:part`s lying in the outline (their outline is then only a footprint);
- *   - overlapping outlines (a polygon mostly inside another one is the same building mapped twice);
- *   - a `building:part` that lies in no outline joins the building it shares the longest wall with.
+ *   - they are the same OSM relation (the outer rings of one multipolygon);
+ *   - they have the same street + house number (both tagged);
+ *   - one is a `building:part` lying in the other's outline;
+ *   - they overlap (a polygon mostly inside another one is the same building mapped twice);
+ *   - they touch: a shared wall of at least MIN_TOUCH_M (within TOUCH_TOLERANCE_M), or any real overlap.
+ *     A shared corner does not count.
  *
- * Two different buildings that merely touch are not merged, and two different addresses never are.
+ * In Milan that can be a whole perimeter block; the user trims it with `togglePart` (shift-click). The fill
+ * stops at MAX_SELECTION_POLYGONS polygons or MAX_SELECTION_RADIUS_M from the click and says so (`capped`).
  */
 
 /** Gaps and offsets up to this size between two outlines still count as touching (OSM nodes are rarely shared exactly). */
 export const TOUCH_TOLERANCE_M = 0.3
-/** A stray part joins a building only when they share a wall at least this long; a corner or a short jog is not enough. */
-export const MIN_SHARED_WALL_M = 4
+/** Two polygons touch when they share a wall at least this long (a corner or a point contact does not count). */
+export const MIN_TOUCH_M = 1
+/** Overlap below this area is a sliver, not the same building. */
+const MIN_OVERLAP_M2 = 1
+/** The fill stops at this many polygons ... */
+export const MAX_SELECTION_POLYGONS = 60
+/** ... or at polygons further than this from the click. */
+export const MAX_SELECTION_RADIUS_M = 250
 /** A polygon with at least this share of its area inside another one belongs with it. */
 const OVERLAP_SHARE = 0.5
 /** Holes of the union smaller than this are gaps between outlines, not courtyards. */
@@ -37,11 +46,18 @@ const MIN_HOLE_AREA_M2 = 2
 const COLLINEAR = Math.sin((5 * Math.PI) / 180)
 
 /** Length of the stretches where two rings run side by side (within `tol`, nearly parallel). */
-export function sharedWallLength(a: Point[], b: Point[], tol = TOUCH_TOLERANCE_M): number {
+export function sharedWallLength(
+  a: Point[],
+  b: Point[],
+  tol = TOUCH_TOLERANCE_M,
+  /** Only walls of `a` for which this holds are measured. */
+  edge: (p: Point, q: Point) => boolean = () => true,
+): number {
   let total = 0
   for (let i = 0; i < a.length; i++) {
     const p = a[i]
     const q = a[(i + 1) % a.length]
+    if (!edge(p, q)) continue
     const len = Math.hypot(q.x - p.x, q.z - p.z)
     if (len < 1e-9) continue
     const d = { x: (q.x - p.x) / len, z: (q.z - p.z) / len }
@@ -135,28 +151,6 @@ function partIn(part: Building, outline: Building): boolean {
   return buildingContains(outline, ringCentroid(part.outer)) || shareInside(part, outline) >= OVERLAP_SHARE
 }
 
-/** Outlines (not parts) of `all` that hold at least one of `all`'s parts. */
-function homes(part: Building, all: Building[]): Building[] {
-  return all.filter((o) => !isPart(o) && o.id !== part.id && partIn(part, o))
-}
-
-/** The building a part belongs to: the smallest outline holding it, else the one it shares the longest wall with. */
-export function homeOfPart(part: Building, all: Building[]): Building | undefined {
-  const holding = homes(part, all).sort((a, b) => footprintArea(a) - footprintArea(b))
-  if (holding.length) return holding[0]
-  let best: Building | undefined
-  let bestLength = MIN_SHARED_WALL_M
-  for (const o of all) {
-    if (o.id === part.id || !near(part, o) || conflicting(part, o)) continue
-    const length = sharedWallLength(part.outer, o.outer)
-    if (length >= bestLength) {
-      best = o
-      bestLength = length
-    }
-  }
-  return best
-}
-
 /** Outlines related to `b` by relation, address or overlap (not by their parts). */
 function samePlace(a: Building, b: Building): boolean {
   if (isPart(a) || isPart(b)) return false
@@ -168,26 +162,79 @@ function samePlace(a: Building, b: Building): boolean {
   return near(a, b) && Math.max(shareInside(a, b), shareInside(b, a)) >= OVERLAP_SHARE
 }
 
-/** Every polygon that belongs with `seed`, the seed first. A part stands for its home building. */
-export function selectionGroup(all: Building[], seed: Building): Building[] {
-  const root = isPart(seed) ? (homeOfPart(seed, all) ?? seed) : seed
-  const group = new Map<string, Building>([[root.id, root]])
-  const queue = [root]
+/** The two polygons share a wall of at least MIN_TOUCH_M, or overlap by more than a sliver. */
+export function touching(a: Building, b: Building): boolean {
+  if (!near(a, b)) return false
+  if (sharedWallLength(a.outer, b.outer, TOUCH_TOLERANCE_M) >= MIN_TOUCH_M) return true
+  return areaOf(polygonClipping.intersection(polygonOf(a), polygonOf(b))) >= MIN_OVERLAP_M2
+}
+
+/** Edge of the selection graph: see the rules at the top of this file. */
+export function linked(a: Building, b: Building): boolean {
+  if (isPart(a) !== isPart(b) && partIn(isPart(a) ? a : b, isPart(a) ? b : a)) return true
+  return samePlace(a, b) || touching(a, b)
+}
+
+/** Distance from the click to the polygon, 0 when inside. */
+const distanceFrom = (b: Building, p: Point) => (buildingContains(b, p) ? 0 : distanceToRing(b.outer, p))
+
+/** The polygons connected to `seed` (the seed first), breadth first from the click, and whether a cap stopped the fill. */
+export function floodSelection(all: Building[], seed: Building, click?: Point): { group: Building[]; capped: boolean } {
+  const from = click ?? ringCentroid(seed.outer)
+  const group = new Map<string, Building>([[seed.id, seed]])
+  const queue = [seed]
+  let capped = false
   while (queue.length) {
     const a = queue.shift()!
-    for (const b of all) {
-      if (!group.has(b.id) && samePlace(a, b)) {
-        group.set(b.id, b)
-        queue.push(b)
+    const next = all
+      .filter((b) => !group.has(b.id) && linked(a, b))
+      .map((b) => ({ b, d: distanceFrom(b, from) }))
+      .sort((x, y) => x.d - y.d)
+    for (const { b, d } of next) {
+      if (group.size >= MAX_SELECTION_POLYGONS || d > MAX_SELECTION_RADIUS_M) {
+        capped = true
+        continue
       }
+      group.set(b.id, b)
+      queue.push(b)
     }
   }
-  for (const part of all.filter(isPart)) {
-    const home = homeOfPart(part, all)
-    if (home && group.has(home.id)) group.set(part.id, part)
+  return { group: [...group.values()], capped }
+}
+
+/** Every polygon that belongs with `seed`, the seed first. */
+export const selectionGroup = (all: Building[], seed: Building, click?: Point): Building[] =>
+  floodSelection(all, seed, click).group
+
+/** Grids tried to close the gaps between outlines that only nearly touch (map-tile polygons are rounded). */
+const SNAP_GRIDS: [number, number, number][] = [
+  [0.4, 0, 0],
+  [0.4, 0.2, 0.2],
+  [0.4, 0.1, 0.3],
+  [0.4, 0.3, 0.1],
+]
+
+function snapped(polygon: Polygon, [g, ox, oz]: [number, number, number]): Polygon {
+  const ring = (r: [number, number][]) => {
+    const pts = r.map(([x, z]): [number, number] => [Math.round(x / g - ox) * g + ox * g, Math.round(z / g - oz) * g + oz * g])
+    return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
   }
-  group.set(seed.id, seed)
-  return [seed, ...[...group.values()].filter((b) => b.id !== seed.id)]
+  return polygon.map(ring).filter((r) => r.length >= 3)
+}
+
+/**
+ * Union of polygons. Outlines that touch exactly union as they are; when the result is still in several
+ * pieces, the coordinates are snapped to a coarse grid (a few offsets) to close the hairline gaps, and the
+ * attempt with the fewest pieces wins.
+ */
+export function closedUnion(polygons: Polygon[]): MultiPolygon {
+  let best = polygonClipping.union(polygons[0], ...polygons.slice(1))
+  for (const grid of SNAP_GRIDS) {
+    if (best.length <= 1) break
+    const tried = polygonClipping.union(snapped(polygons[0], grid), ...polygons.slice(1).map((p) => snapped(p, grid)))
+    if (tried.length < best.length) best = tried
+  }
+  return best
 }
 
 /** Union of footprints as one polygon (the component under `anchor`); gaps between outlines are closed. */
@@ -195,7 +242,7 @@ export function unionFootprint(
   pieces: Building[],
   anchor: Point,
 ): { outer: Point[]; holes: Point[][]; used: Building[] } | undefined {
-  const merged = polygonClipping.union(polygonOf(pieces[0]), ...pieces.slice(1).map(polygonOf))
+  const merged = closedUnion(pieces.map(polygonOf))
   const polygons = polygonsOf(merged)
   const chosen =
     polygons.find((p) => pointInPolygon(anchor, p.outer)) ??
@@ -208,13 +255,24 @@ export function unionFootprint(
   return { outer: chosen.outer, holes, used }
 }
 
+export interface SelectionOptions {
+  /** Where the user clicked: the distance cap is measured from here (default: the seed's centre). */
+  click?: Point
+  /** Use exactly these polygons (plus the seed) instead of flooding: a trimmed or restored selection. */
+  ids?: string[]
+  /** The id (plan key) the result gets, instead of the largest outline's. */
+  id?: string
+}
+
 /**
- * The building the user picked, with everything that belongs to it merged in (see the rules at the top of
+ * The building the user picked, with everything connected to it merged in (see the rules at the top of
  * this file). A lone polygon is returned as it is, so plans saved on it keep working. Otherwise the
- * result has the id of the largest outline, whichever polygon was clicked.
+ * result has the id of the largest outline, whichever polygon was clicked, and `anchor` is the clicked one.
  */
-export function mergeSelection(all: Building[], seed: Building): Building {
-  const group = selectionGroup(all, seed)
+export function mergeSelection(all: Building[], seed: Building, options: SelectionOptions = {}): Building {
+  const flood = options.ids ? undefined : floodSelection(all, seed, options.click)
+  const wanted = options.ids && new Set(options.ids)
+  const group = flood ? flood.group : [seed, ...all.filter((b) => b.id !== seed.id && wanted!.has(b.id))]
   if (group.length === 1) return seed
   const anchor = ringCentroid(seed.outer)
   const union = unionFootprint(group, anchor)
@@ -229,7 +287,7 @@ export function mergeSelection(all: Building[], seed: Building): Building {
   const minHeight = Math.min(...members.map((m) => m.minHeight))
   const sameStart = tallest.minHeight === minHeight
   return {
-    id: primary.id,
+    id: options.id ?? primary.id,
     outer: union.outer,
     holes: union.holes,
     minHeight,
@@ -239,11 +297,78 @@ export function mergeSelection(all: Building[], seed: Building): Building {
     tags: primary.tags,
     members,
     sources: used.map((b) => b.id),
+    anchor: seed.id,
+    ...(flood?.capped ? { capped: true } : {}),
   }
 }
 
-/** The building at p (or the nearest within snapping distance), with its parts and sibling polygons merged. */
-export function selectBuilding(all: Building[], p: Point): Building | undefined {
+/** The building at p (or the nearest within snapping distance), with everything connected to it merged in. */
+export function selectBuilding(all: Building[], p: Point, options: Omit<SelectionOptions, 'click'> = {}): Building | undefined {
   const seed = snapBuilding(all, p)
-  return seed && mergeSelection(all, seed)
+  return seed && mergeSelection(all, seed, { ...options, click: p })
+}
+
+/** The polygons of `selected` as ids: what a plan stores to restore the same parts. */
+export const selectionIds = (selected: Building): string[] => selected.sources ?? [selected.id]
+
+/** Rebuilds a stored selection: the same polygons as before, with the same plan key. Falls back to flooding. */
+export function restoreSelection(all: Building[], p: Point, saved: { id: string; ids: string[] }): Building | undefined {
+  const byId = new Map(all.map((b) => [b.id, b]))
+  const seed = snapBuilding(all, p)
+  if (!seed || !saved.ids.includes(seed.id) || !saved.ids.every((id) => byId.has(id))) return selectBuilding(all, p)
+  return mergeSelection(all, seed, { ids: saved.ids, id: saved.id })
+}
+
+/**
+ * The selection carried onto another set of polygons (map-tile preview to OSM data): the polygons of `all`
+ * that lie mostly inside `previous`'s footprint, kept to the ones connected to the click.
+ */
+export function carrySelection(all: Building[], previous: Building, p: Point): Building | undefined {
+  const seed = snapBuilding(all, p)
+  if (!seed) return undefined
+  const ids = all.filter((b) => shareInside(b, previous) >= OVERLAP_SHARE).map((b) => b.id)
+  const wanted = new Set([seed.id, ...ids])
+  const kept = connectedTo(all, wanted, seed)
+  return mergeSelection(all, seed, { ids: [...kept], click: p })
+}
+
+/** Polygons connected to `anchor` through `ids` only. */
+function connectedTo(all: Building[], ids: Set<string>, anchor: Building): Set<string> {
+  const pool = all.filter((b) => ids.has(b.id) && b.id !== anchor.id)
+  const found = new Set([anchor.id])
+  const queue = [anchor]
+  while (queue.length) {
+    const a = queue.shift()!
+    for (const b of pool) {
+      if (!found.has(b.id) && linked(a, b)) {
+        found.add(b.id)
+        queue.push(b)
+      }
+    }
+  }
+  return found
+}
+
+/**
+ * Shift-click: removes the polygon from the selection, or adds it when it touches the selection. The
+ * polygon first clicked (`anchor`) always stays, and a removal also drops whatever it was the only link to.
+ * The result keeps the plan key (`id`) of `current`. `hint` says why nothing changed.
+ */
+export function togglePart(all: Building[], current: Building, polygonId: string): { selected: Building } | { hint: string } {
+  const target = all.find((b) => b.id === polygonId)
+  const anchor = all.find((b) => b.id === (current.anchor ?? current.id))
+  if (!target || !anchor) return { hint: 'That is not a building polygon.' }
+  const ids = new Set(selectionIds(current))
+  if (ids.has(polygonId)) {
+    if (polygonId === anchor.id) return { hint: 'The part you clicked first stays selected.' }
+    ids.delete(polygonId)
+    // A part leaves with the outline that was only its footprint.
+    if (isPart(target)) for (const o of all) if (ids.has(o.id) && !isPart(o) && partIn(target, o)) ids.delete(o.id)
+  } else {
+    if (!all.some((b) => ids.has(b.id) && linked(target, b))) return { hint: 'That building does not touch your selection.' }
+    ids.add(polygonId)
+    if (!isPart(target)) for (const p of all) if (isPart(p) && partIn(p, target)) ids.add(p.id)
+  }
+  const kept = connectedTo(all, ids, anchor)
+  return { selected: mergeSelection(all, anchor, { ids: [...kept], id: current.id }) }
 }

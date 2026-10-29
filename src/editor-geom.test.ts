@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { Building } from './osm'
 import {
   chainStep,
+  neighborAt,
   clampWindowT,
   clampWindowVertical,
   normalizeWindows,
@@ -250,5 +252,22 @@ describe('chainStep', () => {
     const s = chainStep([P(0, 0), P(4, 0)], P(0, 0.2))
     expect(s.closed).toBe(false)
     expect(s.chain).toHaveLength(3)
+  })
+})
+
+describe('neighborAt', () => {
+  const sq = (id: string, x0: number, x1: number): Building => ({
+    id, outer: [{ x: x0, z: 0 }, { x: x1, z: 0 }, { x: x1, z: 10 }, { x: x0, z: 10 }], holes: [], minHeight: 0, height: 9, heightSource: 'tag', tags: { building: 'yes' },
+  })
+  const mine = sq('way/1', 0, 10)
+  const others = [sq('way/2', 12, 20), sq('way/3', 22, 30)]
+
+  it('finds the neighbour under the point', () => {
+    expect(neighborAt(mine, others, { x: 25, z: 5 })?.id).toBe('way/3')
+  })
+
+  it('finds nothing on the selected building or on the ground between', () => {
+    expect(neighborAt(mine, others, { x: 5, z: 5 })).toBeUndefined()
+    expect(neighborAt(mine, others, { x: 21, z: 5 })).toBeUndefined()
   })
 })

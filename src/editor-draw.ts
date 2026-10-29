@@ -69,6 +69,8 @@ export interface Scene {
   view: View
   selection: Selection | null
   draft: Draft
+  /** Id of the neighbour under the cursor (a click switches to it). */
+  hover?: string
 }
 
 const NS = 'http://www.w3.org/2000/svg'
@@ -146,9 +148,9 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     svgEl(root, 'path', {
       d: pathOf([n.outer, ...n.holes]),
       'fill-rule': 'evenodd',
-      fill: '#ece2cc',
-      stroke: C.lineStrong,
-      'stroke-width': px,
+      fill: n.id === s.hover ? '#f3d79a' : '#ece2cc',
+      stroke: n.id === s.hover ? '#b0701a' : C.lineStrong,
+      'stroke-width': (n.id === s.hover ? 2 : 1) * px,
     })
   }
   svgEl(root, 'path', {

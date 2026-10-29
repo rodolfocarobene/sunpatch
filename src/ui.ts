@@ -357,9 +357,16 @@ function buildingInfoHtml(b: Building): string {
   const source = b.id.startsWith('tile/')
     ? 'Map-tile outline, not an OSM object'
     : `<a href="https://www.openstreetmap.org/${osmPath}" target="_blank" rel="noreferrer">OSM ${b.id}</a>`
+  const parts = b.members?.length ?? 1
+  const hint =
+    parts > 1
+      ? `Your building: ${parts} parts \u00b7 Shift-click in 3D to add or remove parts`
+      : 'Shift-click a neighbour in 3D to add it'
+  const capped = b.capped ? '<br>Stopped at a large selection; shift-click to trim it.' : ''
   return (
     `<strong>Selected building</strong>` +
     `<br>${source}` +
+    `<br><span class="parts">${hint}</span>${capped}` +
     `<span class="detail"><br>` +
     `Height: ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})` +
     levels +
