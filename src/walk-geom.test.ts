@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Point } from './osm'
 import { FACADE_THICKNESS, type Plan, type Window } from './plan'
-import { isWalkable, movePosition, resolvePosition, startPosition, walkStart, windowYaw, yawOf } from './walk-geom'
+import {
+  bandMarker, headingDeg, isWalkable, movePosition, relativeBearing, resolvePosition, startPosition, walkStart, windowYaw, yawOf,
+} from './walk-geom'
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Point[] => [
   { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
@@ -142,5 +144,42 @@ describe('walkStart', () => {
     const { pos, yaw } = walkStart(plan, { x: 8, z: 3 })
     expect(pos).toEqual({ x: 8, z: 3 })
     expect(yaw).toBeCloseTo(windowYaw(plan, pos))
+  })
+})
+
+describe('sun direction band', () => {
+  const sunAt = (yaw: number, azimuth: number) => relativeBearing(headingDeg(yaw), azimuth)
+
+  it('converts a yaw to a clockwise compass heading', () => {
+    expect(headingDeg(0)).toBeCloseTo(0)
+    expect(headingDeg(Math.PI / 2)).toBeCloseTo(270) // turned left from north: west
+    expect(headingDeg(-Math.PI / 2)).toBeCloseTo(90)
+    expect(headingDeg(yawOf(0, 1))).toBeCloseTo(180) // looking south
+    expect(headingDeg(4 * Math.PI)).toBeCloseTo(0)
+  })
+
+  it('is 0 when the sun is ahead and positive to the right', () => {
+    expect(sunAt(yawOf(1, 0), 90)).toBeCloseTo(0) // looking east, sun in the east
+    expect(sunAt(0, 45)).toBeCloseTo(45) // looking north, sun north-east: right
+    expect(sunAt(0, 315)).toBeCloseTo(-45)
+  })
+
+  it('wraps around north', () => {
+    expect(relativeBearing(350, 10)).toBe(20)
+    expect(relativeBearing(10, 350)).toBe(-20)
+    expect(relativeBearing(720, 350)).toBe(-10)
+    expect(relativeBearing(0, 360)).toBe(0)
+  })
+
+  it('puts the sun behind at 180', () => {
+    expect(relativeBearing(0, 180)).toBe(180)
+    expect(relativeBearing(90, 270)).toBe(180)
+  })
+
+  it('clamps outside the band and flags it', () => {
+    expect(bandMarker(45, 90)).toEqual({ offset: 0.5, clamped: false })
+    expect(bandMarker(-90, 90)).toEqual({ offset: -1, clamped: false })
+    expect(bandMarker(120, 90)).toEqual({ offset: 1, clamped: true })
+    expect(bandMarker(-180, 90)).toEqual({ offset: -1, clamped: true })
   })
 })

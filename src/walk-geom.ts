@@ -136,3 +136,26 @@ export function walkStart(plan: Plan, at?: Point): { pos: Point; yaw: number } {
   const pos = (at && resolvePosition(plan, at)) || startPosition(plan)
   return { pos, yaw: windowYaw(plan, pos) }
 }
+
+/** Compass heading (degrees clockwise from north, 0..360) of a walk yaw (radians counter-clockwise from north). */
+export function headingDeg(yaw: number): number {
+  return (((-yaw * 180) / Math.PI) % 360 + 360) % 360
+}
+
+/** Signed angle from where you look to a compass azimuth, in (-180, 180]: positive is to your right, 180 is behind. */
+export function relativeBearing(heading: number, azimuth: number): number {
+  const d = (((azimuth - heading) % 360) + 360) % 360
+  return d > 180 ? d - 360 : d
+}
+
+export interface BandMarker {
+  /** -1 (left end of the band) to 1 (right end); 0 is straight ahead. */
+  offset: number
+  /** The target is outside the band: the marker sits at its end and points toward it. */
+  clamped: boolean
+}
+
+/** Places a relative bearing on a band that spans `halfSpan` degrees either side of the view direction. */
+export function bandMarker(relative: number, halfSpan: number): BandMarker {
+  return { offset: Math.max(-1, Math.min(1, relative / halfSpan)), clamped: Math.abs(relative) > halfSpan }
+}
