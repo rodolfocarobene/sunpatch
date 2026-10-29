@@ -17,6 +17,7 @@ const HEIGHT_SOURCE = {
   levels: 'from levels x 3 m',
   default: 'default, no data',
   tile: 'from map tiles',
+  parts: 'estimated from the parts above it',
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

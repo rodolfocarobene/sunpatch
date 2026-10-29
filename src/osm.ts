@@ -10,7 +10,7 @@ export interface Origin {
   lon: number
 }
 
-export type HeightSource = 'tag' | 'levels' | 'default' | 'tile'
+export type HeightSource = 'tag' | 'levels' | 'default' | 'tile' | 'parts'
 
 export interface Building {
   /** e.g. "way/123", "relation/45" or "relation/45#2" when a relation has several outer rings. */
@@ -253,6 +253,34 @@ export function stitchRings(segments: LatLon[][]): { rings: LatLon[][]; skipped:
   return { rings, skipped }
 }
 
+/**
+ * An outline with no height of its own (the 9 m default) that carries parts floating above it, such as the
+ * Duomo's spires on a body that is only mapped as the outline: whatever lies under the lowest floating part
+ * has to be the outline, so it is raised to that height instead of leaving the parts hanging over a low box.
+ */
+export function inferBodyHeights(buildings: Building[]): void {
+  const parts = buildings.filter(isPart)
+  for (const outline of buildings) {
+    if (isPart(outline) || outline.heightSource !== 'default') continue
+    const inside = partsOf(outline, parts)
+    // A part is held up when a held-up part under it (or one from the ground) spans at least half its footprint.
+    const held = new Set<Building>(inside.filter((p) => p.minHeight === 0))
+    for (const p of [...inside].sort((x, y) => x.minHeight - y.minHeight)) {
+      const at = ringCentroid(p.outer)
+      const base = [...held].some(
+        (q) => q.minHeight < p.minHeight && q.height >= p.minHeight && ringArea(q.outer) >= ringArea(p.outer) / 2 && buildingContains(q, at),
+      )
+      if (base) held.add(p)
+    }
+    const floating = inside.filter((p) => !held.has(p))
+    if (floating.length === 0) continue
+    const body = Math.min(...floating.map((p) => p.minHeight))
+    if (body <= outline.height) continue
+    outline.height = body
+    outline.heightSource = 'parts'
+  }
+}
+
 export interface ParseResult {
   buildings: Building[]
   /** Relation outer/inner rings, or ways, that could not be closed. */
@@ -297,5 +325,6 @@ export function parseOverpass(elements: OverpassElement[], origin: Origin): Pars
       })
     }
   }
+  inferBodyHeights(buildings)
   return { buildings, skippedRings }
 }
