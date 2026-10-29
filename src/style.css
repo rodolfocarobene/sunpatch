@@ -322,6 +322,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 
 /* Panel card: the sentence, the yardstick and the folded details. */
 .panelCard .cardHead { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#cardSlot .panelCard .cardClose { top: 6px; right: 0; }
 .panelCard .cardVerdict { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
 .panelCard .cardVerdict.warn { padding: var(--box-pad); font-weight: 650; color: var(--warn); background: var(--warn-bg); border-radius: var(--radius-control); }
 .panelCard .cardDetails { display: flex; flex-direction: column; gap: 8px; }
@@ -353,5 +354,6 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #panelRows button { display: flex; justify-content: space-between; gap: 8px; width: 100%; font-size: var(--text-sm); text-align: left; font-variant-numeric: tabular-nums; }
 #panel #panelRows button[aria-pressed='true'], #panel #panelRows button[aria-pressed='true']:hover { background: var(--text); border-color: var(--text); color: var(--surface); }
 /* The compact summary of the selected panel, in the editor's right column under its properties. */
+.planSummary { padding-top: 10px; border-top: 1px solid var(--line); }
 .planSummary p { margin: 0; line-height: 1.4; }
 .planSummary button { align-self: flex-start; }

@@ -84,9 +84,9 @@ const shadeJob = createPanelShadeJob()
 const card = createPanelCard({ onClose: () => selectPanel(null), onAssumptions: setAssumptions, onRetry: retryClimate })
 ui.cardSlot.appendChild(card.el)
 const planSummary = document.createElement('div')
-planSummary.className = 'editor-box planSummary'
+planSummary.className = 'editor-cluster planSummary'
 planSummary.hidden = true
-planSummary.innerHTML = '<h4>Selected panel</h4><p></p><button type="button">Open in Panels</button>'
+planSummary.innerHTML = '<p></p><button type="button">Open in Panels</button>'
 const planSummaryText = planSummary.querySelector('p')!
 planSummary.querySelector('button')!.addEventListener('click', () => setView('panels'))
 let selectedPanel: string | null = null
