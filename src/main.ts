@@ -199,7 +199,7 @@ window.addEventListener('keydown', (e) => {
 sunScene.onProbeScreen((at) => popover.moveTo(at))
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    __sunpatch: { scene: sunScene, selectPanel, shadeJob, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+    __sunpatch: { scene: sunScene, selectPanel, shadeJob, plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
   })
 }
 

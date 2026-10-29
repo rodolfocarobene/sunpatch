@@ -290,7 +290,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .panelCard .heat tbody th { width: 28px; }
 .panelCard .heat td { width: 10px; height: 10px; padding: 0; border-radius: 2px; }
 .panelCard .heat td.night { box-shadow: inset 0 0 0 1px var(--line); }
-.panelCard .heat td.behind, .panelCard .key.behind { background: repeating-linear-gradient(135deg, var(--line) 0 2px, var(--surface) 2px 4px); }
+.panelCard .heat td.behind, .panelCard .key.behind { background: repeating-linear-gradient(135deg, #bfae85 0 1.5px, var(--surface) 1.5px 4px); }
 .panelCard .heat td.sun:hover { outline: 2px solid var(--text); outline-offset: 0; position: relative; }
 .panelCard .heat td.night:hover, .panelCard .heat td.behind:hover { outline: 2px solid var(--muted); }
 .panelCard .heatLegend { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: var(--text-xs); }
@@ -301,13 +301,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .panelCard .key { width: 10px; height: 10px; border-radius: 2px; box-sizing: border-box; border: 1px solid var(--line); }
 .panelCard .key.night { background: transparent; }
 .heatTip {
-  position: fixed; z-index: 30; max-width: 240px; padding: 5px 8px; pointer-events: none; font-size: var(--text-xs); line-height: 1.35;
+  position: fixed; z-index: 30; max-width: 300px; padding: 5px 8px; pointer-events: none; font-size: var(--text-xs); line-height: 1.35;
   color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); box-shadow: var(--shadow);
 }
-/* In the Plan editor the card is the last block of the properties box. */
-.editor-props .panelCard { padding-top: 8px; border-top: 1px solid var(--line); }
-/* In 3D it floats at the right of the view, like the editor's side column. */
-#panelCard3d {
-  position: fixed; top: 12px; right: 12px; z-index: 11; width: 290px; box-sizing: border-box; padding: 10px 12px;
+/* A floating box: at the right of the 3D view, and at the bottom left of the Plan view, under the left panel. */
+#panelCard3d, .editor > .panelCard {
+  position: absolute; z-index: 11; width: 290px; box-sizing: border-box; padding: 10px 12px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
 }
+#panelCard3d { position: fixed; top: 12px; right: 12px; }
+.editor > .panelCard { left: 12px; bottom: 16px; }

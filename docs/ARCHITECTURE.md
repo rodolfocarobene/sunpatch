@@ -54,6 +54,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `walk.ts`, `walk-geom.ts` | First-person controls and HUD; collision, start position and look direction. |
 | `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
+| `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 
 ## The selection model
@@ -177,6 +178,17 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   walk camera) marks the spot and turns the sun map on if it was off; the popover opens when the result is ready,
   and not at all for a spot outside the grid (`probeOutcome` in `probe.ts`). `Esc` goes through `escapeAction`: first
   press closes the popover, the next leaves walk. Entering or leaving walk clears the mark.
+- **Panel shading** (`panel-shade.ts`): per panel, a 3 x 3 grid of samples per module, 2 cm in front of the glass
+  (so the panel's own boxes never shade it), traced with the same BVH on the 21st of each month in 15-minute slots
+  from sunrise to sunset. A sample is lit when cos(incidence) > 0 and the ray hits nothing (slots with the sun
+  behind the panel cost no rays). Output: the 12 x 24 lit-share matrix, annual direct-sun hours (the twelve days
+  scaled by days per month), the unshaded potential, the shading loss (1 - lit / potential, both weighted by
+  cos(incidence), so it is energy and not just hours) and the annual cos x lit sum in hours (`annualCosHours`, for
+  the energy step). `panel-shade-job.ts` runs it in its own worker instance (same `sunmap.worker.ts`, message
+  `shade`), debounced 250 ms and cached per (scene version, panel parameters, place). The card (`panel-card.ts`)
+  shows in the Plan view at the bottom left while a panel is selected and floats at the right in 3D after a plain
+  click on a panel (`scene.onPanelClick`; a click elsewhere or `Esc` closes it). Panel snapping in the editor
+  accepts only exterior edges (`exteriorEdge` in `panel.ts`).
 - `window.__sunpatch` and `window.__sunpatchCamera` are exposed in the dev server only, for the visual checks.
 
 ## Testing

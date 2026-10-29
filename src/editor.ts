@@ -138,7 +138,7 @@ export function createPlanEditor(
   }: {
     autosave?: () => boolean
     onSwitch?: (buildingId: string, at: Point) => void
-    /** Shown at the end of the properties box while a panel is selected (the shading card). */
+    /** The shading card, a box at the bottom left of the Plan view (it shows itself while a panel is selected). */
     panelCard?: HTMLElement
     /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
     onPanelSelect?: (id: string | null) => void
@@ -162,6 +162,7 @@ export function createPlanEditor(
   statusLine.appendChild(statusText)
   side.append(toolbar, props)
   root.append(svg, side, statusLine)
+  if (panelCard) root.append(panelCard)
   container.appendChild(root)
 
   let building: Building | undefined
@@ -771,7 +772,6 @@ export function createPlanEditor(
       field('Lowest edge (m)', numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
       presets,
       hint,
-      ...(panelCard ? [panelCard] : []),
     ]
   }
 
