@@ -1,5 +1,6 @@
 import { FACADE_THICKNESS, SLAB_THICKNESS, ringOf, type Plan, type Window } from './plan'
 import { buildingContains, pickBuilding, type Building, type Point } from './osm'
+import { parseHeights } from './heights'
 
 export type Segment = [Point, Point]
 
@@ -272,7 +273,10 @@ export function validatePlan(value: unknown): { plan: Plan } | { error: string }
     if (!isNum(q.tilt) || q.tilt < 0 || q.tilt > 90) return { error: 'Invalid panel tilt' }
     if (q.count !== undefined && (!Number.isInteger(q.count) || q.count < 1)) return { error: 'Invalid panel count' }
   }
-  return { plan: { ...p, panels } }
+  // Heights are the user's own; entries that are not usable are dropped rather than failing the whole plan.
+  const { heights: _, ...rest } = p
+  const heights = parseHeights(p.heights)
+  return { plan: { ...rest, panels, ...(heights && { heights }) } }
 }
 
 export interface FitRect {

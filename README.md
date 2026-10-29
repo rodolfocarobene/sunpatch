@@ -67,6 +67,12 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    heights. In 3D, **Shift-click** a building to add it to the selection or take it out.
    To work on another building, click it in 3D (it lights up when you point at it), or click a grey neighbour in Plan with the Select tool.
    Your plan is saved first.
+   **Heights.** Many OpenStreetMap buildings have no height, and Sunpatch then assumes 9 m. Those are drawn with
+   faint diagonal stripes (switch it off with *Mark guessed heights*), and pointing at a building tells you where its
+   height came from. To correct one, right-click it in 3D (or press *Edit height* under the selected building's name),
+   enter its height in floors (3 m each) or in metres, and press *Set*. This works for neighbours as well as your own
+   building; *Reset to the data* undoes it. The shadows, the sun map and the panel results follow at once, and the
+   heights are saved with your plan (they are part of its export).
 2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
    OpenStreetMap data. Then:
    - **Outline**: click the corners of your apartment; double-click or click the first point to close it.
@@ -74,7 +80,7 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    - **Wall**: two clicks per interior wall; hold Shift for right angles.
    - **Window**: click on an outline edge. With **Select** you can drag a window along its wall and edit its size.
    - **Building fix**: draw a shape, choose Add or Cut, and set its heights or use a preset such as
-     *Balcony slab on this floor*.
+     *Balcony slab on this floor*. To change how tall a whole building is, right-click it in 3D instead (below).
    - **Panel** (`P`): click to place a solar panel anywhere, inside or outside the outline. Near a wall it snaps and
      faces outward (vertical); elsewhere it faces south at 30 degrees. Drag to move, drag the white dot to turn,
      and set tilt, facing, height and modules in the box (presets: *Balcony railing*, *Roof stand*, *Ground*).
@@ -132,8 +138,10 @@ The sun position and the direct-sun geometry are accurate; how good the result i
 building data.
 
 - Heights come from OpenStreetMap `height` tags when present, otherwise from the number of floors × 3 m,
-  otherwise a 9 m default. The selected building's info box says which one was used. Wrong heights move
-  shadows by metres, so check your neighbours on the map.
+  otherwise a 9 m default. The selected building's info box says which one was used, and buildings whose height is
+  a guess are striped in 3D. Wrong heights move shadows by metres, so correct the ones that matter near you
+  (right-click a building in 3D). Your own heights are exact only as far as you know them: 3 m a floor is a
+  typical value, not a measurement.
 - Roofs are flat, and trees, awnings and most balconies are missing. Use **Building fix** for the ones that matter
   to you.
 - The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to

@@ -56,7 +56,7 @@ const HELP: Record<Tool, string> = {
   outline: 'Click the corners of your apartment; click the first point or double-click to close. Esc cancels.',
   wall: 'Click where the wall starts, then where it ends; each next click continues from there. Click the first point to close, double-click or Esc to stop. Shift snaps to 0 or 90 degrees.',
   window: 'Click near an outline edge to add a window, or click a window to select it.',
-  fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees.',
+  fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees. To change a building\'s height, right-click it in 3D (or press Edit height).',
   panel: 'Click to place a solar panel, inside or outside the outline. Near a wall it snaps and faces outward; hold Shift to place it freely.',
 }
 // One short line under the tools for the tools without options, so that row is never an empty gap.

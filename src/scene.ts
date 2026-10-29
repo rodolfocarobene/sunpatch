@@ -58,6 +58,8 @@ import { collectOccluders } from './sunmap-trace'
 import { heatTexels, type Grid } from './sunmap'
 import { along, facing } from './panel'
 import type { SurfaceSample } from './suitability'
+import { hatchedMaterial, hatchStrength } from './hatch'
+import { isGuessed } from './heights'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
@@ -132,7 +134,7 @@ export interface SunScene {
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
   setBuildings(buildings: Building[], selected: Building | string, options?: { keepCamera?: boolean }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
-  setPlan(plan: Plan | null, options?: { close?: boolean }): void
+  setPlan(plan: Plan | null, options?: { close?: boolean; keepView?: boolean }): void
   /** Replaces the trees (local metres, same origin as the buildings); an empty list removes them. */
   setTrees(trees: Tree[]): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
@@ -145,6 +147,12 @@ export interface SunScene {
   resize(): void
   /** Called with the id of the building polygon under a shift-click (not a drag) in the 3D view. */
   onPartClick(handler: (polygonId: string) => void): void
+  /** Shows or hides the stripes on buildings whose height is a guess (on by default); the shapes and shadows are unchanged. */
+  setMarkGuessed(on: boolean): void
+  /** Called as the pointer moves over a building polygon (selected or not) with where it is on screen, and with null when it leaves. */
+  onBuildingHover(handler: (polygon: Building | null, at: { x: number; y: number }) => void): void
+  /** Called with the polygon under a right-click (not a drag): its id and where it is on screen. */
+  onBuildingMenu(handler: (polygonId: string, at: { x: number; y: number }) => void): void
   /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
   onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
   /** Called with the id of the panel under a plain click (not a drag) in 3D, or null for a click on anything else. */
@@ -805,7 +813,7 @@ export function createScene(container: HTMLElement): SunScene {
     selectedIds = highlighted
     const selectedPieces = selected?.members ?? buildings.filter((b) => highlighted.has(b.id) && !hidden.has(b.id))
     const addMesh = (b: Building, color: number) => {
-      const mesh = new Mesh(buildingGeometry(b), new MeshStandardMaterial({ color }))
+      const mesh = new Mesh(buildingGeometry(b), isGuessed(b) ? hatchedMaterial(color) : new MeshStandardMaterial({ color }))
       mesh.castShadow = true
       mesh.receiveShadow = true
       world.add(mesh)
@@ -872,13 +880,13 @@ export function createScene(container: HTMLElement): SunScene {
     if (selectedBuilding && !keepCamera) frameBuilding(selectedBuilding)
   }
 
-  function setPlan(next: Plan | null, { close = false } = {}) {
+  function setPlan(next: Plan | null, { close = false, keepView = false } = {}) {
     const selected = selectedBuilding
     const accepted = next && selected && next.buildingId === selected.id ? next : null
     const first = accepted && !plan
     plan = accepted
     populate()
-    if (accepted && selected && first) {
+    if (accepted && selected && first && !keepView) {
       cutaway = true
       applyCutaway()
       frameApartment(selected, accepted, close)
@@ -1023,7 +1031,10 @@ export function createScene(container: HTMLElement): SunScene {
   let hoverId: string | undefined
   let hoverEvent: { x: number; y: number } | undefined
   let hoverFrame = 0
+  let hoverHandler: ((polygon: Building | null, at: { x: number; y: number }) => void) | undefined
+  let hoverShown: Building | undefined
   function clearHover() {
+    hoverShown = undefined
     hoverEvent = undefined
     if (hoverMark) {
       scene.remove(hoverMark)
@@ -1036,6 +1047,7 @@ export function createScene(container: HTMLElement): SunScene {
       hoverMark = undefined
     }
     hoverId = undefined
+    hoverHandler?.(null, { x: 0, y: 0 })
     if (!walking) renderer.domElement.style.cursor = ''
   }
   function showHover(polygon: Building) {
@@ -1061,13 +1073,21 @@ export function createScene(container: HTMLElement): SunScene {
   function updateHover() {
     hoverFrame = 0
     if (!hoverEvent || walking || !buildingClick) return
-    const found = polygonAt(hoverEvent.x, hoverEvent.y)
-    if (!found || selectedIds.has(found.polygon.id)) {
-      if (hoverId !== undefined) clearHover()
+    const at = hoverEvent
+    const found = polygonAt(at.x, at.y)
+    if (!found) {
+      if (hoverShown) clearHover()
       return
     }
-    showHover(found.polygon)
-    renderer.domElement.style.cursor = 'pointer'
+    if (selectedIds.has(found.polygon.id)) {
+      if (hoverId !== undefined) clearHover()
+      hoverEvent = at
+    } else {
+      showHover(found.polygon)
+      renderer.domElement.style.cursor = 'pointer'
+    }
+    hoverShown = found.polygon
+    hoverHandler?.(found.polygon, at)
   }
   renderer.domElement.addEventListener('pointermove', (e) => {
     if (walking || e.buttons !== 0) {
@@ -1076,6 +1096,15 @@ export function createScene(container: HTMLElement): SunScene {
     }
     hoverEvent = { x: e.clientX, y: e.clientY }
     if (!hoverFrame) hoverFrame = requestAnimationFrame(updateHover)
+  })
+  // A right-click (without dragging, which pans) on a building asks for its height; the browser menu stays away.
+  let menuClick: ((polygonId: string, at: { x: number; y: number }) => void) | undefined
+  renderer.domElement.addEventListener('contextmenu', (e) => {
+    if (walking || !menuClick) return
+    e.preventDefault()
+    if (!isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    const found = polygonAt(e.clientX, e.clientY)
+    if (found) menuClick(found.polygon.id, { x: e.clientX, y: e.clientY })
   })
   renderer.domElement.addEventListener('pointerleave', clearHover)
   renderer.domElement.addEventListener('pointerdown', clearHover)
@@ -1182,6 +1211,15 @@ export function createScene(container: HTMLElement): SunScene {
     },
     onPanelClick(handler) {
       panelClick = handler
+    },
+    setMarkGuessed(on) {
+      hatchStrength.value = on ? 1 : 0
+    },
+    onBuildingHover(handler) {
+      hoverHandler = handler
+    },
+    onBuildingMenu(handler) {
+      menuClick = handler
     },
     sceneVersion: () => version,
     occluders: () => collectOccluders([world, treeGroup]),

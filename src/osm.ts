@@ -10,7 +10,7 @@ export interface Origin {
   lon: number
 }
 
-export type HeightSource = 'tag' | 'levels' | 'default' | 'tile' | 'parts'
+export type HeightSource = 'tag' | 'levels' | 'default' | 'tile' | 'parts' | 'user'
 
 export interface Building {
   /** e.g. "way/123", "relation/45" or "relation/45#2" when a relation has several outer rings. */
@@ -21,6 +21,8 @@ export interface Building {
   height: number
   heightSource: HeightSource
   levels?: number
+  /** Set when the user's own height replaced the data (heights.ts): what the data said, for the label and Reset. */
+  dataHeight?: { height: number; heightSource: HeightSource }
   tags: Record<string, string>
   /**
    * Set on a selection made of several OSM polygons (see block.ts): `outer`/`holes` are their union and

@@ -18,7 +18,10 @@ import {
 import { carrySelection, restoreSelection, selectBuilding, togglePart } from './block'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { nextStep } from './next-step'
-import { defaultPlan, floorBase, rebasePlan, type Plan } from './plan'
+import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
+import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
+import { createHeightPopover, createHoverTip } from './height-popover'
+import { hoverLines } from './building-line'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
@@ -51,6 +54,9 @@ const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
+// Building heights: the hover note says where a height came from, the right-click box (or the building line's button) changes it.
+const hoverTip = createHoverTip(document.body)
+const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
 let sunResult: SunMapResult | undefined
 /** Where the user clicked, kept so the popover can be redone when the result changes. */
@@ -438,6 +444,7 @@ function escape() {
 }
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || walking) return
+  if (heightPopover.isOpen) return heightPopover.hide()
   if (suitPopover.open) return closeSuitPick()
   if (view === 'panels' && selectedPanel && !popover.open) selectPanel(null)
   else escape() // walking, the walk controls report Esc themselves
@@ -490,6 +497,14 @@ sunScene.onPanelClick((id) => {
 })
 ui.onPanelPick(selectPanel)
 sunScene.onPartClick(togglePartAt)
+sunScene.onBuildingHover((b, at) => (b && !heightPopover.isOpen ? hoverTip.show(hoverLines(b), at) : hoverTip.hide()))
+sunScene.onBuildingMenu((id, at) => openHeight(site?.buildings.find((b) => b.id === id), at))
+ui.onEditHeight((at) => {
+  const mine = site?.selected
+  // A merged selection edits the part that sets its height: the tallest.
+  openHeight(mine?.members ? [...mine.members].sort((a, b) => b.height - a.height)[0] : mine, at)
+})
+ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
 sunScene.onBuildingClick((id, at) => switchTo(id, at))
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
@@ -518,7 +533,7 @@ function walkInside() {
 /** The Panels view needs a plan to hold the panels: the whole floor, as when the editor opens first. */
 function ensurePlan(): boolean {
   if (!site) return false
-  if (!plan) setPlan(defaultPlan(site.selected, site.origin))
+  if (!plan) setPlan(newPlan())
   return true
 }
 
@@ -526,6 +541,8 @@ function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   view = next
+  heightPopover.hide()
+  hoverTip.hide()
   const scene3d = next === '3d' || next === 'panels' // one scene and one camera for both
   app.hidden = !scene3d
   mapView.setVisible(next === 'map')
@@ -584,18 +601,22 @@ function pick(lat: number, lon: number) {
 }
 
 /** The building being worked on, with the scene data the plan editor needs. */
-let site: { buildings: Building[]; selected: Building; origin: Origin } | undefined
+let site: { /** The polygons as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
+/** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
+let heights: HeightOverrides = {}
+const sameHeights = (a: HeightOverrides | undefined, b: HeightOverrides | undefined) => JSON.stringify(a ?? {}) === JSON.stringify(b ?? {})
 
-function show(buildings: Building[], selected: Building, origin: Origin, keepCamera: boolean) {
+function show(raw: Building[], picked: Building, origin: Origin, keepCamera: boolean) {
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
-  site = { buildings, selected, origin }
+  const saved = carried || exampleMode ? null : savedPlanFor(picked)
+  heights = keepKnown({ ...heights, ...(carried ? plan!.heights : saved?.heights) }, raw) ?? {}
+  const buildings = applyHeights(raw, heights)
+  const selected = reselect(buildings, picked)
+  site = { raw, buildings, selected, origin }
   sunScene.setBuildings(buildings, selected, { keepCamera })
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
-  else {
-    const saved = exampleMode ? null : savedPlanFor(selected)
-    setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
-  }
+  else setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
   ui.setBuildingPicked(true)
@@ -659,7 +680,7 @@ function togglePartAt(polygonId: string) {
     return
   }
   edited = true
-  show(site.buildings, result.selected, site.origin, true)
+  show(site.raw, result.selected, site.origin, true)
   if (plan && !exampleMode) savePlan(plan)
 }
 
@@ -677,22 +698,69 @@ const withoutKey = ({ originalId: _, ...plan }: Plan & { originalId: string }): 
 /** Opens the editor on the selected building; false when there is none yet. */
 function openEditor(): boolean {
   if (!site) return false
-  const { buildings, selected, origin } = site
+  const { buildings, selected } = site
   const hidden = hiddenOutlines(buildings)
   const own = new Set(selected.sources ?? [selected.id])
   const c = ringCentroid(selected.outer)
   const neighbors = buildings.filter(
     (b) => !own.has(b.id) && !hidden.has(b.id) && distanceToRing(b.outer, c) < NEIGHBOR_RADIUS_M,
   )
-  if (!plan) setPlan(defaultPlan(selected, origin))
+  if (!plan) setPlan(newPlan())
   editor.open(selected, neighbors, plan!, selectedPanel)
   return true
 }
 
-/** close: frame the apartment itself rather than the whole building. */
-function setPlan(next: Plan | undefined, close = false) {
+/** The whole floor of the selected building, carrying the heights set so far. */
+function newPlan(): Plan {
+  return { ...defaultPlan(site!.selected, site!.origin), ...(Object.keys(heights).length ? { heights } : {}) }
+}
+
+/** Opens the Height box for a polygon (right-click, or the building line's button). */
+function openHeight(b: Building | undefined, at: { x: number; y: number }) {
+  if (!b) return
+  hoverTip.hide()
+  heightPopover.open(b, at)
+}
+
+/**
+ * Sets (or, with null, resets) one polygon's height. The scene, shadows, sun map, panel shading and suitability follow
+ * through the scene version; the overrides are saved with the plan, which is created for the selected building if
+ * there is none yet. A changed selected building gets its storey height and floor count from the new height.
+ */
+function setHeight(id: string, override: HeightOverride | null) {
+  if (!site) return
+  const next = { ...heights }
+  if (override) next[id] = override
+  else delete next[id]
+  heights = next
+  const before = site.selected
+  site.buildings = applyHeights(site.raw, heights)
+  site.selected = reselect(site.buildings, before)
+  const now = site.selected
+  sunScene.setBuildings(site.buildings, now, { keepCamera: true })
+  ui.setBuildingInfo(now)
+  const { heights: _, ...rest } = plan ?? newPlan()
+  let updated: Plan = { ...rest, ...(Object.keys(heights).length ? { heights } : {}) }
+  if (before.height !== now.height || before.minHeight !== now.minHeight || before.levels !== now.levels) {
+    updated = { ...updated, floorHeight: defaultFloorHeight(now), floor: Math.min(updated.floor, levelCount(now) - 1) }
+  }
+  setPlan(updated, false, true)
+  if (!exampleMode) savePlan(updated)
+  chip.done(override ? 'Height set. Right-click the building to reset it.' : 'Height reset to the data.')
+}
+
+/** close: frame the apartment itself rather than the whole building; keepView leaves the camera where it is. */
+function setPlan(next: Plan | undefined, close = false, keepView = false) {
+  // A plan imported with other heights brings them in.
+  if (next && site && !sameHeights(next.heights, heights)) {
+    heights = keepKnown(next.heights, site.raw) ?? {}
+    site.buildings = applyHeights(site.raw, heights)
+    site.selected = reselect(site.buildings, site.selected)
+    sunScene.setBuildings(site.buildings, site.selected, { keepCamera: true })
+    ui.setBuildingInfo(site.selected)
+  }
   plan = next
-  sunScene.setPlan(next ?? null, { close })
+  sunScene.setPlan(next ?? null, { close, keepView })
   ui.setPlanActive(next !== undefined)
   ui.setNextStep(nextStep(next, site?.selected))
 }
