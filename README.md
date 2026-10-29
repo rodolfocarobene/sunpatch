@@ -80,9 +80,11 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
    you walk.
 4. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
-   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. `H` (or the
-   **Floors above** button) hides or shows the floors above; it is the same switch as in the 3D panel. Hidden,
-   you see the sky through the ceiling, and the sun still comes in only through the windows.
+   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The small panel on
+   the left keeps **Hide floors above** (`H`) and **Sun map** (`M`) with its legend; they are the same switches as
+   in the 3D panel. Hidden, you see the sky through the ceiling, and the sun still comes in only through the
+   windows. Click the floor to read the hours of direct sun at that spot (this turns the sun map on if it is
+   off); the first `Esc` closes that box, the next one leaves the walk.
 
 Times are in your browser's time zone, so use the app from the same time zone as the place you are looking at.
 

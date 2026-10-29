@@ -41,6 +41,9 @@ export interface UI {
   onCutaway(listener: (hidden: boolean) => void): void
   /** The "Sun map" switch (off by default): hear about changes. */
   onSunMap(listener: (on: boolean) => void): void
+  /** Sets or flips the switch (the walk panel, the M key and a floor click in walk mode use these). */
+  setSunMap(on: boolean): void
+  toggleSunMap(): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
   /** Disables the Walk button while walking. */
@@ -103,8 +106,8 @@ export function createUI(
     <section data-views="3d">
       <button id="nextStep" class="primary" type="button"></button>
       <div id="aptTools" hidden>
-        <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
-        <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map</label>
+        <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
+        <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
         <div id="sunMapLegend" hidden></div>
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
@@ -158,10 +161,11 @@ export function createUI(
   const sunMap = $<HTMLInputElement>('sunMap')
   const legend = $('sunMapLegend')
   let sunMapListener: ((on: boolean) => void) | undefined
-  sunMap.addEventListener('change', () => {
+  const applySunMap = () => {
     legend.hidden = !sunMap.checked
     sunMapListener?.(sunMap.checked)
-  })
+  }
+  sunMap.addEventListener('change', applySunMap)
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
@@ -354,6 +358,15 @@ export function createUI(
     },
     onSunMap(fn) {
       sunMapListener = fn
+    },
+    setSunMap(on) {
+      if (sunMap.checked === on) return
+      sunMap.checked = on
+      applySunMap()
+    },
+    toggleSunMap() {
+      sunMap.checked = !sunMap.checked
+      applySunMap()
     },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
