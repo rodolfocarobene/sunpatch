@@ -3,7 +3,7 @@ import fixture from '../fixtures/nasa-power-milan.json'
 import type { Building } from './osm'
 import type { Panel } from './plan'
 import { DAYS_IN_MONTH, shadePanel, yearSlots } from './panel-shade'
-import { panelInside, referenceEnergy, referenceLine, verdict } from './panel-verdict'
+import { panelInside, referenceEnergy, referenceLine, totalsLine, verdict } from './panel-verdict'
 import { DEFAULT_ASSUMPTIONS, panelEnergy, type PanelEnergy } from './solar'
 import { buildBvh } from './sunmap-trace'
 import { parseClimate } from './weather'
@@ -90,5 +90,17 @@ describe('reference panel', () => {
   it('words the line with local weather, or on a clear sky without it', () => {
     expect(referenceLine(ref, true, MILAN.lat)).toMatch(/^An unshaded panel of the same size, tilted 30° and facing south, would make about [\d,]+0 kWh a year here\.$/)
     expect(referenceLine(ref, false, -33.9)).toMatch(/facing north.*a year here on a clear sky\.$/)
+  })
+})
+
+describe('totals line', () => {
+  it('adds up the panels outside the building and says how many were left out', () => {
+    const line = totalsLine([{ kwh: 400, inside: false }, { kwh: 600, inside: false }, { kwh: 90, inside: true }], true)
+    expect(line).toBe('2 panels · ~1,000 kWh a year with local weather (1 panel inside the building not counted)')
+  })
+
+  it('does not mention exclusions when every panel counts, and says so when none does', () => {
+    expect(totalsLine([{ kwh: 1234, inside: false }], false)).toBe('1 panel · ~1,234 kWh a year, clear sky')
+    expect(totalsLine([{ kwh: 90, inside: true }], true)).toBe('No panels counted: 1 panel inside the building.')
   })
 })

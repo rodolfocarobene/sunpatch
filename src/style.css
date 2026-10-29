@@ -114,7 +114,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel button.link { padding: 0; font-weight: 600; text-align: left; background: none; border: 0; color: var(--link); text-decoration: underline; }
 #panel button.link:hover:not(:disabled) { background: none; color: var(--accent-strong); }
 #aptTools { display: flex; flex-direction: column; gap: 10px; }
-#panel .groupHead { margin: 0 0 2px; font-size: var(--text-xs); font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+#panel .groupHead { margin: 0 0 2px; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
 /* Sun map legend: the colour ramp with hours and share of daylight, under its switch. */
 #sunMapLegend, #suitLegend { display: flex; flex-direction: column; gap: 4px; padding: var(--box-pad); font-size: var(--text-sm); background: var(--bg-band); border-radius: var(--radius-control); }
 #sunMapLegend .legendHead, #suitLegend .legendHead { font-weight: 600; }
@@ -127,7 +127,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #sunMapLegend .legendMore summary { cursor: pointer; color: var(--muted); font-size: var(--text-xs); }
 #sunMapLegend .legendMore[open] { display: flex; flex-direction: column; gap: 4px; }
 #sunMapLegend .legendHint, #suitLegend .legendHint { margin-top: 4px; color: var(--muted); font-size: var(--text-xs); }
-#suitLegend .legendUnit { align-self: flex-end; color: var(--muted); font-size: var(--text-xs); }
+#suitLegend .legendTicks.scaled { position: relative; height: 1.3em; }
+#suitLegend .legendTicks.scaled span { position: absolute; top: 0; transform: translateX(-50%); }
+#suitLegend .legendUnit { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* Popover on a clicked floor point: the answer, then the day strip with the sunny intervals on it. */
 #spotPopover, #suitPopover {
@@ -151,9 +153,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #spotPopover .spotNow { position: absolute; top: 2px; width: 2px; height: 18px; margin-left: -1px; background: var(--text); border-radius: 1px; box-shadow: 0 0 0 1px var(--surface); }
 #spotPopover .spotAxis { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
-/* Panel suitability popover: the surface, the yearly figure per kWp, and the button that places a panel. */
+/* Panel suitability popover: same box as the one above (answer, detail), then the button that places a panel. */
 #suitPopover { width: 284px; }
-#suitPopover .suitFigure { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 #suitPopover .suitPlace {
   margin-top: 6px; padding: 8px 10px; font: inherit; font-weight: 600; cursor: pointer; color: var(--on-accent);
   background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-control);
@@ -265,11 +266,11 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #walkCompass .compassBand { position: relative; width: 100%; height: 47px; overflow: hidden; }
 #walkCompass .compassStrip { position: absolute; top: 0; left: 0; height: 100%; will-change: transform; }
-#walkCompass .tick { position: absolute; top: 22px; width: 1px; height: 5px; background: currentColor; opacity: 0.45; }
-#walkCompass .tick.half { height: 8px; opacity: 0.6; }
+#walkCompass .tick { font-style: normal; position: absolute; top: 22px; width: 1px; height: 5px; background: currentColor; opacity: 0.45; }
+#walkCompass .tick.half { height: 8px; opacity: 0.75; }
 #walkCompass .tick.main { height: 10px; opacity: 0.9; }
 #walkCompass .tick b { position: absolute; top: 100%; left: 0; transform: translateX(-50%); padding-top: 2px; font-weight: 600; line-height: 1; }
-#walkCompass .tick.half b { font-weight: 500; font-size: 10px; opacity: 0.75; }
+#walkCompass .tick.half b { font-weight: 500; font-size: var(--text-xs); font-style: normal; opacity: 0.9; }
 #walkCompass .compassAhead {
   position: absolute; top: 22px; left: calc(50% - 1px); width: 2px; height: 10px; background: var(--surface); opacity: 0.85;
 }
@@ -346,7 +347,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .panelCard .realBar { fill: var(--accent-strong); }
 .panelCard .idealMark { fill: none; stroke: var(--muted); stroke-opacity: 0.55; stroke-width: 1; }
 .panelCard .baseline { stroke: var(--line); stroke-width: 1; }
-.panelCard .barLabel { font-size: 10px; fill: var(--muted); }
+.panelCard .barLabel { font-size: var(--text-xs); fill: var(--muted); }
 .panelCard .energyBars rect[tabindex]:hover { fill: rgba(31, 42, 55, 0.06); }
 .panelCard .energyKey { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; color: var(--muted); font-size: var(--text-xs); }
 .panelCard .energyKey span { display: inline-flex; align-items: center; gap: 5px; }
@@ -366,4 +367,5 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* The compact summary of the selected panel, in the editor's right column under its properties. */
 .planSummary { padding-top: 10px; border-top: 1px solid var(--line); }
 .planSummary p { margin: 0; line-height: 1.4; }
+.planSummary p.warn { padding: var(--box-pad); font-weight: 650; color: var(--warn); background: var(--warn-bg); border-radius: var(--radius-control); }
 .planSummary button { align-self: flex-start; }

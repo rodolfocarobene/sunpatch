@@ -264,30 +264,46 @@ export function panelFor(s: SurfaceSample, id: string): Panel {
   return { ...base, x: s.x, z: s.z, elevation: s.kind === 'roof' ? s.top : GROUND_ELEVATION, tilt: ROOF_TILT, azimuth: s.azimuth }
 }
 
-/** Ramp end and legend ticks for these figures (kWh/kWp/yr): the top is the best spot rounded up to 250, ticks every 250 or 500. */
-export function rampScale(values: ArrayLike<number>): { max: number; ticks: number[] } {
-  let best = 0
-  for (let i = 0; i < values.length; i++) best = Math.max(best, values[i])
-  const max = Math.max(500, Math.ceil(best / 250) * 250)
-  const step = max > 1250 ? 500 : 250
-  const top = Math.ceil(max / step) * step
-  return { max: top, ticks: Array.from({ length: top / step + 1 }, (_, i) => i * step) }
+/**
+ * The colour scale for these figures (kWh/kWp/yr), stretched to what the spots really make: it runs from the worst
+ * spot to the best, each rounded outward to 50, instead of from 0 to a round top. `ticks` are the round values
+ * inside it (every 50 to 500, by how wide it is) for the legend to label; `observed` is the exact range.
+ */
+export function rampScale(values: ArrayLike<number>): { min: number; max: number; ticks: number[]; observed: [number, number] } {
+  let lo = Infinity
+  let hi = -Infinity
+  for (let i = 0; i < values.length; i++) {
+    lo = Math.min(lo, values[i])
+    hi = Math.max(hi, values[i])
+  }
+  if (!Number.isFinite(lo)) lo = hi = 0
+  lo = Math.max(0, lo)
+  hi = Math.max(lo, hi)
+  const min = Math.floor(lo / 50) * 50
+  const max = Math.max(Math.ceil(hi / 50) * 50, min + 50)
+  const span = max - min
+  const step = span > 1500 ? 500 : span > 600 ? 250 : span > 250 ? 100 : 50
+  const ticks: number[] = []
+  for (let t = Math.ceil(min / step) * step; t <= max; t += step) ticks.push(t)
+  return { min, max, ticks, observed: [lo, hi] }
 }
 
-/** sRGB (0..1) of the sun-map ramp for a figure, `max` kWh/kWp/yr being its light end. */
-export function suitabilityColor(kwh: number, max: number): [number, number, number] {
-  return sunColor((Math.max(0, kwh) / max) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
+/** sRGB (0..1) of the sun-map ramp for a figure: `min` kWh/kWp/yr is its dark end, `max` its light end. */
+export function suitabilityColor(kwh: number, min: number, max: number): [number, number, number] {
+  return sunColor(((Math.max(min, kwh) - min) / (max - min)) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
 }
 
-const round10 = (n: number): string => (Math.round(n / 10) * 10).toLocaleString('en')
+export const round10 = (n: number): string => (Math.round(n / 10) * 10).toLocaleString('en')
 
-/** The popover's lines: the surface, the figure, and what it rests on. */
-export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { title: string; figure: string; detail: string } {
+/** The legend's range line, "650 \u2026 1,400 kWh a year per kW" (the true worst and best spot, not the rounded ticks). */
+export const rangeText = ([lo, hi]: [number, number]): string => `${round10(lo)} \u2026 ${round10(hi)} kWh a year per kW`
+
+/** The popover's lines, as in the sun map's: the answer first, then what the surface is and what the figure rests on. */
+export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { headline: string; detail: string } {
   const loss = e.shadingShare > 0 && e.shadingShare < 0.005 ? '<1%' : `${Math.round(e.shadingShare * 100)}%`
   const basis = e.weather === undefined ? 'clear sky, no weather data' : `with local weather (ideal ${round10(e.ideal)})`
   return {
-    title: surfaceLabel(s),
-    figure: `~${round10(e.weather ?? e.ideal)} kWh a year per kW of panels`,
-    detail: `${basis} · shading loss ${loss}`,
+    headline: `About ${round10(e.weather ?? e.ideal)} kWh a year per kW`,
+    detail: `${surfaceLabel(s)} \u00b7 ${basis} \u00b7 shading loss ${loss}`,
   }
 }

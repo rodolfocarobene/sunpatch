@@ -86,26 +86,28 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. The bar at the bottom holds the date (Winter,
    Equinox, Summer and Today chips, or any date), the time slider with its daylight strip, **Play** and where the
    sun is. Keep **Hide floors above** on to see inside.
-   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend is one line from 0 h to
-   6 h+; *Share of daylight* opens the percentages). The left panel names the building on one line, for example
-   *Relation 36488 · 9 m · 3 levels*, with its OSM link; **Location and accuracy** is folded away. Click a spot on the floor to read its hours and times, for example *3 h 10 min of
-   direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
-   recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
-   you walk.
+   Tick **Sun map** to colour the floor by hours of direct sun on that date. The legend is one line from 0 h to
+   6 h+; *Share of daylight* opens the percentages. Click a spot on the floor to read its hours and times, for
+   example *3 h 10 min of direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it.
+   Changing the date recomputes the map (a few seconds, in the background); moving the time slider does not.
+   The map stays on while you walk.
+   The left panel names the building on one line, for example *Relation 36488 · 9 m · 3 levels*, with its OSM
+   link. **Location and accuracy** is folded away.
    Panels are drawn and cast shadows here too, but the solar controls live in the Panels tab.
 4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
    time do not matter here: everything is a year).
    - **Panel suitability**: tick it to colour the outside of the building and its surroundings by the yearly energy a
-   panel would make there, in kWh a year for each kW of panels (the legend has the scale). The facade is sampled every metre (panels
+   panel would make there, in kWh a year for each kW of panels. The colours stretch over the range found around your building, and the legend
+   gives that range, for example *650 … 1,400 kWh a year per kW*. The facade is sampled every metre (panels
    vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
    2 m grid; roofs and ground use a 30 degree stand facing south (north in the southern hemisphere). It takes a
    few seconds to a minute for a big building (a progress bar shows), runs only when ticked, and is kept for
    the same scene and place. Click a spot for its figure with local weather, the ideal clear-sky one and the loss to
    shading, and press **Place a panel here** to add a panel with the matching preset to your plan, selected so its
-   card opens. The floors above stay visible while the map shows (so the facade and roof have something behind
-   them), and it is exclusive with **Sun map**. Esc closes the popover. It switches off when you leave the tab.
+   card opens. The camera stays where you left it; if the building is out of view the legend offers **Frame the
+   building**. The floors above stay visible while the map shows (the legend says so), and it is exclusive with **Sun map**. Esc closes the popover. It switches off when you leave the tab.
    - **Your panels**: a list with each panel's yearly energy and the total, for example *3 panels, ~1,050 kWh a
-     year with local weather*. Click a row, or a panel in the view, to open its card. Add panels with **Place a panel
+     year with local weather*. A panel inside the building is listed as excluded and not counted in the total. Click a row, or a panel in the view, to open its card. Add panels with **Place a panel
      here** or with the Panel tool in Plan.
    - **The card** leads with one sentence, for example *About 568 kWh a year with local weather, 76% of the ideal.
      Shading costs under 1%.*, and a yardstick: what an unshaded panel of the same size, tilted 30 degrees and facing

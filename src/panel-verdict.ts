@@ -14,6 +14,23 @@ export const SHADE_WARNING_LOSS = 0.95
 export const panelInside = (panel: Panel, building: Building): boolean =>
   panel.elevation < building.height && buildingContains(building, { x: panel.x, z: panel.z })
 
+/** What the Panels list says in place of a yearly figure for a panel inside the building. */
+export const EXCLUDED_INSIDE = 'excluded (inside the building)'
+
+/**
+ * The totals line over the panels' yearly kWh. A panel inside the building is not counted (its figure is the sun
+ * of a buried panel, which is meaningless), and the line says how many were left out.
+ */
+export function totalsLine(panels: { kwh: number; inside: boolean }[], weather: boolean): string {
+  const counted = panels.filter((p) => !p.inside)
+  const left = panels.length - counted.length
+  const plural = (n: number) => `${n} ${n === 1 ? 'panel' : 'panels'}`
+  const note = left > 0 ? ` (${plural(left)} inside the building not counted)` : ''
+  if (counted.length === 0) return `No panels counted: ${plural(left)} inside the building.`
+  const sum = counted.reduce((t, p) => t + p.kwh, 0)
+  return `${plural(counted.length)} \u00b7 ~${Math.round(sum).toLocaleString('en')} kWh a year${weather ? ' with local weather' : ', clear sky'}${note}`
+}
+
 export interface Verdict {
   sentence: string
   /** True when the sentence is a warning: the panel is inside the building or almost always in shade. */

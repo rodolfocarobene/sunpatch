@@ -169,6 +169,10 @@ export interface SunScene {
   onSuitabilityScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
   /** Called with the index of the sample under a plain click (not a drag) while the map shows, or null for a click anywhere else. */
   onSuitabilityClick(handler: (index: number | null) => void): void
+  /** While the map shows: whether the selected building is in view; the handler hears each change. The camera is never moved for the map. */
+  onBuildingInView(handler: (inView: boolean) => void): void
+  /** Frames the whole selected building (the legend's "Frame the building"). */
+  frameSelected(): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
   setProbe(at: { x: number; z: number } | null): void
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
@@ -291,7 +295,7 @@ export function createScene(container: HTMLElement): SunScene {
   scene.add(treeGroup)
 
   const hemi = new HemisphereLight(0xdfe9f5, 0x7d8a6c, 0.35)
-  const ambient = new AmbientLight(0xfff3e0, 0.1)
+  const ambient = new AmbientLight(0xfff3e0, 0.12)
   scene.add(hemi, ambient)
 
   const sunLight = new DirectionalLight(0xfff4e0, 3)
@@ -334,7 +338,7 @@ export function createScene(container: HTMLElement): SunScene {
     sunDisc.material.color.copy(SUN_LOW).lerp(SUN_WHITE, Math.min(1, Math.max(0, (sun.altitudeDeg - 2) / 10)))
     daylight = t
     applyGlow()
-    hemi.intensity = 0.05 + 0.45 * t
+    hemi.intensity = 0.07 + 0.55 * t
     sunLight.intensity = aptLight.intensity = 3 * Math.min(1, sun.altitudeDeg / 5)
   }
 
@@ -720,6 +724,25 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   // Where the chosen quad is on screen, so its popover can follow while the camera moves.
+  // Whether the building is in view: its middle is on screen and the camera is not much farther than the framing distance.
+  let viewHandler: ((inView: boolean) => void) | undefined
+  let viewShown: boolean | undefined
+  const viewPoint = new Vector3()
+  function reportBuildingView() {
+    if (!viewHandler) return
+    let inView = true
+    if (suitOn && !walking && selectedBuilding) {
+      const { c, dist } = buildingFraming(selectedBuilding)
+      viewPoint.set(c.x, selectedBuilding.height / 2, c.z)
+      const far = camera.position.distanceTo(viewPoint) > dist * 3
+      viewPoint.project(camera)
+      inView = !far && viewPoint.z < 1 && Math.abs(viewPoint.x) < 0.9 && Math.abs(viewPoint.y) < 0.9
+    }
+    if (inView === viewShown) return
+    viewShown = inView
+    viewHandler(inView)
+  }
+
   const suitScreen = new Vector3()
   function reportSuitMark() {
     if (!suitHandler) return
@@ -799,13 +822,15 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
-  function frameBuilding(b: Building, onlyIfClose = false) {
+  function buildingFraming(b: Building) {
     const c = ringCentroid(b.outer)
     let half = 5
     for (const p of b.outer) half = Math.max(half, Math.abs(p.x - c.x), Math.abs(p.z - c.z))
-    const dist = Math.max(40, half * 3 + b.height)
-    // The framing distance along its own direction is dist * 1.1 (0.6, 0.5, 0.8 of it).
-    if (onlyIfClose && camera.position.distanceTo(new Vector3(c.x, b.height / 2, c.z)) > dist * 0.6) return
+    return { c, dist: Math.max(40, half * 3 + b.height) }
+  }
+
+  function frameBuilding(b: Building) {
+    const { c, dist } = buildingFraming(b)
     frame(
       new Vector3(c.x + dist * 0.6, b.height / 2 + dist * 0.5, c.z + dist * 0.8),
       new Vector3(c.x, b.height / 2, c.z),
@@ -1130,6 +1155,7 @@ export function createScene(container: HTMLElement): SunScene {
     for (const g of glassMeshes) g.visible = true
     reportProbe()
     reportSuitMark()
+    reportBuildingView()
   }
   renderer.setAnimationLoop(render)
   // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
@@ -1170,8 +1196,13 @@ export function createScene(container: HTMLElement): SunScene {
     setSuitabilityVisible(on) {
       suitOn = on
       applyCutaway()
-      // The map is about the outside: from close to the apartment (the usual view) step back to see the whole building.
-      if (on && selectedBuilding && !walking) frameBuilding(selectedBuilding, true)
+    },
+    onBuildingInView(handler) {
+      viewHandler = handler
+      viewShown = undefined
+    },
+    frameSelected() {
+      if (selectedBuilding && !walking) frameBuilding(selectedBuilding)
     },
     setSuitabilityMark(index) {
       suitIndex = index

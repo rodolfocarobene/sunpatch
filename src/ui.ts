@@ -6,6 +6,7 @@ import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
+import { rangeText } from './suitability'
 import { buildingLine } from './building-line'
 
 const GUIDE_KEY = 'sunpatch.guide'
@@ -27,7 +28,7 @@ export type SunMapStatus =
 
 export type SuitabilityStatus =
   | { kind: 'computing'; progress: number; updating?: boolean }
-  | { kind: 'ready'; max: number; ticks: number[]; weather: boolean; count: number }
+  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; weather: boolean; count: number }
   | { kind: 'error'; message: string }
 
 export interface PanelList {
@@ -65,6 +66,9 @@ export interface UI {
   onSuitability(listener: (on: boolean) => void): void
   setSuitability(on: boolean): void
   setSuitabilityStatus(status: SuitabilityStatus): void
+  /** Shows the legend's "Frame the building" button (the building is out of view) and hears its press. */
+  setSuitabilityFrame(visible: boolean): void
+  onSuitabilityFrame(listener: () => void): void
   /** The Panels view's list: one row per panel and the total line (null while the panels are still analysed). */
   setPanelList(list: PanelList): void
   /** A click on a row of the list. */
@@ -84,8 +88,6 @@ export interface UI {
   setMinutes(minutes: number): void
   /** Called after every sun update with the date and time, the day strip's CSS background and the place the sun was computed for. */
   onChange(listener: (when: Date, sun: SunDirection, strip: string, place: { lat: number; lon: number }) => void): void
-  /** Called when Play starts or stops. */
-  onPlaying(listener: (playing: boolean) => void): void
 }
 
 export function createUI(
@@ -155,6 +157,7 @@ export function createUI(
       <div class="field">
         <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
         <div id="suitLegend" hidden></div>
+        <button id="suitFrame" class="link" type="button" hidden>Frame the building</button>
       </div>
       <div id="panelList">
         <p id="panelTotals" class="hint" hidden></p>
@@ -220,9 +223,13 @@ export function createUI(
   sunMap.addEventListener('change', applySunMap)
   const suit = $<HTMLInputElement>('suit')
   const suitLegend = $('suitLegend')
+  const suitFrame = $('suitFrame')
+  let suitFrameListener: (() => void) | undefined
+  suitFrame.addEventListener('click', () => suitFrameListener?.())
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
     suitLegend.hidden = !suit.checked
+    if (!suit.checked) suitFrame.hidden = true
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
@@ -284,7 +291,6 @@ export function createUI(
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
   let listener: ((when: Date, sun: SunDirection, strip: string, place: { lat: number; lon: number }) => void) | undefined
-  let playListener: ((playing: boolean) => void) | undefined
 
   function currentDate(): Date | null {
     if (!date.value) return null
@@ -366,7 +372,6 @@ export function createUI(
       return
     }
     play.textContent = 'Pause'
-    playListener?.(true)
     playStep()
     timer = window.setInterval(playStep, 50)
   })
@@ -374,7 +379,6 @@ export function createUI(
     window.clearInterval(timer)
     timer = undefined
     play.textContent = 'Play'
-    playListener?.(false)
   }
 
   for (const el of [lat, lon, date, time]) el.addEventListener('input', refresh)
@@ -485,6 +489,12 @@ export function createUI(
     setSuitabilityStatus(status) {
       suitLegend.innerHTML = suitabilityLegendHtml(status)
     },
+    setSuitabilityFrame(visible) {
+      suitFrame.hidden = !visible || !suit.checked
+    },
+    onSuitabilityFrame(fn) {
+      suitFrameListener = fn
+    },
     setPanelList({ items, selected, total }) {
       const totalEl = $('panelTotals')
       totalEl.hidden = total === null
@@ -530,9 +540,6 @@ export function createUI(
       time.value = String(snapMinutes(minutes))
       refresh()
     },
-    onPlaying(fn) {
-      playListener = fn
-    },
     onChange(fn) {
       listener = fn
       refresh()
@@ -571,14 +578,14 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
     return `<span class="legendHead" role="status">${head}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
-  const top = status.ticks[status.ticks.length - 1]
-  const tick = (t: number) => `<span>${t.toLocaleString('en')}${t === top ? '+' : ''}</span>`
+  const at = (t: number) => (((t - status.min) / (status.max - status.min)) * 100).toFixed(1)
+  const tick = (t: number) => `<span style="left:${at(t)}%">${t.toLocaleString('en')}</span>`
   return (
     `<span class="legendHead">Energy a year for each kW of panels, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
-    `<div class="legendTicks">${status.ticks.map(tick).join('')}</div>` +
-    `<span class="legendUnit muted">kWh a year per kW</span>` +
-    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Click one for details.</span>`
+    `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
+    `<span class="legendUnit">${rangeText(status.observed)}</span>` +
+    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Colours span the range found here. The whole building is shown, floors above the apartment included. Click a spot for details.</span>`
   )
 }
 
@@ -614,10 +621,4 @@ export function sunParts(sun: SunDirection, tail = 'above the horizon'): { where
   if (sun.altitudeDeg <= 0) return { where: 'Sun below the horizon', height: '' }
   const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
   return { where: `Sun in the ${dir}`, height: `${sun.altitudeDeg.toFixed(0)}\u00b0 ${tail}` }
-}
-
-/** Plain-language sun position; `tail` ends the sentence after the altitude in degrees. */
-export function sunSentence(sun: SunDirection, tail = 'above the horizon'): string {
-  const { where, height } = sunParts(sun, tail)
-  return height ? `${where}, ${height}` : where
 }
