@@ -181,33 +181,70 @@ export interface ApartmentGeometry {
   addedAbove: BufferGeometry[]
 }
 
+interface Ranges {
+  lower?: [number, number]
+  /** The part of the apartment's own storey that is not the apartment (the rest of the floor). */
+  storey?: [number, number]
+  upper?: [number, number]
+}
+
+/**
+ * Where one piece of the building is solid around the apartment storey. `extend` lets the piece reach the
+ * apartment's ceiling even when its mapped height falls short (the tallest piece always does).
+ */
+function rangesAt(m: Building, base: number, floorHeight: number, extend: boolean): Ranges {
+  const top = base + floorHeight
+  const ceilingBottom = top - SLAB_THICKNESS
+  const height = extend ? Math.max(m.height, top) : m.height
+  const range = (a: number, b: number): [number, number] | undefined => (b - a > EPS ? [a, b] : undefined)
+  // A piece that starts at the floor keeps a thin slab below it, like the ground floor of a plain building.
+  const startsAtFloor = Math.abs(m.minHeight - base) <= EPS
+  const lowerBottom = m.minHeight < base - EPS ? m.minHeight : startsAtFloor ? base - SLAB_THICKNESS : base
+  return {
+    lower: range(lowerBottom, Math.min(base - FLOOR_SKIN, height)),
+    storey: range(Math.max(base, m.minHeight), Math.min(ceilingBottom, height)),
+    upper: range(Math.max(ceilingBottom, m.minHeight), height),
+  }
+}
+
 /** Vertical extents of the lower block and the upper block around the apartment storey. */
 export function remainderRanges(b: Building, plan: Plan): { lower: [number, number]; upper?: [number, number] } {
-  const base = floorBase(b, plan)
-  const top = base + plan.floorHeight
-  const lowerBottom = base - b.minHeight > EPS ? b.minHeight : base - SLAB_THICKNESS
-  const upperTop = Math.max(b.height, top)
-  return {
-    lower: [lowerBottom, base - FLOOR_SKIN],
-    upper: upperTop - (top - SLAB_THICKNESS) > EPS ? [top - SLAB_THICKNESS, upperTop] : undefined,
-  }
+  const { lower, upper } = rangesAt(b, floorBase(b, plan), plan.floorHeight, true)
+  return { lower: lower ?? [b.minHeight, b.minHeight], upper }
 }
 
 const extrudePiece = (p: Piece) => extrudeRings(p.outer, p.holes, p.bottom, p.top)
 
-/** All geometry of the selected building with the apartment carved out and the plan's edits applied; scene coordinates. */
+/** The pieces that are drawn: the selection's members, or the building itself. */
+export const piecesOf = (b: Building): Building[] => b.members ?? [b]
+
+/**
+ * All geometry of the selected building with the apartment carved out and the plan's edits applied; scene
+ * coordinates. A selection made of several polygons (`members`) is cut piece by piece, each with its own
+ * footprint and heights, around the one apartment outline. Whatever lies above the apartment's ceiling
+ * slab goes to `ceiling` (hidden by the cutaway), whichever piece it belongs to.
+ */
 export function apartmentGeometry(b: Building, plan: Plan): ApartmentGeometry {
   const base = floorBase(b, plan)
   const top = base + plan.floorHeight
-  const { lower, upper } = remainderRanges(b, plan)
   const cuts = cutsOf(plan.edits)
   // Cuts through the apartment storey spare the apartment's own footprint (its walls follow the outline).
   const apartment: Polygon = [toPairs(plan.outline.outer), ...plan.outline.holes.map(toPairs)]
   const blockCuts = sparing(cuts, apartment, base, top)
-  const block = ([y0, y1]: [number, number]) => carve(b.outer, b.holes, y0, y1, blockCuts).map(extrudePiece)
-  const shell = block(lower)
-  for (const p of restOfFloorPolygons(b, plan)) {
-    shell.push(...carve(p.outer, p.holes, base, top - SLAB_THICKNESS, cuts).map(extrudePiece))
+  const pieces = piecesOf(b)
+  const tallest = pieces.reduce((a, c) => (c.height > a.height ? c : a), pieces[0])
+  const shell: BufferGeometry[] = []
+  const ceiling: BufferGeometry[] = []
+  for (const m of pieces) {
+    const { lower, storey, upper } = rangesAt(m, base, plan.floorHeight, m === tallest)
+    const block = ([y0, y1]: [number, number]) => carve(m.outer, m.holes, y0, y1, blockCuts).map(extrudePiece)
+    if (lower) shell.push(...block(lower))
+    if (storey) {
+      for (const p of restOfFloorPolygons(m, plan)) {
+        shell.push(...carve(p.outer, p.holes, storey[0], storey[1], cuts).map(extrudePiece))
+      }
+    }
+    if (upper) ceiling.push(...block(upper))
   }
   const { walls, glass } = facadeWalls(plan, b)
   const ceilingBottom = top - SLAB_THICKNESS
@@ -215,7 +252,7 @@ export function apartmentGeometry(b: Building, plan: Plan): ApartmentGeometry {
   const prism = (e: (typeof adds)[number]) => extrudeRings(e.outline, [], e.bottom, e.top)
   return {
     shell,
-    ceiling: upper ? block(upper) : [],
+    ceiling,
     floor: extrudeRings(plan.outline.outer, plan.outline.holes, base - FLOOR_SKIN, base),
     walls: [...walls, ...interiorWalls(plan, b)],
     glass,
