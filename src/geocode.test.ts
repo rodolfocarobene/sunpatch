@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { buildingAt, polygonFeature, searchUrl, viewFor, type GeoHit } from './geocode'
+import arbe from '../fixtures/nominatim-via-arbe-34.json'
+import murat from '../fixtures/nominatim-via-murat-60.json'
+import {
+  buildingAt,
+  highlightFeature,
+  hitLabel,
+  isStreetLevel,
+  numberMatch,
+  polygonFeature,
+  rankHits,
+  requestedHouseNumber,
+  searchUrl,
+  viewFor,
+  type GeoHit,
+} from './geocode'
 
 const base: GeoHit = { lat: '45', lon: '9', display_name: 'x' }
 
@@ -60,5 +74,59 @@ describe('buildingAt', () => {
   it('snaps to a building a few metres away, but not to a far one', () => {
     expect(buildingAt([merged], 9.00105, 45.00013)?.polygon[0][0]).toEqual([9.001, 45])
     expect(buildingAt([merged], 9.0005, 45.001)).toBeNull()
+  })
+})
+
+describe('house numbers', () => {
+  // Real Nominatim answer for "via Arbe 34 Milano": three pieces of the street, no house number 34.
+  const arbeHits = arbe as unknown as GeoHit[]
+  const house = (n: string, over: Partial<GeoHit> = {}): GeoHit => ({
+    ...base, category: 'place', type: 'house', address: { house_number: n, road: 'Via Arbe' }, ...over,
+  })
+
+  it('reads the house number from the query, not the postcode', () => {
+    expect(requestedHouseNumber('via Arbe 34 Milano')).toBe('34')
+    expect(requestedHouseNumber('via Roma 12/b, Milano')).toBe('12/b')
+    expect(requestedHouseNumber('via Roma 12b 20125 Milano')).toBe('12b')
+    expect(requestedHouseNumber('Duomo Milano')).toBeUndefined()
+    expect(requestedHouseNumber('20122 Milano')).toBeUndefined()
+  })
+
+  it('asks Nominatim for the address details used to compare numbers', () => {
+    expect(new URL(searchUrl('via Arbe 34')).searchParams.get('addressdetails')).toBe('1')
+  })
+
+  it('recognises the fixture answer as streets without a house number (the via Arbe 34 bug)', () => {
+    expect(arbeHits.length).toBeGreaterThan(0)
+    for (const hit of arbeHits) {
+      expect(isStreetLevel(hit)).toBe(true)
+      expect(numberMatch(hit, '34')).toBe('street')
+      expect(hitLabel(hit, 'via Arbe 34 Milano')).toBe('street only, no house number 34 in the data')
+    }
+    for (const hit of murat as unknown as GeoHit[]) expect(numberMatch(hit, '60')).toBe('street')
+  })
+
+  it('outlines a street as a line and never as a building', () => {
+    const feature = highlightFeature(arbeHits[0])
+    expect(feature?.geometry.type).toBe('LineString')
+    expect(highlightFeature(house('34'))).toBeNull()
+  })
+
+  it('ranks the exact house first, then other numbers, then bare streets', () => {
+    const street = arbeHits[0]
+    const hits = [street, house('36'), house('34'), { ...base, category: 'amenity', type: 'cafe' }]
+    const ranked = rankHits(hits, 'via Arbe 34 Milano')
+    expect(ranked.map((h) => numberMatch(h, '34'))).toEqual(['exact', 'none', 'other', 'street'])
+    expect(hitLabel(ranked[0], 'via Arbe 34')).toBe('house number 34')
+    expect(hitLabel(ranked[2], 'via Arbe 34')).toBe('house number 36, not 34')
+  })
+
+  it('matches 12b and 12/B as the same number', () => {
+    expect(numberMatch(house('12/B'), '12b')).toBe('exact')
+  })
+
+  it('keeps Nominatim order when the query has no number', () => {
+    expect(rankHits(arbeHits, 'via Arbe Milano')).toBe(arbeHits)
+    expect(hitLabel(arbeHits[0], 'via Arbe Milano')).toBe('highway / tertiary')
   })
 })

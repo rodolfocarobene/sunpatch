@@ -35,9 +35,10 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 | `main.ts` | App state and wiring: views (Map / Plan / 3D), picking, OSM refinement, plan loading. |
 | `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play), status chip. |
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
-| `map.ts`, `geocode.ts` | MapLibre map, Nominatim search results, found-building highlight, tile buildings accessor. |
+| `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview. |
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
+| `block.ts` | The selection model: merges the polygons of one building (parts, relation rings, address, overlap) into the selected `Building` with `members` and `sources`. |
 | `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights, picking helpers. |
 | `footprint.ts` | Extrudes footprints into three.js geometry. |
 | `sun.ts` | Sun direction vector from SunCalc, compass names. |
@@ -47,6 +48,25 @@ time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 | `edits.ts` | Building fixes: carving cuts per height range and adding prisms (`polygon-clipping`). |
 | `scene.ts` | three.js scene: buildings, lights, shadows, cutaway, sun disc, sky, two-pass apartment rendering, walk mode. |
 | `walk.ts`, `walk-geom.ts` | First-person controls and HUD; collision, start position and look direction. |
+
+## The selection model
+
+One real building is often several OSM polygons (an outline plus `building:part`s with their own heights, the
+outer rings of a multipolygon, a footprint mapped twice). `selectBuilding` in `src/block.ts` turns the clicked
+polygon into one selected `Building`:
+
+- `outer`/`holes` are the union of the footprints (the plan editor snaps to it and "Whole floor" uses it);
+  `height`/`minHeight`/`levels` summarise the pieces (tallest piece, lowest start).
+- `members` are the pieces that are drawn, each with its own footprint and heights; `sources` lists every polygon
+  merged in, including an outline that is only the footprint of its parts (not drawn).
+- Merge rules: same relation; same `addr:street` + `addr:housenumber`; parts lying in an outline; overlapping
+  outlines; a stray part joins the neighbour it shares the longest wall (4 m or more) with. Buildings that merely
+  touch are not merged (a Milan perimeter block would become one selection); different addresses never merge.
+- `id` is the id of the largest outline, so it does not depend on which polygon was clicked. Plans saved under any
+  merged polygon's id are still found (`savedPlanFor` in `main.ts`).
+- `apartment.ts` cuts every member around the one apartment outline; whatever of any member lies above the ceiling
+  slab goes to the cutaway group.
+- A lone polygon is returned unchanged, with no `members`/`sources`.
 
 ## The plan model
 

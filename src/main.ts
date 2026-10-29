@@ -9,11 +9,11 @@ import {
   parseOverpass,
   project,
   ringCentroid,
-  snapBuilding,
   unproject,
   type Building,
   type Origin,
 } from './osm'
+import { selectBuilding } from './block'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { nextStep } from './next-step'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
@@ -103,12 +103,12 @@ function pick(lat: number, lon: number) {
   const clicked = { lat, lon }
   // Instant preview from the vector tiles already on the map.
   const features = mapView.getTileBuildings()
-  const hit = snapBuilding(tileBuildings(features, clicked, RADIUS_M), project(lat, lon, clicked))
+  const hit = selectBuilding(tileBuildings(features, clicked, RADIUS_M), project(lat, lon, clicked))
   last = { clicked }
   if (hit) {
     const origin = unproject(ringCentroid(hit.outer), clicked)
     const buildings = tileBuildings(features, origin, RADIUS_M)
-    const selected = buildings.find((b) => b.id === hit.id)!
+    const selected = selectBuilding(buildings, project(lat, lon, origin))!
     last.origin = origin
     show(buildings, selected, origin, false)
     mapView.setLoading(false)
@@ -129,7 +129,7 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
   sunScene.setBuildings(buildings, selected.id, { keepCamera })
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id })
   else {
-    const saved = exampleMode ? null : loadSavedPlan(selected.id)
+    const saved = exampleMode ? null : savedPlanFor(selected)
     setPlan(saved ? rebasePlan(saved, origin) : undefined)
   }
   ui.setLocation(origin.lat, origin.lon)
@@ -141,14 +141,24 @@ function show(buildings: Building[], selected: Building, origin: Origin, keepCam
 
 const NEIGHBOR_RADIUS_M = 60
 
+/** A plan saved on the building, or on any polygon that is now merged into it (older plans used the clicked one). */
+function savedPlanFor(b: Building): Plan | null {
+  for (const id of [b.id, ...(b.sources ?? [])]) {
+    const saved = loadSavedPlan(id)
+    if (saved) return { ...saved, buildingId: b.id }
+  }
+  return null
+}
+
 /** Opens the editor on the selected building; false when there is none yet. */
 function openEditor(): boolean {
   if (!site) return false
   const { buildings, selected, origin } = site
   const hidden = hiddenOutlines(buildings)
+  const own = new Set(selected.sources ?? [selected.id])
   const c = ringCentroid(selected.outer)
   const neighbors = buildings.filter(
-    (b) => b.id !== selected.id && !hidden.has(b.id) && distanceToRing(b.outer, c) < NEIGHBOR_RADIUS_M,
+    (b) => !own.has(b.id) && !hidden.has(b.id) && distanceToRing(b.outer, c) < NEIGHBOR_RADIUS_M,
   )
   if (!plan) setPlan(defaultPlan(selected, origin))
   editor.open(selected, neighbors, plan!)
@@ -174,7 +184,7 @@ async function refine({ clicked, origin }: Pick, token: number) {
     let sceneOrigin = origin
     if (!sceneOrigin) {
       // No preview: centre on the building found, as the preview would have.
-      const first = snapBuilding(parseOverpass(elements, clicked).buildings, project(clicked.lat, clicked.lon, clicked))
+      const first = selectBuilding(parseOverpass(elements, clicked).buildings, project(clicked.lat, clicked.lon, clicked))
       if (first) sceneOrigin = unproject(ringCentroid(first.outer), clicked)
     }
     if (!sceneOrigin) {
@@ -182,7 +192,7 @@ async function refine({ clicked, origin }: Pick, token: number) {
       return
     }
     const { buildings } = parseOverpass(elements, sceneOrigin)
-    const selected = snapBuilding(buildings, project(clicked.lat, clicked.lon, sceneOrigin))
+    const selected = selectBuilding(buildings, project(clicked.lat, clicked.lon, sceneOrigin))
     if (!selected) {
       // Nothing in OSM under the click: the preview stays.
       if (hasPreview) chip.done('Detailed OSM data loaded (no OSM building at this point)')

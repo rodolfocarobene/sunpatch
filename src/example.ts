@@ -1,3 +1,4 @@
+import { mergeSelection } from './block'
 import { buildingContains, parseOverpass, ringCentroid, unproject, type Building, type Origin, type OverpassElement, type Point } from './osm'
 import { defaultPlan, type Plan } from './plan'
 import { yawOf } from './walk-geom'
@@ -56,7 +57,7 @@ export function buildExample(elements: OverpassElement[]): Example {
   if (!first) throw new Error('example building missing from the fixture')
   const origin = unproject(ringCentroid(first.outer), EXAMPLE_NEAR)
   const { buildings } = parseOverpass(elements, origin)
-  const selected = buildings.find((b) => b.id === first.id)!
+  const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!)
   return { buildings, selected, origin, plan: examplePlan(selected, origin) }
 }
 

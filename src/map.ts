@@ -1,7 +1,7 @@
 import { type GeoJSONSource, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import { buildingAt, hitLabel, isBuildingLike, polygonFeature, searchUrl, viewFor, type GeoHit, type TileBuilding } from './geocode'
+import { buildingAt, highlightFeature, hitLabel, isBuildingLike, isStreetLevel, rankHits, searchUrl, viewFor, type GeoHit, type TileBuilding } from './geocode'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
 // elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
@@ -106,6 +106,13 @@ export function createMapView(
   }
 
   function pickPopup(hit: GeoHit) {
+    if (isStreetLevel(hit)) {
+      // The point is the middle of a street piece, not a house: do not offer it as the building.
+      const note = document.createElement('p')
+      note.textContent = 'This is the street, not a house. Click the building on the map.'
+      note.style.cssText = 'margin: 0; padding-right: 18px; max-width: 200px' // keeps the text clear of the close button
+      return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(note)
+    }
     const button = document.createElement('button')
     button.textContent = 'Use this building'
     button.addEventListener('click', (ev) => {
@@ -145,14 +152,14 @@ export function createMapView(
     results.replaceChildren()
   }
 
-  function showResults(hits: GeoHit[]) {
+  function showResults(hits: GeoHit[], q: string) {
     results.replaceChildren(...hits.map((hit) => {
       const li = document.createElement('li')
       li.tabIndex = 0
       const name = document.createElement('span')
       name.textContent = hit.display_name
       const kind = document.createElement('small')
-      kind.textContent = hitLabel(hit)
+      kind.textContent = hitLabel(hit, q)
       li.append(name, kind)
       const choose = () => { closeResults(); goTo(hit) }
       li.addEventListener('click', choose)
@@ -161,15 +168,15 @@ export function createMapView(
     }))
     results.hidden = false
   }
-
   function goTo(hit: GeoHit) {
     clearFound()
     const token = found
     const lngLat: [number, number] = [Number(hit.lon), Number(hit.lat)]
     marker.setLngLat(lngLat).setPopup(pickPopup(hit)).addTo(map).togglePopup()
-    const polygon = polygonFeature(hit)
-    if (polygon && !isBuildingLike(hit)) setHighlight(polygon)
-    else highlightBuildingUnder(lngLat, token, polygon)
+    // A street is outlined as a line: snapping to the building nearest to it would show some other house.
+    const outline = highlightFeature(hit)
+    if (outline && (isStreetLevel(hit) || !isBuildingLike(hit))) setHighlight(outline)
+    else highlightBuildingUnder(lngLat, token, outline)
     const view = viewFor(hit)
     if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18 })
     else map.flyTo({ center: lngLat, zoom: view.zoom })
@@ -196,7 +203,7 @@ export function createMapView(
         setStatus(`No place found for "${q}".`, 'error')
         return
       }
-      showResults(hits)
+      showResults(rankHits(hits, q), q)
       setStatus('Choose a result to go there.')
     } catch (err) {
       setStatus(`Place search failed (${(err as Error).message}).`, 'error')

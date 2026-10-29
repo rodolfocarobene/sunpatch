@@ -20,6 +20,13 @@ export interface Building {
   heightSource: HeightSource
   levels?: number
   tags: Record<string, string>
+  /**
+   * Set on a selection made of several OSM polygons (see block.ts): `outer`/`holes` are their union and
+   * the heights summarise them. The pieces that are drawn keep their own footprint and heights; `sources`
+   * lists the ids of every polygon merged in, including outlines that are only a footprint for their parts.
+   */
+  members?: Building[]
+  sources?: string[]
 }
 
 interface LatLon {

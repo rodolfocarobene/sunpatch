@@ -15,6 +15,7 @@ export interface GeoHit {
   category?: string
   type?: string
   addresstype?: string
+  address?: { house_number?: string; road?: string }
   boundingbox?: [string, string, string, string] // south, north, west, east
   geojson?: { type: string; coordinates: unknown }
 }
@@ -25,7 +26,7 @@ export function searchUrl(q: string, bounds?: [number, number, number, number], 
     q,
     format: 'jsonv2',
     limit: '6',
-    addressdetails: '0',
+    addressdetails: '1',
     polygon_geojson: '1',
     polygon_threshold: '0.00001',
   })
@@ -58,8 +59,64 @@ export function polygonFeature(hit: GeoHit): PolygonFeature | null {
   return { type: 'Feature', properties: {}, geometry: g }
 }
 
-export function hitLabel(hit: GeoHit): string {
-  return [hit.category, hit.type].filter(Boolean).join(' / ')
+/** House number typed in a query ("via Arbe 34 Milano" -> "34", "via Roma 12/b" -> "12/b"); postcodes do not count. */
+export function requestedHouseNumber(q: string): string | undefined {
+  const tokens = q.split(/[\s,]+/).filter((t) => /^\d{1,4}([a-z]|\/[a-z0-9]{1,2})?$/i.test(t))
+  return tokens[tokens.length - 1]
+}
+
+const normalNumber = (n: string) => n.toLowerCase().replace(/[\s/]/g, '')
+
+/** A street, not a house: Nominatim falls back to the street when it does not know the number. */
+export function isStreetLevel(hit: GeoHit): boolean {
+  return !hit.address?.house_number && (hit.category === 'highway' || hit.addresstype === 'road')
+}
+
+export type NumberMatch = 'exact' | 'other' | 'street' | 'none'
+
+/** How a hit relates to the house number asked for: its own number, another number, the bare street, or no number to compare. */
+export function numberMatch(hit: GeoHit, number: string | undefined): NumberMatch {
+  if (!number) return 'none'
+  const own = hit.address?.house_number
+  if (own) return normalNumber(own) === normalNumber(number) ? 'exact' : 'other'
+  return isStreetLevel(hit) ? 'street' : 'none'
+}
+
+const RANK: Record<NumberMatch, number> = { exact: 0, none: 1, other: 2, street: 3 }
+
+/** With a house number in the query: exact matches first, bare streets last. Otherwise Nominatim's order. */
+export function rankHits(hits: GeoHit[], q: string): GeoHit[] {
+  const number = requestedHouseNumber(q)
+  if (!number) return hits
+  return hits
+    .map((hit, i) => ({ hit, i, rank: RANK[numberMatch(hit, number)] }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map((r) => r.hit)
+}
+
+export function hitLabel(hit: GeoHit, q = ''): string {
+  const number = requestedHouseNumber(q)
+  switch (numberMatch(hit, number)) {
+    case 'exact':
+      return `house number ${hit.address?.house_number}`
+    case 'other':
+      return `house number ${hit.address?.house_number}, not ${number}`
+    case 'street':
+      return `street only, no house number ${number} in the data`
+    default:
+      return [hit.category, hit.type].filter(Boolean).join(' / ')
+  }
+}
+
+/** The outline to draw for a hit: its polygon, or a street's line (never the building nearest to it). */
+export function highlightFeature(hit: GeoHit): PolygonFeature | null {
+  const polygon = polygonFeature(hit)
+  if (polygon) return polygon
+  const g = hit.geojson
+  if (isStreetLevel(hit) && g && (g.type === 'LineString' || g.type === 'MultiLineString')) {
+    return { type: 'Feature', properties: {}, geometry: g }
+  }
+  return null
 }
 
 type Ring = [number, number][]

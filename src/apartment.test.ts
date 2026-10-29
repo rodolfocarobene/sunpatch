@@ -246,3 +246,33 @@ describe('apartmentGeometry', () => {
     expect(g.ceiling).toHaveLength(2)
   })
 })
+
+describe('apartmentGeometry of a selection made of several pieces', () => {
+  // A 21 m wing beside a 6 m wing, and a volume floating above the low one (6 to 12 m).
+  const tall: Building = { ...building, id: 'way/2', outer: rect(0, 0, 10, 6), height: 21 }
+  const low: Building = { ...building, id: 'way/3', outer: rect(10, 0, 20, 6), height: 6 }
+  const floating: Building = { ...building, id: 'way/4', outer: rect(10, 0, 20, 6), minHeight: 6, height: 12 }
+  const merged: Building = {
+    ...building, outer: rect(0, 0, 20, 6), height: 21, members: [tall, low, floating], sources: ['way/2', 'way/3', 'way/4'],
+  }
+  const tops = (list: { computeBoundingBox(): void; boundingBox: any }[]) => list.map((g) => bounds(g).max.y)
+  // Apartment on floor 1 (y 3 to 6) in the tall wing.
+  const g = apartmentGeometry(merged, floorPlan(rect(0, 0, 10, 6)))
+
+  it('sends everything above the ceiling slab to the ceiling, whichever piece it belongs to', () => {
+    expect(tops(g.ceiling).sort((a, b) => a - b)).toEqual([6, 12, 21].map((y) => expect.closeTo(y)))
+    for (const geometry of g.ceiling) expect(bounds(geometry).min.y).toBeGreaterThanOrEqual(6 - SLAB_THICKNESS - 1e-6)
+  })
+
+  it('keeps the low wing visible up to the apartment ceiling', () => {
+    const lowWing = g.shell.filter((s) => bounds(s).min.x >= 10 - 1e-6)
+    expect(lowWing.length).toBeGreaterThan(0)
+    expect(Math.max(...tops(lowWing))).toBeLessThanOrEqual(6 - SLAB_THICKNESS + 1e-6)
+  })
+
+  it('a single building without members is cut exactly as before', () => {
+    const single = apartmentGeometry({ ...building, height: 9 }, floorPlan(rect(0, 0, 5, 6)))
+    expect(single.shell).toHaveLength(2)
+    expect(single.ceiling).toHaveLength(1)
+  })
+})

@@ -97,7 +97,7 @@ const NEIGHBORS: [number, number, number, number, number][] = [
 export interface SunScene {
   update(sun: SunDirection): void
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
-  setBuildings(buildings: Building[], selectedId: string, options?: { keepCamera?: boolean }): void
+  setBuildings(buildings: Building[], selected: Building | string, options?: { keepCamera?: boolean }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
   setPlan(plan: Plan | null, options?: { close?: boolean }): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
@@ -319,6 +319,7 @@ export function createScene(container: HTMLElement): SunScene {
 
   let buildings: Building[] = []
   let selectedId = ''
+  let selectedBuilding: Building | undefined
   let plan: Plan | null = null
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
@@ -450,24 +451,24 @@ export function createScene(container: HTMLElement): SunScene {
     glowMaterials = []
     floorMesh = undefined
     solidMeshes = []
-    const selected = buildings.find((b) => b.id === selectedId)
+    const selected = selectedBuilding
     const hidden = hiddenOutlines(buildings)
-    const highlighted = new Set([selectedId])
-    if (selected && hidden.has(selected.id)) {
+    // A selection merged from several polygons (sources) draws its own pieces (members) instead of them.
+    const highlighted = new Set(selected?.sources ?? [selectedId])
+    if (selected && !selected.sources && hidden.has(selected.id)) {
       for (const p of partsOf(selected, buildings)) highlighted.add(p.id)
     }
-    for (const b of buildings) {
-      if (hidden.has(b.id)) continue
-      const isSelected = highlighted.has(b.id)
-      if (isSelected && plan) continue
-      const mesh = new Mesh(
-        buildingGeometry(b),
-        new MeshStandardMaterial({ color: isSelected ? SELECTED_COLOR : OTHER_COLOR }),
-      )
+    const selectedPieces = selected?.members ?? buildings.filter((b) => highlighted.has(b.id) && !hidden.has(b.id))
+    const addMesh = (b: Building, color: number) => {
+      const mesh = new Mesh(buildingGeometry(b), new MeshStandardMaterial({ color }))
       mesh.castShadow = true
       mesh.receiveShadow = true
       world.add(mesh)
     }
+    for (const b of buildings) {
+      if (!hidden.has(b.id) && !highlighted.has(b.id)) addMesh(b, OTHER_COLOR)
+    }
+    if (!plan) for (const b of selectedPieces) addMesh(b, SELECTED_COLOR)
     if (!selected) return
     if (plan) {
       addApartment(selected, plan)
@@ -515,18 +516,18 @@ export function createScene(container: HTMLElement): SunScene {
     frame(target.clone().addScaledVector(side, dist * 0.7).setY(target.y + dist * 0.7), target)
   }
 
-  function setBuildings(next: Building[], id: string, { keepCamera = false } = {}) {
+  function setBuildings(next: Building[], choice: Building | string, { keepCamera = false } = {}) {
     setExtent(DATA_EXTENT)
     buildings = next
-    selectedId = id
-    if (plan?.buildingId !== id || !next.some((b) => b.id === id)) plan = null
+    selectedBuilding = typeof choice === 'string' ? next.find((b) => b.id === choice) : choice
+    selectedId = selectedBuilding?.id ?? ''
+    if (plan?.buildingId !== selectedId || !selectedBuilding) plan = null
     populate()
-    const selected = next.find((b) => b.id === id)
-    if (selected && !keepCamera) frameBuilding(selected)
+    if (selectedBuilding && !keepCamera) frameBuilding(selectedBuilding)
   }
 
   function setPlan(next: Plan | null, { close = false } = {}) {
-    const selected = buildings.find((b) => b.id === selectedId)
+    const selected = selectedBuilding
     const accepted = next && selected && next.buildingId === selected.id ? next : null
     const first = accepted && !plan
     plan = accepted
@@ -548,7 +549,7 @@ export function createScene(container: HTMLElement): SunScene {
   })
 
   function startWalk(at?: { x: number; z: number }): boolean {
-    const selected = buildings.find((b) => b.id === selectedId)
+    const selected = selectedBuilding
     if (!plan || !selected) return false
     if (!walking) {
       saved.position.copy(camera.position)
