@@ -45,6 +45,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
+import { panelMeshes } from './panel-mesh'
 import { hiddenOutlines, partsOf, pickBuilding, ringCentroid, type Building } from './osm'
 import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
@@ -635,6 +636,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (!selected) return
     if (plan) {
       addApartment(selected, plan)
+      for (const o of panelMeshes(plan.panels)) world.add(o)
       const { c, radius } = apartmentBounds(selected, plan)
       const mid = floorBase(selected, plan) + plan.floorHeight / 2
       aptLight.target.position.set(c.x, mid, c.z)
