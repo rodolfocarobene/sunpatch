@@ -32,6 +32,7 @@ export function panelMeshes(panels: Panel[]): (Mesh | LineSegments)[] {
       mesh.matrixAutoUpdate = false
       mesh.matrix.makeBasis(x, y, z).setPosition(centre)
       mesh.castShadow = true
+      mesh.userData.panelId = p.id
       mesh.receiveShadow = true
       const lines = new LineSegments(new EdgesGeometry(geometry), frame)
       lines.matrixAutoUpdate = false

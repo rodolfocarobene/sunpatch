@@ -130,7 +130,19 @@ export function createPlanEditor(
   container: HTMLElement,
   onChange: (plan: Plan) => void,
   /** autosave() false keeps edits out of localStorage (the built-in example). */
-  { autosave = () => true, onSwitch }: { autosave?: () => boolean; onSwitch?: (buildingId: string, at: Point) => void } = {},
+  {
+    autosave = () => true,
+    onSwitch,
+    panelCard,
+    onPanelSelect,
+  }: {
+    autosave?: () => boolean
+    onSwitch?: (buildingId: string, at: Point) => void
+    /** Shown at the end of the properties box while a panel is selected (the shading card). */
+    panelCard?: HTMLElement
+    /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
+    onPanelSelect?: (id: string | null) => void
+  } = {},
 ): PlanEditor {
   const root = document.createElement('div')
   root.className = 'editor'
@@ -291,11 +303,13 @@ export function createPlanEditor(
     if (!force && props.contains(document.activeElement)) return
     if (!selection) {
       props.hidden = true
+      onPanelSelect?.(null)
       return
     }
     props.hidden = false
     const p = plan
     const sel = selection
+    onPanelSelect?.(sel.kind === 'panel' ? p.panels[sel.index]?.id ?? null : null)
     if (sel.kind === 'viewpoint') {
       const vp = effectiveViewpoint(p)
       const heading = Math.round((((-vp.yaw * 180) / Math.PI) % 360 + 360) % 360)
@@ -757,6 +771,7 @@ export function createPlanEditor(
       field('Lowest edge (m)', numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
       presets,
       hint,
+      ...(panelCard ? [panelCard] : []),
     ]
   }
 

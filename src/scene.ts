@@ -137,6 +137,8 @@ export interface SunScene {
   onPartClick(handler: (polygonId: string) => void): void
   /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
   onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
+  /** Called with the id of the panel under a plain click (not a drag) in 3D, or null for a click on anything else. */
+  onPanelClick(handler: (id: string | null) => void): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
   /** Changes whenever anything that can shade the apartment is rebuilt (buildings, plan, edits) or replaced (trees). */
@@ -782,7 +784,7 @@ export function createScene(container: HTMLElement): SunScene {
   }
   function polygonAt(clientX: number, clientY: number): { polygon: Building; hit: Vector3; dir: Vector3 } | undefined {
     const hit = seenHit(clientX, clientY)
-    if (!hit) return undefined
+    if (!hit || hit.object.userData.panelId) return undefined // a panel is not a building: it opens its card
     // A wall hit lies on the polygon's edge: step a little way along the ray, into the building.
     const dir = raycaster.ray.direction
     const flat = Math.hypot(dir.x, dir.z) || 1
@@ -799,6 +801,13 @@ export function createScene(container: HTMLElement): SunScene {
     if (!found) return
     if (e.shiftKey) partClick?.(found.polygon.id)
     else if (!selectedIds.has(found.polygon.id)) buildingClick?.(found.polygon.id, { x: found.hit.x, z: found.hit.z })
+  })
+
+  // A plain click on a solar panel names it (its card opens); a click on anything else reports null (it closes the card).
+  let panelClick: ((id: string | null) => void) | undefined
+  renderer.domElement.addEventListener('click', (e) => {
+    if (walking || !panelClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    panelClick(seenHit(e.clientX, e.clientY)?.object.userData.panelId ?? null)
   })
 
   // A click on the apartment floor reports its point; a click anywhere else reports null (it closes the popover).
@@ -972,6 +981,9 @@ export function createScene(container: HTMLElement): SunScene {
     },
     onBuildingClick(handler) {
       buildingClick = handler
+    },
+    onPanelClick(handler) {
+      panelClick = handler
     },
     sceneVersion: () => version,
     occluders: () => collectOccluders([world, treeGroup]),
