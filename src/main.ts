@@ -48,8 +48,10 @@ sunScene.setWalkHandlers({
   stepTime: (minutes) => ui.stepTime(minutes),
   togglePlay: () => ui.togglePlay(),
   toggleCutaway: () => ui.toggleCutaway(),
+  look: (yaw) => hud.setYaw(yaw),
 })
 ui.onChange((when, sun, strip) => {
+  hud.setSun(sun)
   hud.setStatus(`${dayLabel(when.getMonth(), when.getDate())} \u00b7 ${sunSentence(sun, 'up')}`)
   hud.setTime(minutesOfDay(when), strip)
 })
