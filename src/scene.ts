@@ -3,6 +3,7 @@ import {
   AmbientLight,
   AdditiveBlending,
   BackSide,
+  BufferAttribute,
   BoxGeometry,
   CanvasTexture,
   CircleGeometry,
@@ -25,6 +26,7 @@ import {
   LineBasicMaterial,
   LineSegments,
   Group,
+  type Intersection,
   DirectionalLight,
   HemisphereLight,
   BufferGeometry,
@@ -53,6 +55,8 @@ import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
 import { collectOccluders } from './sunmap-trace'
 import { heatTexels, type Grid } from './sunmap'
+import { along, facing } from './panel'
+import type { SurfaceSample } from './suitability'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
@@ -88,6 +92,11 @@ const APARTMENT_SHADOW_MAP = 2048
 const SUNMAP_LIFT = 0.012
 const SUNMAP_OPACITY = 0.8
 const SUNMAP_WALK_OPACITY = 0.55
+// Panel suitability overlay: coloured quads a hand's width off the surface they describe (facade quads stand out from
+// the wall, roof and ground quads lie flat above it), a gap between neighbours so cells read as cells.
+const SUIT_LIFT = 0.08
+const SUIT_GAP = 0.08
+const SUIT_OPACITY = 0.92
 const PROBE_COLOR = 0x1f2a37
 const PROBE_RING = 0xfffdf8
 const SKY_DAY = new Color(0x8fbfe8)
@@ -151,6 +160,15 @@ export interface SunScene {
   setSunMap(map: { grid: Grid; minutes: Float32Array } | null): void
   /** Shows or hides the painted sun map (also in first person). */
   setSunMapVisible(on: boolean): void
+  /** Paints the panel suitability map: one quad per sample, coloured by `colors` (sRGB 0..1, three numbers each); null removes it. */
+  setSuitability(map: { samples: SurfaceSample[]; colors: Float32Array } | null): void
+  /** Shows or hides the map (it is hidden in first person). While it shows, the floors above the apartment stay visible so the facade and roof have something behind them. */
+  setSuitabilityVisible(on: boolean): void
+  /** Outlines one sample of the map (null removes it); the handler gets where it is on screen. */
+  setSuitabilityMark(index: number | null): void
+  onSuitabilityScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
+  /** Called with the index of the sample under a plain click (not a drag) while the map shows, or null for a click anywhere else. */
+  onSuitabilityClick(handler: (index: number | null) => void): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
   setProbe(at: { x: number; z: number } | null): void
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
@@ -367,7 +385,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -384,6 +402,14 @@ export function createScene(container: HTMLElement): SunScene {
   let probeMark: Group | undefined
   let probeHandler: ((at: { x: number; y: number; visible: boolean } | null) => void) | undefined
   let probeShown = ''
+  // Panel suitability: the data (kept across rebuilds of the scene), its quads and the outline of the chosen one.
+  let suitOn = false
+  let suitData: { samples: SurfaceSample[]; colors: Float32Array } | null = null
+  let suitMesh: Mesh | undefined
+  let suitMark: Group | undefined
+  let suitIndex: number | null = null
+  let suitHandler: ((at: { x: number; y: number; visible: boolean } | null) => void) | undefined
+  let suitShown = ''
 
   // Faces sit a hair behind their own edge lines so the lines do not flicker.
   function offsetFaces<T extends MeshStandardMaterial>(material: T): T {
@@ -472,12 +498,15 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
+  /** The floors above are hidden only when asked for and the suitability map is not showing (it needs the whole building). */
+  const cutawayNow = (): boolean => cutaway && !(suitOn && !walking)
+
   function applyCutaway() {
     // Still drawn into the shadow map (the depth pass ignores the material), but invisible to the camera.
     // The same in walk mode: with the floors above hidden the ceiling is open to the sky, and the sun still
     // comes in only through the windows because the hidden block keeps casting into the apartment.
     for (const m of [ceilingMaterial, addedAboveMaterial]) {
-      if (m) m.colorWrite = m.depthWrite = !cutaway
+      if (m) m.colorWrite = m.depthWrite = !cutawayNow()
     }
   }
 
@@ -485,7 +514,7 @@ export function createScene(container: HTMLElement): SunScene {
   function showAptLines(on: boolean) {
     for (const { line, kind } of aptLines) {
       const shown =
-        kind === 'ceiling' ? !cutaway : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : kind === 'sunmap' ? sunMapOn : true
+        kind === 'ceiling' ? !cutawayNow() : kind === 'ghost' ? !cutawayNow() && !walking : kind === 'outline' ? !walking : kind === 'sunmap' ? sunMapOn : kind === 'suit' ? suitOn && !walking : true
       line.visible = on && shown
     }
   }
@@ -593,6 +622,122 @@ export function createScene(container: HTMLElement): SunScene {
     probeHandler({ x, y, visible })
   }
 
+  // One quad per sample, vertex-coloured, as an apartment line so the second render pass draws it over the walls it
+  // sits on. Facade quads are vertical (their normal is the sample's facing), the others flat.
+  function suitCorners(q: SurfaceSample): number[] {
+    const h = q.size / 2 - SUIT_GAP / 2
+    if (q.kind === 'facade') {
+      const n = facing(q.azimuth)
+      const r = along(q.azimuth)
+      const at = { x: q.x + n.x * SUIT_LIFT, z: q.z + n.z * SUIT_LIFT }
+      return [-1, 1, 1, -1].flatMap((u, i) => [at.x + r.x * h * u, q.y + h * (i < 2 ? -1 : 1), at.z + r.z * h * u])
+    }
+    const y = q.y + SUIT_LIFT
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].flatMap(([u, v]) => [q.x + h * u, y, q.z + h * v])
+  }
+
+  function disposeMeshes(root: Object3D | undefined) {
+    root?.traverse((o) => {
+      const mesh = o as Mesh
+      if (!mesh.isMesh) return
+      mesh.geometry.dispose()
+      ;(mesh.material as MeshBasicMaterial).dispose()
+    })
+  }
+
+  function removeSuitability() {
+    for (const o of [suitMesh, suitMark]) if (o) world.remove(o)
+    aptLines = aptLines.filter((l) => l.line !== suitMesh && l.line.parent !== suitMark)
+    disposeMeshes(suitMesh)
+    disposeMeshes(suitMark)
+    suitMesh = suitMark = undefined
+    suitShown = ''
+  }
+
+  function paintSuitability() {
+    removeSuitability()
+    if (!suitData) return
+    const { samples, colors } = suitData
+    const positions = new Float32Array(samples.length * 12)
+    const linear = new Float32Array(samples.length * 12)
+    const index = new Uint32Array(samples.length * 6)
+    const c = new Color()
+    samples.forEach((q, i) => {
+      positions.set(suitCorners(q), i * 12)
+      c.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2], SRGBColorSpace)
+      for (let k = 0; k < 4; k++) linear.set([c.r, c.g, c.b], i * 12 + k * 3)
+      index.set([0, 1, 2, 0, 2, 3].map((k) => i * 4 + k), i * 6)
+    })
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    geometry.setAttribute('color', new Float32BufferAttribute(linear, 3))
+    geometry.setIndex(new BufferAttribute(index, 1))
+    suitMesh = new Mesh(
+      geometry,
+      new MeshBasicMaterial({
+        vertexColors: true, transparent: true, opacity: SUIT_OPACITY, depthWrite: false, toneMapped: false, side: DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      }),
+    )
+    // Clicks on it are answered by its own picking (see the click handler), not by the general ones that look through overlays.
+    suitMesh.raycast = () => {}
+    world.add(suitMesh)
+    aptLines.push({ line: suitMesh, kind: 'suit' })
+    paintSuitMark()
+  }
+
+  // A dark ring around a light one on the chosen quad, readable on every colour of the ramp.
+  function paintSuitMark() {
+    if (suitMark) {
+      world.remove(suitMark)
+      aptLines = aptLines.filter((l) => l.line.parent !== suitMark)
+      disposeMeshes(suitMark)
+      suitMark = undefined
+    }
+    suitShown = ''
+    if (suitIndex === null || !suitData?.samples[suitIndex]) return
+    const corners = suitCorners(suitData.samples[suitIndex])
+    const mid = [0, 1, 2].map((k) => (corners[k] + corners[3 + k] + corners[6 + k] + corners[9 + k]) / 4)
+    const ring = (outer: number, inner: number, color: number) => {
+      const pos: number[] = []
+      for (const k of [outer, inner]) for (let v = 0; v < 4; v++) for (let d = 0; d < 3; d++) pos.push(mid[d] + (corners[v * 3 + d] - mid[d]) * k)
+      const idx: number[] = []
+      for (let v = 0; v < 4; v++) idx.push(v, (v + 1) % 4, 4 + v, (v + 1) % 4, 4 + ((v + 1) % 4), 4 + v)
+      const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(pos, 3))
+      geometry.setIndex(idx)
+      const mesh = new Mesh(geometry, new MeshBasicMaterial({ color, side: DoubleSide, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))
+      mesh.renderOrder = 1
+      mesh.raycast = () => {}
+      return mesh
+    }
+    suitMark = new Group()
+    suitMark.add(ring(1.22, 1.02, PROBE_COLOR), ring(1.02, 0.84, PROBE_RING))
+    suitMark.userData.centre = mid
+    world.add(suitMark)
+    for (const child of suitMark.children) aptLines.push({ line: child, kind: 'suit' })
+  }
+
+  // Where the chosen quad is on screen, so its popover can follow while the camera moves.
+  const suitScreen = new Vector3()
+  function reportSuitMark() {
+    if (!suitHandler) return
+    if (!suitMark) {
+      if (suitShown) suitHandler(null)
+      suitShown = ''
+      return
+    }
+    const [x0, y0, z0] = suitMark.userData.centre as number[]
+    suitScreen.set(x0, y0, z0).project(camera)
+    const rect = renderer.domElement.getBoundingClientRect()
+    const x = Math.round((suitScreen.x * 0.5 + 0.5) * rect.width + rect.left)
+    const y = Math.round((-suitScreen.y * 0.5 + 0.5) * rect.height + rect.top)
+    const visible = suitScreen.z < 1 && Math.abs(suitScreen.x) <= 1 && Math.abs(suitScreen.y) <= 1
+    const key = `${x} ${y} ${visible}`
+    if (key === suitShown) return
+    suitShown = key
+    suitHandler({ x, y, visible })
+  }
+
   function removeSunMap() {
     if (overlay) (overlay.material as MeshBasicMaterial).map?.dispose()
     overlay = undefined
@@ -607,6 +752,7 @@ export function createScene(container: HTMLElement): SunScene {
     clearHover()
     removeSunMap()
     clearWorld()
+    suitMesh = suitMark = undefined // cleared with the world; the data is painted again below
     version++
     sceneChange?.()
     apartmentMeshes = new Set()
@@ -616,6 +762,7 @@ export function createScene(container: HTMLElement): SunScene {
     glowMaterials = []
     floorMesh = undefined
     solidMeshes = []
+    paintSuitability()
     const selected = selectedBuilding
     const hidden = hiddenOutlines(buildings)
     // A selection merged from several polygons (sources) draws its own pieces (members) instead of them.
@@ -821,6 +968,19 @@ export function createScene(container: HTMLElement): SunScene {
     floorClick(at)
   })
 
+  // A click on a quad of the suitability map names its sample (the nearer of the quad and whatever the camera sees
+  // first, so a wall or a neighbour in front hides it); a click anywhere else reports null. A drag or double-click is
+  // an orbit or a walk and does nothing here.
+  let suitClick: ((index: number | null) => void) | undefined
+  renderer.domElement.addEventListener('click', (e) => {
+    if (walking || !suitOn || !suitMesh || !suitClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    const front = seenHit(e.clientX, e.clientY) // also aims the raycaster at the pointer
+    const hits: Intersection[] = []
+    Mesh.prototype.raycast.call(suitMesh, raycaster, hits)
+    const quad = hits.sort((a, b) => a.distance - b.distance)[0]
+    suitClick(quad && (!front || quad.distance <= front.distance) ? Math.floor(quad.faceIndex! / 2) : null)
+  })
+
   // Hover cue for switching buildings: a pointer cursor and an amber tint on an unselected building. One raycast
   // per animation frame at most, and none while a button is down (orbit or pan drag) or while walking.
   let hoverMark: Group | undefined
@@ -965,6 +1125,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (twoPass) renderApartmentPass()
     for (const g of glassMeshes) g.visible = true
     reportProbe()
+    reportSuitMark()
   }
   renderer.setAnimationLoop(render)
   // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
@@ -996,6 +1157,26 @@ export function createScene(container: HTMLElement): SunScene {
     },
     setSunMapVisible(on) {
       sunMapOn = on
+    },
+    setSuitability(map) {
+      suitData = map
+      suitIndex = null
+      paintSuitability()
+    },
+    setSuitabilityVisible(on) {
+      suitOn = on
+      applyCutaway()
+    },
+    setSuitabilityMark(index) {
+      suitIndex = index
+      paintSuitMark()
+      if (index === null) reportSuitMark()
+    },
+    onSuitabilityScreen(handler) {
+      suitHandler = handler
+    },
+    onSuitabilityClick(handler) {
+      suitClick = handler
     },
     setProbe(at) {
       probe = at
