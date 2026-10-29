@@ -55,6 +55,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
 | `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it. |
+| `solar.ts`, `weather.ts`, `panel-totals.ts` | Panel energy: clear-sky model and kWh, NASA POWER climate (fetch, parse, cache), analysis of every panel for the totals line. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 
 ## The selection model
@@ -189,6 +190,18 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   shows in the Plan view at the bottom left while a panel is selected and floats at the right in 3D after a plain
   click on a panel (`scene.onPanelClick`; a click elsewhere or `Esc` closes it). Panel snapping in the editor
   accepts only exterior edges (`exteriorEdge` in `panel.ts`).
+- **Panel energy** (`solar.ts`, `weather.ts`): `shadePanel` also sums, per month, the clear-sky irradiation of a
+  representative day: beam = Meinel DNI (1353 x 0.68^(AM^0.678), Kasten-Young air mass) x cos(incidence) x lit share
+  (and the same with nothing in the way), plus isotropic diffuse (DHI = 10% of DNI, sky (1+cos tilt)/2, ground
+  albedo 0.2 x (1-cos tilt)/2). Diffuse is not ray-traced and has no sky-view factor. `panelEnergy` turns that into
+  kWh: irradiation x days per month x area x efficiency x (1 - losses); defaults 21% and 14% (PR 0.86, the PVGIS
+  convention), so a 1.13 x 1.72 m module is about 0.41 kWp. The weather figure is the ideal month times the NASA POWER
+  clear-sky index (ALLSKY / CLRSKY, horizontal), a simple approximation that slightly misstates vertical or shaded
+  panels because clouds cut beam more than diffuse. The index is fetched once per place (0.1 degrees) by
+  `loadClimate` once a plan has panels, kept in memory and localStorage for 30 days, never retried automatically;
+  on failure the card shows the ideal figure with a Retry. PVGIS is not used: it sends no CORS header. Assumptions
+  are edited in the card and recompute without new rays. `panel-totals.ts` runs the shading of every panel through a
+  second job (one at a time) for the totals line in the 3D panel. Tests use `fixtures/nasa-power-milan.json`.
 - `window.__sunpatch` and `window.__sunpatchCamera` are exposed in the dev server only, for the visual checks.
 
 ## Testing

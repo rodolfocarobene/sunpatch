@@ -309,7 +309,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   position: absolute; z-index: 11; width: 290px; box-sizing: border-box; padding: 10px 12px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
 }
-#panelCard3d { position: fixed; top: 12px; right: 12px; }
+#panelCard3d { position: fixed; top: 12px; right: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
 .editor > .panelCard { left: 12px; bottom: 16px; }
 
 /* Panel card: energy. */

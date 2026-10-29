@@ -55,6 +55,7 @@ const popover = createSunMapPopover(app, closeProbe)
 let sunMapOn = false
 let sunResult: SunMapResult | undefined
 /** Where the user clicked, kept so the popover can be redone when the result changes. */
+let plan: Plan | undefined // declared early: the sun callback below can fire before the building is picked
 let probePoint: Point | undefined
 /** The date, strip and place the sun was last computed for; the sun map follows them. */
 let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
@@ -427,7 +428,6 @@ function pick(lat: number, lon: number) {
 
 /** The building being worked on, with the scene data the plan editor needs. */
 let site: { buildings: Building[]; selected: Building; origin: Origin } | undefined
-let plan: Plan | undefined
 
 function show(buildings: Building[], selected: Building, origin: Origin, keepCamera: boolean) {
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
