@@ -32,6 +32,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
@@ -113,6 +114,8 @@ export interface SunScene {
   resize(): void
   /** Called with the id of the building polygon under a shift-click (not a drag) in the 3D view. */
   onPartClick(handler: (polygonId: string) => void): void
+  /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
+  onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
   dispose(): void
@@ -338,6 +341,7 @@ export function createScene(container: HTMLElement): SunScene {
   let glowMaterials: MeshStandardMaterial[] = []
   let floorMesh: Mesh | undefined
   let solidMeshes: Mesh[] = []
+  let selectedIds = new Set<string>()
 
   // Faces sit a hair behind their own edge lines so the lines do not flicker.
   function offsetFaces<T extends MeshStandardMaterial>(material: T): T {
@@ -466,6 +470,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (selected && !selected.sources && hidden.has(selected.id)) {
       for (const p of partsOf(selected, buildings)) highlighted.add(p.id)
     }
+    selectedIds = highlighted
     const selectedPieces = selected?.members ?? buildings.filter((b) => highlighted.has(b.id) && !hidden.has(b.id))
     const addMesh = (b: Building, color: number) => {
       const mesh = new Mesh(buildingGeometry(b), new MeshStandardMaterial({ color }))
@@ -606,12 +611,14 @@ export function createScene(container: HTMLElement): SunScene {
     startWalk({ x: hit.point.x, z: hit.point.z })
   })
 
-  // Shift-click (without dragging) names the building polygon under the cursor, to add it to or remove it from the selection.
+  // A click (without dragging) names the building polygon under the cursor: shift adds it to or removes it from the
+  // selection, a plain click on another building switches to it.
   let partClick: ((polygonId: string) => void) | undefined
+  let buildingClick: ((polygonId: string, at: { x: number; z: number }) => void) | undefined
   let downAt: { x: number; y: number } | undefined
   renderer.domElement.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }))
   renderer.domElement.addEventListener('click', (e) => {
-    if (!e.shiftKey || walking || !partClick || (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5)) return
+    if (walking || !(e.shiftKey ? partClick : buildingClick) || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
     const rect = renderer.domElement.getBoundingClientRect()
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
     raycaster.setFromCamera(ndc, camera)
@@ -626,7 +633,9 @@ export function createScene(container: HTMLElement): SunScene {
     const hidden = hiddenOutlines(buildings)
     const here = buildings.filter((b) => !hidden.has(b.id) && hit.point.y >= b.minHeight - 0.3 && hit.point.y <= b.height + 0.3)
     const polygon = pickBuilding(here, at)
-    if (polygon) partClick(polygon.id)
+    if (!polygon) return
+    if (e.shiftKey) partClick?.(polygon.id)
+    else if (!selectedIds.has(polygon.id)) buildingClick?.(polygon.id, { x: hit.point.x, z: hit.point.z })
   })
 
   function setTrees(trees: Tree[]) {
@@ -715,6 +724,9 @@ export function createScene(container: HTMLElement): SunScene {
     setCutaway,
     onPartClick(handler) {
       partClick = handler
+    },
+    onBuildingClick(handler) {
+      buildingClick = handler
     },
     startWalk,
     stopWalk,

@@ -77,6 +77,11 @@ touch). `selectBuilding` in `src/block.ts` turns the clicked polygon into one se
   saves the plan again when one exists.
 - Tile preview to OSM: tile pieces are flooded the same way. If the user trimmed the preview, `carrySelection` picks
   the OSM polygons that lie mostly inside the previous footprint; otherwise the fill runs again from the click.
+- Switching buildings without the map: a plain click (not a drag, `isClick` in `click.ts`) on an unselected building in 3D,
+  or a click on a grey neighbour in the Plan with the Select tool, calls `switchTo` in `main.ts`. It saves the current
+  plan, then, if the point is within 250 m of the loaded Overpass data (`loaded`), re-parses those elements around the
+  new building and floods again (no request); otherwise it is a map pick (tile preview, then Overpass). The new
+  building's own saved plan opens, or none.
 - `apartment.ts` cuts every member around the one apartment outline, each with its own height and min height;
   whatever of any member lies above the ceiling slab goes to the cutaway group.
 - The `?example=milan` sample keeps Palazzo Reale alone (`ids: [id]`): flooding adds its neighbours and moves the

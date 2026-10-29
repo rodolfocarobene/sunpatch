@@ -57,6 +57,8 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
 1. **Map**: search an address or move the map, then click your building. The app switches to the 3D view.
    Your building is every outline that touches the one you clicked, so it may include neighbours of other
    heights. In 3D, **Shift-click** a building to add it to the selection or take it out.
+   To work on another building, click it in 3D, or click a grey neighbour in Plan with the Select tool.
+   Your plan is saved first.
 2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
    OpenStreetMap data. Then:
    - **Outline**: click the corners of your apartment; double-click or click the first point to close it.
