@@ -112,6 +112,14 @@ export function daylight(day: Date, lat: number, lon: number): Daylight {
   }
 }
 
+/** Minutes of the local day of `d`, as the time slider counts them. */
+export const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes()
+
+/** Snaps minutes to the slider's grid and range (a time picked on the walk slider). */
+export function snapMinutes(minutes: number): number {
+  return Math.max(0, Math.min(DAY_MAX, Math.round(minutes / STEP) * STEP))
+}
+
 /** Slider minutes to start at: now if the sun is up, else solar noon of that day. */
 export function startMinutes(now: Date, lat: number, lon: number): number {
   const current = now.getHours() * 60 + Math.floor(now.getMinutes() / STEP) * STEP

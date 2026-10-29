@@ -1,7 +1,7 @@
 import SunCalc from 'suncalc'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
-import { activePreset, dateValue, daylight, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
+import { activePreset, dateValue, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
 
@@ -36,8 +36,12 @@ export interface UI {
   togglePlay(): void
   /** Sets the date (YYYY-MM-DD) and the time of day in minutes. */
   setWhen(date: string, minutes: number): void
-  /** Called after every sun update with the selected date and time. */
-  onChange(listener: (when: Date, sun: SunDirection) => void): void
+  /** Sets the time of day from the walk slider (minutes, snapped) and stops Play. */
+  setMinutes(minutes: number): void
+  /** Called after every sun update with the date and time, and the day strip's CSS background. */
+  onChange(listener: (when: Date, sun: SunDirection, strip: string) => void): void
+  /** Called when Play starts or stops. */
+  onPlaying(listener: (playing: boolean) => void): void
 }
 
 export function createUI(
@@ -86,7 +90,7 @@ export function createUI(
       <button id="nextStep" class="primary" type="button"></button>
       <div id="aptTools" hidden>
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above</label>
-        <button id="walk" class="primary" type="button" title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
+        <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
       <div class="field">
         <label for="date">Date</label>
@@ -95,9 +99,9 @@ export function createUI(
       </div>
       <div class="field">
         <label class="split" for="time">Time <span id="timeLabel" title="Times use your browser's time zone"></span></label>
-        <div id="timeTrack">
-          <div id="dayStrip" aria-hidden="true"></div>
-          <input id="time" type="range" min="0" max="${DAY_MAX}" step="${STEP}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
+        <div class="timeTrack">
+          <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
+          <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
       </div>
       <button id="play" type="button">Play</button>
@@ -157,7 +161,8 @@ export function createUI(
     mapHint.textContent = text
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
-  let listener: ((when: Date, sun: SunDirection) => void) | undefined
+  let listener: ((when: Date, sun: SunDirection, strip: string) => void) | undefined
+  let playListener: ((playing: boolean) => void) | undefined
 
   function currentDate(): Date | null {
     if (!date.value) return null
@@ -188,7 +193,7 @@ export function createUI(
     updatePresets(when.getFullYear(), la)
     const sun = sunDirection(when, la, lo)
     onSun(sun)
-    listener?.(when, sun)
+    listener?.(when, sun, strip.style.background)
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = formatTime(times.sunrise)
     const set = formatTime(times.sunset)
@@ -239,6 +244,7 @@ export function createUI(
       return
     }
     play.textContent = 'Pause'
+    playListener?.(true)
     playStep()
     timer = window.setInterval(playStep, 50)
   })
@@ -246,6 +252,7 @@ export function createUI(
     window.clearInterval(timer)
     timer = undefined
     play.textContent = 'Play'
+    playListener?.(false)
   }
 
   for (const el of [lat, lon, date, time]) el.addEventListener('input', refresh)
@@ -295,7 +302,8 @@ export function createUI(
       $('planToThree').hidden = step !== 'see'
       nextButton.hidden = step === 'see'
       nextButton.textContent = step === 'outline' ? 'Next: draw your apartment' : 'Next: place the windows'
-      walk.classList.toggle('primary', step === 'see')
+      // Walking needs windows; before that the Next prompt leads, and double-clicking the floor still works.
+      walk.hidden = step !== 'see'
     },
     setExample(on) {
       $('exampleNote').hidden = !on
@@ -319,6 +327,14 @@ export function createUI(
     },
     togglePlay() {
       play.click()
+    },
+    setMinutes(minutes) {
+      stop()
+      time.value = String(snapMinutes(minutes))
+      refresh()
+    },
+    onPlaying(fn) {
+      playListener = fn
     },
     onChange(fn) {
       listener = fn

@@ -1,6 +1,7 @@
 import type { PerspectiveCamera } from 'three'
 import type { Point } from './osm'
 import type { Plan } from './plan'
+import { DAY_MAX, STEP } from './daylight'
 import { movePosition } from './walk-geom'
 
 export const EYE_HEIGHT = 1.6
@@ -26,7 +27,7 @@ export interface WalkControls {
 }
 
 function typing(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+  return target instanceof HTMLElement && (target.isContentEditable || /^(TEXTAREA|SELECT)$/.test(target.tagName) || (target instanceof HTMLInputElement && target.type !== 'range'))
 }
 
 export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, handlers: WalkHandlers): WalkControls {
@@ -141,14 +142,32 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
 export interface WalkHud {
   show(on: boolean): void
   setStatus(text: string): void
+  /** Mirrors the panel's time: slider position, label and the day strip's CSS background. */
+  setTime(minutes: number, strip: string): void
+  setPlaying(playing: boolean): void
 }
 
-export function createWalkHud(container: HTMLElement, onExit: () => void): WalkHud {
+export interface WalkHudHandlers {
+  exit(): void
+  /** The slider was dragged to this many minutes of the day. */
+  setMinutes(minutes: number): void
+  togglePlay(): void
+}
+
+export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers): WalkHud {
   const hud = document.createElement('div')
   hud.id = 'walkHud'
   hud.hidden = true
   hud.innerHTML = `
     <div class="walkStatus"></div>
+    <div class="walkTime">
+      <button type="button" class="walkPlay" aria-label="Play the day" title="Play the day (P)">Play</button>
+      <div class="timeTrack">
+        <div class="dayStrip" aria-hidden="true"></div>
+        <input class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="Time of day">
+      </div>
+      <output class="walkClock"></output>
+    </div>
     <div class="walkHelp">
       <span><kbd>Drag</kbd> look</span>
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
@@ -157,10 +176,23 @@ export function createWalkHud(container: HTMLElement, onExit: () => void): WalkH
       <span><kbd>P</kbd> play</span>
       <span><kbd>Esc</kbd> exit</span>
     </div>
-    <button type="button">Exit walk</button>`
-  hud.querySelector('button')!.addEventListener('click', onExit)
+    <button type="button" class="walkExit">Exit walk</button>`
+  // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
+  for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) hud.addEventListener(type, (e) => e.stopPropagation())
   container.appendChild(hud)
   const status = hud.querySelector('.walkStatus')!
+  const range = hud.querySelector<HTMLInputElement>('.timeRange')!
+  const strip = hud.querySelector<HTMLElement>('.dayStrip')!
+  const clock = hud.querySelector('.walkClock')!
+  const playButton = hud.querySelector<HTMLButtonElement>('.walkPlay')!
+  hud.querySelector('.walkExit')!.addEventListener('click', handlers.exit)
+  playButton.addEventListener('click', () => {
+    handlers.togglePlay()
+    playButton.blur()
+  })
+  range.addEventListener('input', () => handlers.setMinutes(Number(range.value)))
+  range.addEventListener('pointerup', () => range.blur())
+  range.addEventListener('change', () => range.blur())
   return {
     show(on) {
       hud.hidden = !on
@@ -168,5 +200,16 @@ export function createWalkHud(container: HTMLElement, onExit: () => void): WalkH
     setStatus(text) {
       status.textContent = text
     },
+    setTime(minutes, background) {
+      range.value = String(minutes)
+      clock.textContent = formatClock(minutes)
+      strip.style.background = background
+    },
+    setPlaying(playing) {
+      playButton.textContent = playing ? 'Pause' : 'Play'
+      playButton.setAttribute('aria-label', playing ? 'Pause the day' : 'Play the day')
+    },
   }
 }
+
+const formatClock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`

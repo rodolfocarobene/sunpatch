@@ -19,8 +19,8 @@ import { nextStep } from './next-step'
 import { defaultPlan, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
-import { dayLabel } from './daylight'
-import { createUI, sunSentence, TIME_FORMAT, type View } from './ui'
+import { dayLabel, minutesOfDay } from './daylight'
+import { createUI, sunSentence, type View } from './ui'
 import { createWalkHud } from './walk'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -28,7 +28,12 @@ const MILAN = { lat: 45.4642, lon: 9.19 }
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
 const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
-const hud = createWalkHud(app, () => sunScene.stopWalk())
+const hud = createWalkHud(app, {
+  exit: () => sunScene.stopWalk(),
+  setMinutes: (minutes) => ui.setMinutes(minutes),
+  togglePlay: () => ui.togglePlay(),
+})
+ui.onPlaying((playing) => hud.setPlaying(playing))
 sunScene.setWalkHandlers({
   change(walking) {
     hud.show(walking)
@@ -38,12 +43,10 @@ sunScene.setWalkHandlers({
   stepTime: (minutes) => ui.stepTime(minutes),
   togglePlay: () => ui.togglePlay(),
 })
-ui.onChange((when, sun) =>
-  hud.setStatus(
-    `${dayLabel(when.getMonth(), when.getDate())} ` +
-      `${when.toLocaleTimeString([], TIME_FORMAT)} \u00b7 ${sunSentence(sun, 'up')}`,
-  ),
-)
+ui.onChange((when, sun, strip) => {
+  hud.setStatus(`${dayLabel(when.getMonth(), when.getDate())} \u00b7 ${sunSentence(sun, 'up')}`)
+  hud.setTime(minutesOfDay(when), strip)
+})
 const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
 let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'

@@ -2,7 +2,7 @@
 ;(globalThis as unknown as { process: { env: Record<string, string> } }).process.env.TZ = 'Europe/Rome'
 
 import { describe, expect, it } from 'vitest'
-import { activePreset, DAY_MAX, daylight, nextPlayMinute, presetDates, startMinutes, stripGradient } from './daylight'
+import { activePreset, DAY_MAX, daylight, minutesOfDay, nextPlayMinute, presetDates, snapMinutes, startMinutes, stripGradient } from './daylight'
 
 const LAT = 45.4642
 const LON = 9.19
@@ -110,5 +110,18 @@ describe('nextPlayMinute', () => {
   it('plays the whole day with no sunrise or sunset', () => {
     expect(nextPlayMinute(100, { sunrise: null, sunset: null })).toBe(105)
     expect(nextPlayMinute(DAY_MAX, { sunrise: null, sunset: null })).toBe(0)
+  })
+})
+
+describe('walk slider time mapping', () => {
+  it('reads the minutes of the local day', () => {
+    expect(minutesOfDay(new Date(2026, 5, 21, 13, 45))).toBe(13 * 60 + 45)
+    expect(minutesOfDay(new Date(2026, 5, 21, 0, 0))).toBe(0)
+  })
+  it('snaps to the slider grid and range', () => {
+    expect(snapMinutes(752)).toBe(750)
+    expect(snapMinutes(753)).toBe(755)
+    expect(snapMinutes(-20)).toBe(0)
+    expect(snapMinutes(5000)).toBe(DAY_MAX)
   })
 })
