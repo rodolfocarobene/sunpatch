@@ -23,9 +23,11 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
   recess. Fixes cast shadows like the rest of the building.
 - **Watch the sun move**: pick a date and a time, or press Play to run through the day. A cutaway view hides the
   floors above so you can look into your rooms from outside.
-- **Solar panels**: place panels on a facade, roof or the ground and see their shading and yearly energy.
+- **Solar panels** in their own **Panels** tab: place panels on a facade, roof or the ground and read, in one
+  sentence, how much energy each makes a year and how that compares with an unshaded panel, with the shading and
+  the month-by-month figures one click away.
 - **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
-  building, in kWh per kWp a year with local weather. Click a spot and place a panel there.
+  building, in kWh a year for each kW of panels, with local weather. Click a spot and place a panel there.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.
@@ -78,32 +80,39 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      and set tilt, facing, height and modules in the box (presets: *Balcony railing*, *Roof stand*, *Ground*).
      Panels show in 3D, cast shadows, and count in the sun map. Snapping only uses the building's outside walls,
      never an apartment wall inside it.
-   - **Panel shading**: select a panel (in the Plan, or click it in 3D) to see a card with its direct-sun hours a year,
-     the share lost to shading, and a month by hour chart of how much of it is in sun; hover a cell for the figure.
-   - **Panel energy**: the same card gives the energy a year in kWh, as an *ideal* clear-sky figure and one *with local
-     weather*, what shading costs, and a bar chart by month. Open *Assumptions* to change the module efficiency
-     (21%) and system losses (14%). The 3D panel adds up all panels, for example *3 panels, ~1,050 kWh/year with
-     local weather*. It is an estimate: direct sun is traced in 3D, diffuse light is approximated and not shaded.
-   - **Where to put panels**: in the 3D view tick **Panel suitability** (see below).
+   - Select a panel to see a one-sentence summary under its properties, with **Open in Panels** for the full card.
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
    **Play**. Keep **Hide floors above** on to see inside.
-   Tick **Panel suitability** to colour the outside of the building and its surroundings by the yearly energy a
-   panel would make there, in kWh/kWp/yr (the legend has the scale). The facade is sampled every metre (panels
+   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend gives hours and the share
+   of the day's daylight). Click a spot on the floor to read its hours and times, for example *3 h 10 min of
+   direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
+   recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
+   you walk.
+   Panels are drawn and cast shadows here too, but the solar controls live in the Panels tab.
+4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
+   time do not matter here: everything is a year).
+   - **Panel suitability**: tick it to colour the outside of the building and its surroundings by the yearly energy a
+   panel would make there, in kWh a year for each kW of panels (the legend has the scale). The facade is sampled every metre (panels
    vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
    2 m grid; roofs and ground use a 30 degree stand facing south (north in the southern hemisphere). It takes a
    few seconds to a minute for a big building (a progress bar shows), runs only when ticked, and is kept for
    the same scene and place. Click a spot for its figure with local weather, the ideal clear-sky one and the loss to
    shading, and press **Place a panel here** to add a panel with the matching preset to your plan, selected so its
    card opens. The floors above stay visible while the map shows (so the facade and roof have something behind
-   them), and it is exclusive with **Sun map**. Esc closes the popover.
-   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend gives hours and the share
-   of the day's daylight). Click a spot on the floor to read its hours and times, for example *3 h 10 min of
-   direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
-   recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
-   you walk.
-4. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
+   them), and it is exclusive with **Sun map**. Esc closes the popover. It switches off when you leave the tab.
+   - **Your panels**: a list with each panel's yearly energy and the total, for example *3 panels, ~1,050 kWh a
+     year with local weather*. Click a row, or a panel in the view, to open its card. Add panels with **Place a panel
+     here** or with the Panel tool in Plan.
+   - **The card** leads with one sentence, for example *About 568 kWh a year with local weather, 76% of the ideal.
+     Shading costs under 1%.*, and a yardstick: what an unshaded panel of the same size, tilted 30 degrees and facing
+     south, would make at this place. A panel inside the building, or one that loses 95% or more to shading, gets a
+     warning instead. **Details** holds the ideal clear-sky figure, the bars by month, the direct-sun hours, the loss
+     to shading, the month by hour chart (hover a cell for the figure) and the *Assumptions* (module efficiency 21%,
+     system losses 14%; kWp is the panel's rated power, and 1 kWp is about 5 m² of panels). It is an estimate: direct sun is
+     traced in 3D, diffuse light is approximated and not shaded.
+5. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
    faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The small panel on
    the left keeps **Hide floors above** (`H`) and **Sun map** (`M`) with its legend; they are the same switches as
    in the 3D panel. Hidden, you see the sky through the ceiling, and the sun still comes in only through the

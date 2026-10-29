@@ -133,13 +133,13 @@ export function createPlanEditor(
   {
     autosave = () => true,
     onSwitch,
-    panelCard,
+    panelSummary,
     onPanelSelect,
   }: {
     autosave?: () => boolean
     onSwitch?: (buildingId: string, at: Point) => void
-    /** The shading card, a box at the bottom left of the Plan view (it shows itself while a panel is selected). */
-    panelCard?: HTMLElement
+    /** The compact summary of the selected panel, shown at the end of its properties (the caller shows and hides it). */
+    panelSummary?: HTMLElement
     /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
     onPanelSelect?: (id: string | null) => void
   } = {},
@@ -162,7 +162,6 @@ export function createPlanEditor(
   statusLine.appendChild(statusText)
   side.append(toolbar, props)
   root.append(svg, side, statusLine)
-  if (panelCard) root.append(panelCard)
   container.appendChild(root)
 
   let building: Building | undefined
@@ -752,8 +751,6 @@ export function createPlanEditor(
     const preset = (kind: PanelPreset): void => patch(presetPatch(kind, building!, p))
     const presets = document.createElement('div')
     presets.className = 'editor-row'
-    presets.style.flexDirection = 'column'
-    presets.style.alignItems = 'stretch'
     const base = floorBase(building!, p)
     presets.append(
       button('Balcony railing', `Vertical, lowest edge ${(base + 1).toFixed(1)} m: a metre above this floor`, () => preset('railing')),
@@ -761,7 +758,7 @@ export function createPlanEditor(
       button('Ground', 'Tilted 30 degrees, lowest edge 0.5 m above the ground', () => preset('ground')),
     )
     const hint = document.createElement('small')
-    hint.textContent = 'Facing: 0 = N, 90 = E, 180 = S. Tilt: 90 is vertical, 0 flat. Heights are metres above the ground.'
+    hint.textContent = 'Facing: 0 = N, 90 = E, 180 = S. Tilt: 90 is vertical, 0 flat.'
     return [
       Object.assign(document.createElement('h4'), { textContent: 'Solar panel' }),
       field('Module width (m)', numberInput(q.width, 0.01, 0.1, (v) => patch({ width: v }))),
@@ -772,6 +769,7 @@ export function createPlanEditor(
       field('Lowest edge (m)', numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
       presets,
       hint,
+      ...(panelSummary ? [panelSummary] : []),
     ]
   }
 

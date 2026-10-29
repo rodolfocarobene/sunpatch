@@ -198,11 +198,11 @@ describe('legend and popover text', () => {
     const roof = { kind: 'roof' as const, x: 0, y: 9, z: 0, azimuth: 180, tilt: 30, size: 1, top: 9 }
     expect(suitabilityText(roof, { ideal: 1840, weather: 1387, shadingShare: 0.04 })).toEqual({
       title: 'Roof, 30\u00b0 south',
-      figure: '~1,390 kWh/kWp/yr',
+      figure: '~1,390 kWh a year per kW of panels',
       detail: 'with local weather (ideal 1,840) \u00b7 shading loss 4%',
     })
     const clear = suitabilityText(roof, { ideal: 1840, shadingShare: 0.001 })
-    expect(clear.figure).toBe('~1,840 kWh/kWp/yr')
+    expect(clear.figure).toBe('~1,840 kWh a year per kW of panels')
     expect(clear.detail).toBe('clear sky, no weather data \u00b7 shading loss <1%')
   })
 })

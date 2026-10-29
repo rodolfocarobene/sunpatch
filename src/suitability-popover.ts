@@ -11,7 +11,7 @@ export interface SuitabilityPopover {
 }
 
 /**
- * A small box at the chosen quad of the suitability map: what the surface is, its yearly energy per kWp, and a button
+ * A small box at the chosen quad of the suitability map: what the surface is, its yearly energy for each kW of panels, and a button
  * that places a panel there. Closes on its button, or when the caller hides it (a click elsewhere, Esc).
  */
 export function createSuitabilityPopover(container: HTMLElement, handlers: { onClose(): void; onPlace(): void }): SuitabilityPopover {

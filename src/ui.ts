@@ -4,9 +4,9 @@ import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
+import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 
-const ACCURACY_URL = 'https://github.com/rodolfocarobene/sunpatch#accuracy-and-limitations'
 const GUIDE_KEY = 'sunpatch.guide'
 
 /** One 24-hour HH:MM format for every time shown in the app. */
@@ -14,7 +14,7 @@ export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
-export type View = 'map' | 'plan' | '3d'
+export type View = 'map' | 'plan' | '3d' | 'panels'
 
 export type SunMapStatus =
   | { kind: 'computing'; progress: number }
@@ -26,13 +26,19 @@ export type SuitabilityStatus =
   | { kind: 'ready'; max: number; ticks: number[]; weather: boolean; count: number }
   | { kind: 'error'; message: string }
 
+export interface PanelList {
+  items: { id: string; label: string; detail: string }[]
+  selected: string | null
+  total: string | null
+}
+
 export interface UI {
   setLocation(lat: number, lon: number): void
   /** Where the place search form is mounted (the Map view panel). */
   readonly searchSlot: HTMLElement
   setBuildingInfo(building: Building | null): void
   setView(view: View): void
-  /** Enables the Plan and 3D views once a building is selected. */
+  /** Enables the Plan, 3D and Panels views once a building is selected. */
   setBuildingPicked(picked: boolean): void
   /** Shows what to do next on the apartment (Plan hint, 3D button); derived from the plan by the caller. */
   setNextStep(step: NextStep): void
@@ -55,8 +61,12 @@ export interface UI {
   onSuitability(listener: (on: boolean) => void): void
   setSuitability(on: boolean): void
   setSuitabilityStatus(status: SuitabilityStatus): void
-  /** The line with every panel's energy in the 3D panel; null hides it. */
-  setPanelTotals(text: string | null): void
+  /** The Panels view's list: one row per panel and the total line (null while the panels are still analysed). */
+  setPanelList(list: PanelList): void
+  /** A click on a row of the list. */
+  onPanelPick(listener: (id: string) => void): void
+  /** Where the panel card is docked: the Panels view of the left panel. */
+  readonly cardSlot: HTMLElement
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -87,6 +97,7 @@ export function createUI(
       <button type="button" data-view="map">Map</button>
       <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
       <button type="button" data-view="3d" disabled title="Pick a building first">3D</button>
+      <button type="button" data-view="panels" disabled title="Pick a building first">Panels</button>
     </nav>
     <section data-views="map">
       <h2>Find your building</h2>
@@ -120,8 +131,6 @@ export function createUI(
         <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
         <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
         <div id="sunMapLegend" hidden></div>
-        <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
-        <div id="suitLegend" hidden></div>
         <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
       </div>
       <div class="field">
@@ -138,13 +147,24 @@ export function createUI(
       </div>
       <button id="play" type="button">Play</button>
       <div id="sunSummary"></div>
-      <p id="panelTotals" class="note" hidden></p>
       <details id="location">
         <summary>Location</summary>
         <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
         <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
       </details>
       <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
+    </section>
+    <section data-views="panels">
+      <div class="field">
+        <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
+        <div id="suitLegend" hidden></div>
+      </div>
+      <div id="panelList">
+        <p id="panelTotals" class="hint" hidden></p>
+        <ul id="panelRows" hidden></ul>
+        <p id="panelEmpty" class="hint">No panels yet. Turn on Panel suitability, click a spot and press Place a panel here, or use the Panel tool in <button id="emptyToPlan" class="link" type="button">Plan</button>.</p>
+      </div>
+      <div id="cardSlot"></div>
     </section>`
   document.body.appendChild(panel)
 
@@ -185,9 +205,6 @@ export function createUI(
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
     suitLegend.hidden = !suit.checked
-    // The map needs the whole building (facade and roof), so the floors above stay while it shows.
-    cutaway.disabled = suit.checked
-    cutaway.title = suit.checked ? 'The floors above stay visible while the panel suitability map shows' : ''
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
@@ -195,6 +212,12 @@ export function createUI(
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
   nextButton.addEventListener('click', () => onView('plan'))
+  $('emptyToPlan').addEventListener('click', () => onView('plan'))
+  let panelPickListener: ((id: string) => void) | undefined
+  $('panelRows').addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]')
+    if (row) panelPickListener?.(row.dataset.id!)
+  })
   $('planToThree').addEventListener('click', () => onView('3d'))
   $('exampleClose').addEventListener('click', () => ($('exampleNote').hidden = true))
 
@@ -214,7 +237,7 @@ export function createUI(
   /** One line under the tabs; the open guide already says what to do, so it stays quiet then. */
   function updateMapHint() {
     $('firstRun').hidden = picked
-    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan and 3D.'
+    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan, 3D and Panels.'
     mapHint.textContent = text
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
@@ -348,7 +371,8 @@ export function createUI(
         b.disabled = !picked
         b.title = !picked
           ? 'Pick a building first'
-          : b.dataset.view === 'plan' ? 'Draw your apartment on this building' : 'Sun and shadows in 3D'
+          : b.dataset.view === 'plan' ? 'Draw your apartment on this building'
+          : b.dataset.view === 'panels' ? 'Solar panels: where they would do best and what yours make' : 'Sun and shadows in 3D'
       }
     },
     setNextStep(step) {
@@ -407,11 +431,29 @@ export function createUI(
     setSuitabilityStatus(status) {
       suitLegend.innerHTML = suitabilityLegendHtml(status)
     },
-    setPanelTotals(text) {
-      const el = panel.querySelector<HTMLElement>('#panelTotals')!
-      el.hidden = text === null
-      el.textContent = text ?? ''
+    setPanelList({ items, selected, total }) {
+      const totalEl = $('panelTotals')
+      totalEl.hidden = total === null
+      totalEl.textContent = total ?? ''
+      const rows = $('panelRows')
+      rows.hidden = items.length === 0
+      $('panelEmpty').hidden = items.length > 0
+      rows.replaceChildren(
+        ...items.map((item) => {
+          const li = document.createElement('li')
+          const b = Object.assign(document.createElement('button'), { type: 'button' })
+          b.dataset.id = item.id
+          b.setAttribute('aria-pressed', String(item.id === selected))
+          b.append(Object.assign(document.createElement('span'), { textContent: item.label }), Object.assign(document.createElement('span'), { textContent: item.detail }))
+          li.append(b)
+          return li
+        }),
+      )
     },
+    onPanelPick(fn) {
+      panelPickListener = fn
+    },
+    cardSlot: $('cardSlot'),
     setWalking(walking) {
       walk.disabled = walking
       panel.classList.toggle('walking', walking)
@@ -465,7 +507,7 @@ function legendHtml(status: SunMapStatus): string {
   )
 }
 
-/** The suitability legend: the ramp in kWh/kWp/yr, and what the colours assume. */
+/** The suitability legend: the ramp in kWh a year per kW of panels, and what the colours assume. */
 function suitabilityLegendHtml(status: SuitabilityStatus): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
@@ -476,10 +518,10 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
   const top = status.ticks[status.ticks.length - 1]
   const tick = (t: number) => `<span>${t.toLocaleString('en')}${t === top ? '+' : ''}</span>`
   return (
-    `<span class="legendHead">Yearly energy per kWp, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
+    `<span class="legendHead">Energy a year for each kW of panels, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
     `<div class="legendTicks">${status.ticks.map(tick).join('')}</div>` +
-    `<span class="legendUnit muted">kWh/kWp/yr</span>` +
+    `<span class="legendUnit muted">kWh a year per kW</span>` +
     `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Click one for details.</span>`
   )
 }

@@ -13,7 +13,7 @@
   box-sizing: border-box; padding: var(--box-pad); display: flex; flex-direction: column; gap: 10px;
   font-size: var(--text-sm); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
 }
-.editor-props { gap: 8px; }
+.editor-props { gap: 6px; }
 .editor-props[hidden] { display: none; }
 .editor-cluster { display: flex; flex-direction: column; gap: 6px; }
 .editor-cluster + .editor-cluster { padding-top: 10px; border-top: 1px solid var(--line); }

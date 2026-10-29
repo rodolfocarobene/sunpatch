@@ -1,9 +1,10 @@
 import type { PanelShade } from './panel-shade'
+import type { Verdict } from './panel-verdict'
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type PanelEnergy } from './solar'
 import { clock, FULL_SUN_MINUTES, sunColor, sunGradient } from './sunmap'
 
-// The panel card: what the shading analysis says about the selected panel. The same card is shown in the Plan
-// editor's properties box and as a floating box in 3D; main.ts feeds both.
+// The panel card: what the shading analysis says about the selected panel. It leads with one sentence and a yardstick,
+// and keeps the figures and charts under "Details". It is docked in the left panel of the Panels view; main.ts feeds it.
 
 export type CardState =
   | { status: 'idle' }
@@ -18,7 +19,12 @@ export interface EnergyView {
   assumptions: Assumptions
   /** Area of the whole row, m2. */
   area: number
+  /** The sentence the card leads with, and the yardstick line under it (null when there is nothing to compare). */
+  verdict: Verdict
+  reference: string | null
 }
+
+export const ACCURACY_URL = 'https://github.com/rodolfocarobene/sunpatch#accuracy-and-limitations'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 /** The chart's hours (start of the hour, local time); widened when the sun is up outside them. */
@@ -79,9 +85,10 @@ export interface PanelCard {
   set(state: CardState): void
 }
 
-/** A card; `onClose` adds a close button (the floating card in 3D). */
+/** A card; `onClose` adds a close button. */
 export function createPanelCard(options: { onClose?: () => void; onAssumptions?: (a: Assumptions) => void; onRetry?: () => void } = {}): PanelCard {
   let assumptionsOpen = false
+  let detailsOpen = false
   const el = document.createElement('div')
   el.className = 'panelCard'
   el.hidden = true
@@ -257,44 +264,55 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: 'Reset' })
     reset.addEventListener('click', () => options.onAssumptions?.({ ...DEFAULT_ASSUMPTIONS }))
     const facts = note(
-      `About ${view.energy.kwp.toFixed(2)} kWp (${view.area.toFixed(2)} m\u00b2 at ${Math.round(a.efficiency * 100)}%). Losses cover wiring, inverter, heat and dirt; 14% is the PVGIS convention.`,
+      `This panel is about ${view.energy.kwp.toFixed(2)} kWp (${view.area.toFixed(2)} m\u00b2 at ${Math.round(a.efficiency * 100)}%). kWp is the panel's rated power; 1 kWp is about 5 m\u00b2 of panels. Losses cover wiring, inverter, heat and dirt; 14% is the PVGIS convention.`,
       'cardNote small',
     )
     details.append(summary, grid, facts, reset)
     return details
   }
 
-  function energyBlock(view: EnergyView): HTMLElement {
-    const { energy, weather } = view
+  /** The sentence, the yardstick under it and, when the weather could not load, the way to retry. */
+  function headline(view: EnergyView): HTMLElement {
     const box = document.createElement('section')
-    box.className = 'energy'
-    box.setAttribute('aria-label', 'Energy a year')
-    box.append(Object.assign(document.createElement('h5'), { textContent: 'Energy a year' }))
-    const main = document.createElement('div')
-    main.className = 'energyMain'
-    if (weather === 'ready' && energy.weather !== undefined) {
-      main.append(
-        Object.assign(document.createElement('strong'), { className: 'energyBig', textContent: formatKwh(energy.weather) }),
-        Object.assign(document.createElement('span'), { textContent: 'With local weather' }),
-      )
-    } else if (weather === 'loading') {
-      main.append(note('Loading weather data\u2026', 'cardBusy'))
-    } else {
-      main.append(note('Weather data unavailable.', 'cardBusy'))
-      const retry = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: 'Retry' })
+    box.className = 'cardHead'
+    box.setAttribute('aria-label', 'Summary')
+    const { verdict } = view
+    const sentence = note(verdict.sentence, verdict.warning ? 'cardVerdict warn' : 'cardVerdict')
+    if (verdict.warning) sentence.setAttribute('role', 'alert')
+    box.append(sentence)
+    if (view.weather === 'error') {
+      const retry = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: 'Retry the weather' })
       retry.addEventListener('click', () => options.onRetry?.())
-      main.append(retry)
+      box.append(retry)
     }
+    if (view.reference && !verdict.warning) box.append(note(view.reference))
+    return box
+  }
+
+  /** Everything behind the sentence: the clear-sky figure, the months, the sun hours, the chart and the assumptions. */
+  function details(view: EnergyView, shade: PanelShade): HTMLElement {
+    const box = document.createElement('details')
+    box.className = 'cardDetails'
+    box.open = detailsOpen
+    box.addEventListener('toggle', () => {
+      detailsOpen = box.open
+    })
+    box.append(Object.assign(document.createElement('summary'), { textContent: 'Details' }))
     const ideal = document.createElement('div')
     ideal.className = 'energyIdeal'
     ideal.append(
       Object.assign(document.createElement('span'), { textContent: 'Ideal (clear sky)' }),
-      Object.assign(document.createElement('strong'), { textContent: formatKwh(energy.ideal) }),
+      Object.assign(document.createElement('strong'), { textContent: `${formatKwh(view.energy.ideal)} a year` }),
     )
-    box.append(main, ideal)
-    const shading = shadingLine(energy)
-    if (shading) box.append(note(shading, 'energyShading'))
-    box.append(bars(view), assumptions(view))
+    const shading = shadingLine(view.energy)
+    box.append(ideal, ...(shading ? [note(shading, 'energyShading')] : []), bars(view), figures(shade))
+    if (shade.potentialHours > 0) {
+      box.append(chart(shade), legend())
+    } else box.append(note('The sun never reaches the front of this panel.'))
+    box.append(
+      note('The 21st of each month in 15 minute steps. Neighbours, trees, the building and other panels shade it.', 'cardNote small'),
+      assumptions(view),
+    )
     return box
   }
 
@@ -326,14 +344,13 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
       else if (state.status === 'error') body.replaceChildren(note(state.message, 'cardBusy'))
       else if (state.status === 'ready') {
         const { shade } = state
-        body.replaceChildren(
-          energyBlock(state.energy),
-          figures(shade),
-          shade.potentialHours > 0 ? chart(shade) : note('The sun never reaches the front of this panel.'),
-          ...(shade.potentialHours > 0 ? [legend()] : []),
-          note('The 21st of each month in 15 minute steps. Neighbours, trees, the building and other panels shade it.', 'cardNote small'),
-          note('Estimate. Direct sun is traced in 3D; diffuse light is approximated and not shaded; weather from long-term NASA POWER averages, which cut direct sun more than diffuse, so vertical or shaded panels are a little off. Weather: NASA POWER.', 'cardNote small'),
+        const caveat = document.createElement('p')
+        caveat.className = 'cardNote small'
+        caveat.append(
+          'An estimate: direct sun is traced in 3D, weather comes from NASA POWER averages. ',
+          Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: 'Accuracy and limits' }),
         )
+        body.replaceChildren(headline(state.energy), details(state.energy, shade), caveat)
       }
     },
   }
