@@ -198,8 +198,7 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
       <span><kbd>Shift</kbd> faster</span>
       <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
-      <span><kbd>P</kbd> play</span>
-      <span><kbd>Click</kbd> floor: sun</span>
+      <span><kbd>Click</kbd> floor for sun</span>
       <button type="button" class="walkExit">Exit walk <kbd>Esc</kbd></button>
     </div>`
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.

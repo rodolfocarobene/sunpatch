@@ -232,10 +232,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #sunSummary span { color: var(--muted); }
 #walkHud {
   display: flex; flex-direction: column; align-items: center; gap: 4px; align-self: center; max-width: 100%;
-  padding: 5px 12px; border-radius: var(--radius-box); font-size: var(--text-sm); text-align: center;
+  padding: 5px 8px; border-radius: var(--radius-box); font-size: var(--text-sm); text-align: center;
   background: var(--text); color: var(--surface); box-shadow: var(--shadow);
 }
-#walkHud .walkHelp { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; font-size: var(--text-xs); }
+#walkHud .walkHelp { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 9px; font-size: var(--text-xs); }
 #walkHud kbd {
   display: inline-block; min-width: 1.4em; margin-right: 2px; padding: 0 5px; box-sizing: border-box;
   font: inherit; font-weight: 600; text-align: center; color: var(--text); background: var(--surface); border-radius: 4px;
