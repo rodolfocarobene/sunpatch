@@ -8,7 +8,7 @@ import { buildBvh, collectOccluders } from './sunmap-trace'
 import { defaultPlan } from './plan'
 import {
   GROUND_MARGIN, GROUND_REACH, IRRADIATION_STRIDE, SUITABILITY_SLOT_MINUTES, facadeSamples, groundSamples, panelFor, rayInputs, roofSamples,
-  surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
+  rampScale, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
 } from './suitability'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -178,5 +178,31 @@ describe('place a panel preset', () => {
   it('labels the surfaces', () => {
     expect(surfaceLabel({ kind: 'roof', azimuth: 180, tilt: 30, y: 9 })).toBe('Roof, 30° south')
     expect(surfaceLabel({ kind: 'facade', azimuth: 225, tilt: 90, y: 6.5 })).toBe('Facade facing south-west, 7 m up')
+  })
+})
+
+describe('legend and popover text', () => {
+  it('rounds the ramp up to 250 with ticks every 250 or 500', () => {
+    expect(rampScale([100, 1390])).toEqual({ max: 1500, ticks: [0, 500, 1000, 1500] })
+    expect(rampScale([100, 900])).toEqual({ max: 1000, ticks: [0, 250, 500, 750, 1000] })
+    expect(rampScale([10]).max).toBe(500)
+  })
+
+  it('colours the low end dark and the top light, like the sun map', () => {
+    const lightness = (c: number[]) => c[0] + c[1] + c[2]
+    expect(lightness(suitabilityColor(0, 1500))).toBeLessThan(lightness(suitabilityColor(750, 1500)))
+    expect(lightness(suitabilityColor(750, 1500))).toBeLessThan(lightness(suitabilityColor(5000, 1500)))
+  })
+
+  it('says the figure with weather, the ideal and the shading loss, or labels the clear-sky fallback', () => {
+    const roof = { kind: 'roof' as const, x: 0, y: 9, z: 0, azimuth: 180, tilt: 30, size: 1, top: 9 }
+    expect(suitabilityText(roof, { ideal: 1840, weather: 1387, shadingShare: 0.04 })).toEqual({
+      title: 'Roof, 30\u00b0 south',
+      figure: '~1,390 kWh/kWp/yr',
+      detail: 'with local weather (ideal 1,840) \u00b7 shading loss 4%',
+    })
+    const clear = suitabilityText(roof, { ideal: 1840, shadingShare: 0.001 })
+    expect(clear.figure).toBe('~1,840 kWh/kWp/yr')
+    expect(clear.detail).toBe('clear sky, no weather data \u00b7 shading loss <1%')
   })
 })

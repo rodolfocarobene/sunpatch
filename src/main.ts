@@ -28,9 +28,12 @@ import { createPanelTotals } from './panel-totals'
 import { DEFAULT_ASSUMPTIONS, panelEnergy, type Assumptions } from './solar'
 import { DAYS_IN_MONTH, type PanelShade } from './panel-shade'
 import { climateKey, loadClimate, type Climate } from './weather'
-import { modules } from './panel'
+import { modules, newPanelId } from './panel'
 import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-job'
 import { createSunMapJob } from './sunmap-job'
+import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
+import { createSuitabilityPopover } from './suitability-popover'
+import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
 import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, sunSentence, type View } from './ui'
@@ -62,6 +65,18 @@ let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
 let sunKey = ''
 let sunTimer: number | undefined
 
+// Panel suitability: where on the facade, roof and ground a panel would make the most energy per kWp. Computed in a
+// worker when the switch goes on, painted as coloured quads, read by clicking one (and a panel placed from there).
+const suitJob = createSuitabilityJob()
+const suitPopover = createSuitabilityPopover(app, { onClose: closeSuitPick, onPlace: placeHere })
+let suitOn = false
+let suitResult: SuitabilityResult | undefined
+let suitEnergy: SurfaceEnergy[] = []
+let suitPicked: number | null = null
+/** True while a panel placed from the map rebuilds the scene: the old map stays up until the new one is ready. */
+let suitKeep = false
+let suitTimer: number | undefined
+
 // Panel shading: the selected panel (in the Plan editor or clicked in 3D) is analysed in a worker and shown on a card.
 const shadeJob = createPanelShadeJob()
 const cardOptions = { onAssumptions: setAssumptions, onRetry: retryClimate }
@@ -89,7 +104,7 @@ const totals = createPanelTotals(renderTotals)
 const panelArea = (p: Plan['panels'][number]): number => p.width * p.height * modules(p)
 
 function ensureClimate() {
-  if (!sunDay || !plan || plan.panels.length === 0) return
+  if (!sunDay || !plan || (plan.panels.length === 0 && !suitOn)) return
   const place = climateKey(sunDay.lat, sunDay.lon)
   if (climateAt === place.key && climateStatus !== 'idle') return
   climateAt = place.key
@@ -101,11 +116,13 @@ function ensureClimate() {
       climate = c
       climateStatus = 'idle'
       renderEnergy()
+      paintSuitability()
     },
     () => {
       if (climateAt !== place.key) return
       climateStatus = 'error'
       renderEnergy()
+      paintSuitability()
     },
   )
   renderEnergy()
@@ -120,6 +137,7 @@ function retryClimate() {
 function setAssumptions(next: Assumptions) {
   assumptions = next
   renderEnergy()
+  paintSuitability()
 }
 
 function renderEnergy() {
@@ -230,6 +248,95 @@ function requestSunMap() {
   })
 }
 
+/** Asks for the suitability map after the current synchronous changes (a pick sets buildings, then the plan) are done. */
+function scheduleSuitability() {
+  window.clearTimeout(suitTimer)
+  suitTimer = window.setTimeout(requestSuitability, 0)
+}
+
+function requestSuitability() {
+  if (!suitOn || !site || !plan || !sunDay) return
+  const { selected, buildings } = site
+  const { lat, lon, when } = sunDay
+  ensureClimate()
+  suitJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    lat,
+    lon,
+    year: when.getFullYear(),
+    samples: () => surfaceSamples(selected, buildings, lat),
+    occluders: () => sunScene.occluders(),
+  })
+}
+
+/** The figure of every spot (local weather once the climate is known) and the quads coloured by it; waits for the climate. */
+function paintSuitability() {
+  if (!suitOn || !suitResult) return
+  if (climateStatus === 'loading') return ui.setSuitabilityStatus({ kind: 'computing', progress: 1 })
+  const { samples, irradiation } = suitResult
+  suitEnergy = samples.map((_, i) => surfaceEnergy(irradiation, i * IRRADIATION_STRIDE, assumptions, climate?.clearness))
+  const figures = suitEnergy.map((e) => e.weather ?? e.ideal)
+  const { max, ticks } = rampScale(figures)
+  const colors = new Float32Array(samples.length * 3)
+  figures.forEach((v, i) => colors.set(suitabilityColor(v, max), i * 3))
+  sunScene.setSuitability({ samples, colors })
+  ui.setSuitabilityStatus({ kind: 'ready', max, ticks, weather: climate !== undefined, count: samples.length })
+  if (suitPicked !== null) showSuitPick()
+}
+
+function showSuitPick() {
+  if (!suitResult || suitPicked === null || !suitEnergy[suitPicked]) return closeSuitPick()
+  sunScene.setSuitabilityMark(suitPicked)
+  suitPopover.show(suitabilityText(suitResult.samples[suitPicked], suitEnergy[suitPicked]))
+}
+
+function closeSuitPick() {
+  suitPicked = null
+  suitPopover.hide()
+  sunScene.setSuitabilityMark(null)
+}
+
+/** "Place a panel here": the preset of the surface at the chosen spot, added to the plan and selected. */
+function placeHere() {
+  if (!suitResult || suitPicked === null || !plan) return
+  const panel = panelFor(suitResult.samples[suitPicked], newPanelId())
+  closeSuitPick()
+  suitKeep = true
+  setPlan({ ...plan, panels: [...plan.panels, panel] })
+  suitKeep = false
+  if (!exampleMode) savePlan(plan!)
+  selectPanel(panel.id)
+}
+
+suitJob.onState((state) => {
+  if (!suitOn) return
+  if (state.status === 'computing') {
+    ui.setSuitabilityStatus({ kind: 'computing', progress: state.progress, updating: suitResult !== undefined })
+  } else if (state.status === 'ready') {
+    suitResult = state.result
+    paintSuitability()
+  } else if (state.status === 'error') ui.setSuitabilityStatus({ kind: 'error', message: state.message })
+})
+ui.onSuitability((on) => {
+  suitOn = on
+  sunScene.setSuitabilityVisible(on)
+  if (on) {
+    if (sunMapOn) ui.setSunMap(false) // both paint on the same surfaces; one at a time
+    scheduleSuitability()
+  } else {
+    suitJob.stop()
+    suitResult = undefined
+    closeSuitPick()
+    sunScene.setSuitability(null)
+  }
+})
+sunScene.onSuitabilityClick((index) => {
+  suitPicked = index
+  if (index === null) closeSuitPick()
+  else showSuitPick()
+})
+sunScene.onSuitabilityScreen((at) => suitPopover.moveTo(at))
+
 function closeProbe() {
   probePoint = undefined
   popover.hide()
@@ -260,6 +367,7 @@ sunJob.onState((state) => {
 })
 ui.onSunMap((on) => {
   sunMapOn = on
+  if (on && suitOn) ui.setSuitability(false)
   sunScene.setSunMapVisible(on)
   if (on) scheduleSunMap()
   else {
@@ -275,6 +383,15 @@ sunScene.onSceneChange(() => {
   sunResult = undefined
   closeProbe()
   if (sunMapOn) scheduleSunMap()
+  if (suitOn) {
+    // The map belongs to the scene it was traced in: a new building or plan clears it (a panel placed from it keeps it until the update arrives).
+    closeSuitPick()
+    if (!suitKeep) {
+      suitResult = undefined
+      sunScene.setSuitability(null)
+    }
+    scheduleSuitability()
+  }
 })
 sunScene.onFloorClick((at) => {
   if (!at) return closeProbe()
@@ -296,19 +413,21 @@ function escape() {
 }
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || walking) return
+  if (suitPopover.open) return closeSuitPick()
   if (view === '3d' && selectedPanel && !popover.open) selectPanel(null)
   else escape() // walking, the walk controls report Esc themselves
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    __sunpatch: { scene: sunScene, selectPanel, shadeJob, plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+    __sunpatch: { scene: sunScene, selectPanel, shadeJob, suit: () => suitResult, plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
   })
 }
 
 sunScene.setWalkHandlers({
   change(isWalking) {
     walking = isWalking
+    if (isWalking) ui.setSuitability(false) // the map belongs to the outside view
     hud.show(isWalking)
     ui.setWalking(isWalking)
     closeProbe() // a spot marked in one view is not where the camera is in the other

@@ -5,6 +5,7 @@ import type { Panel } from './plan'
 import { DEFAULT_PANEL, FACADE_GAP, GROUND_ELEVATION, ROOF_TILT, azimuthOf, edgeOutward, facing } from './panel'
 import { clearSky, diffuseOnPlane, panelEnergy, DEFAULT_ASSUMPTIONS, type Assumptions, type EnergyIrradiation } from './solar'
 import { DAYS_IN_MONTH, type YearSlots } from './panel-shade'
+import { FULL_SUN_MINUTES, sunColor } from './sunmap'
 
 // "Where should I put panels?": candidate surfaces around the selected building (facade, roof, ground), each sampled
 // on a grid and given the same annual energy per kWp as a panel card. This file holds the sample generation, the
@@ -261,4 +262,32 @@ export function panelFor(s: SurfaceSample, id: string): Panel {
     return { ...base, x: s.x + n.x * FACADE_GAP, z: s.z + n.z * FACADE_GAP, elevation, tilt: 90, azimuth: s.azimuth }
   }
   return { ...base, x: s.x, z: s.z, elevation: s.kind === 'roof' ? s.top : GROUND_ELEVATION, tilt: ROOF_TILT, azimuth: s.azimuth }
+}
+
+/** Ramp end and legend ticks for these figures (kWh/kWp/yr): the top is the best spot rounded up to 250, ticks every 250 or 500. */
+export function rampScale(values: ArrayLike<number>): { max: number; ticks: number[] } {
+  let best = 0
+  for (let i = 0; i < values.length; i++) best = Math.max(best, values[i])
+  const max = Math.max(500, Math.ceil(best / 250) * 250)
+  const step = max > 1250 ? 500 : 250
+  const top = Math.ceil(max / step) * step
+  return { max: top, ticks: Array.from({ length: top / step + 1 }, (_, i) => i * step) }
+}
+
+/** sRGB (0..1) of the sun-map ramp for a figure, `max` kWh/kWp/yr being its light end. */
+export function suitabilityColor(kwh: number, max: number): [number, number, number] {
+  return sunColor((Math.max(0, kwh) / max) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
+}
+
+const round10 = (n: number): string => (Math.round(n / 10) * 10).toLocaleString('en')
+
+/** The popover's lines: the surface, the figure, and what it rests on. */
+export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { title: string; figure: string; detail: string } {
+  const loss = e.shadingShare > 0 && e.shadingShare < 0.005 ? '<1%' : `${Math.round(e.shadingShare * 100)}%`
+  const basis = e.weather === undefined ? 'clear sky, no weather data' : `with local weather (ideal ${round10(e.ideal)})`
+  return {
+    title: surfaceLabel(s),
+    figure: `~${round10(e.weather ?? e.ideal)} kWh/kWp/yr`,
+    detail: `${basis} · shading loss ${loss}`,
+  }
 }

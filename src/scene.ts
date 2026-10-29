@@ -698,9 +698,11 @@ export function createScene(container: HTMLElement): SunScene {
     if (suitIndex === null || !suitData?.samples[suitIndex]) return
     const corners = suitCorners(suitData.samples[suitIndex])
     const mid = [0, 1, 2].map((k) => (corners[k] + corners[3 + k] + corners[6 + k] + corners[9 + k]) / 4)
+    // From far away a 1 m cell is a few pixels: the ring grows with the distance so it stays findable.
+    const grow = Math.min(8, Math.max(1, camera.position.distanceTo(new Vector3(mid[0], mid[1], mid[2])) / 40))
     const ring = (outer: number, inner: number, color: number) => {
       const pos: number[] = []
-      for (const k of [outer, inner]) for (let v = 0; v < 4; v++) for (let d = 0; d < 3; d++) pos.push(mid[d] + (corners[v * 3 + d] - mid[d]) * k)
+      for (const k of [outer * grow, inner * grow]) for (let v = 0; v < 4; v++) for (let d = 0; d < 3; d++) pos.push(mid[d] + (corners[v * 3 + d] - mid[d]) * k)
       const idx: number[] = []
       for (let v = 0; v < 4; v++) idx.push(v, (v + 1) % 4, 4 + v, (v + 1) % 4, 4 + ((v + 1) % 4), 4 + v)
       const geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(pos, 3))
@@ -797,11 +799,13 @@ export function createScene(container: HTMLElement): SunScene {
     }
   }
 
-  function frameBuilding(b: Building) {
+  function frameBuilding(b: Building, onlyIfClose = false) {
     const c = ringCentroid(b.outer)
     let half = 5
     for (const p of b.outer) half = Math.max(half, Math.abs(p.x - c.x), Math.abs(p.z - c.z))
     const dist = Math.max(40, half * 3 + b.height)
+    // The framing distance along its own direction is dist * 1.1 (0.6, 0.5, 0.8 of it).
+    if (onlyIfClose && camera.position.distanceTo(new Vector3(c.x, b.height / 2, c.z)) > dist * 0.6) return
     frame(
       new Vector3(c.x + dist * 0.6, b.height / 2 + dist * 0.5, c.z + dist * 0.8),
       new Vector3(c.x, b.height / 2, c.z),
@@ -1166,6 +1170,8 @@ export function createScene(container: HTMLElement): SunScene {
     setSuitabilityVisible(on) {
       suitOn = on
       applyCutaway()
+      // The map is about the outside: from close to the apartment (the usual view) step back to see the whole building.
+      if (on && selectedBuilding && !walking) frameBuilding(selectedBuilding, true)
     },
     setSuitabilityMark(index) {
       suitIndex = index
