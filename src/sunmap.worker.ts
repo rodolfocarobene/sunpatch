@@ -1,16 +1,20 @@
 import type { MeshBVH } from 'three-mesh-bvh'
+import type { Panel } from './plan'
+import { shadePanel, type PanelShade, type YearSlots } from './panel-shade'
 import { buildBvh, traceSun } from './sunmap-trace'
 
 export type WorkerIn =
   | { kind: 'scene'; key: number; triangles: Float32Array }
   | { kind: 'trace'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array }
+  | { kind: 'shade'; id: number; key: number; panel: Panel; slots: YearSlots }
 
 export type WorkerOut =
   | { kind: 'progress'; id: number; done: number }
   | { kind: 'done'; id: number; lit: Uint8Array; ms: number; bvhMs: number }
+  | { kind: 'shaded'; id: number; shade: PanelShade; bvhMs: number }
   | { kind: 'error'; id: number; message: string }
 
-// The BVH is built once per scene and kept for every date asked afterwards.
+// The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
 let bvh: MeshBVH | undefined
 let bvhKey = -1
 let bvhMs = 0
@@ -28,6 +32,10 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
   }
   try {
     if (!bvh || bvhKey !== m.key) throw new Error('scene not loaded')
+    if (m.kind === 'shade') {
+      reply({ kind: 'shaded', id: m.id, shade: shadePanel(bvh, m.panel, m.slots), bvhMs })
+      return
+    }
     const start = performance.now()
     const lit = traceSun(bvh, m.points, m.floorY, m.dirs, (done) => reply({ kind: 'progress', id: m.id, done }))
     reply({ kind: 'done', id: m.id, lit, ms: performance.now() - start, bvhMs }, [lit.buffer])
