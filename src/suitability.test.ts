@@ -8,7 +8,7 @@ import { buildBvh, collectOccluders } from './sunmap-trace'
 import { defaultPlan } from './plan'
 import {
   GROUND_MARGIN, GROUND_REACH, IRRADIATION_STRIDE, SUITABILITY_SLOT_MINUTES, facadeSamples, groundSamples, panelFor, rayInputs, roofSamples,
-  rampScale, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
+  rampScale, rangeText, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
 } from './suitability'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -182,27 +182,43 @@ describe('place a panel preset', () => {
 })
 
 describe('legend and popover text', () => {
-  it('rounds the ramp up to 250 with ticks every 250 or 500', () => {
-    expect(rampScale([100, 1390])).toEqual({ max: 1500, ticks: [0, 500, 1000, 1500] })
-    expect(rampScale([100, 900])).toEqual({ max: 1000, ticks: [0, 250, 500, 750, 1000] })
-    expect(rampScale([10]).max).toBe(500)
+  it('stretches the scale to the spots found, on round ticks', () => {
+    expect(rampScale([650, 1010, 1390])).toEqual({ min: 500, max: 1500, ticks: [500, 750, 1000, 1250, 1500], observed: [650, 1390] })
+  })
+
+  it('keeps a tight range tight and a wide one to five intervals', () => {
+    const tight = rampScale([1280, 1330])
+    expect(tight.min).toBe(1250)
+    expect(tight.max).toBe(1350)
+    expect(tight.ticks).toEqual([1250, 1300, 1350])
+    const wide = rampScale([80, 1900])
+    expect(wide).toMatchObject({ min: 0, max: 2000, ticks: [0, 500, 1000, 1500, 2000] })
+    expect(rampScale([700, 700])).toMatchObject({ min: 700, max: 750 })
+    expect(rampScale([]).ticks.length).toBeGreaterThan(1)
+  })
+
+  it('writes the observed range for the legend', () => {
+    expect(rangeText([648, 1396])).toBe('650 \u2026 1,400 kWh a year per kW')
   })
 
   it('colours the low end dark and the top light, like the sun map', () => {
     const lightness = (c: number[]) => c[0] + c[1] + c[2]
-    expect(lightness(suitabilityColor(0, 1500))).toBeLessThan(lightness(suitabilityColor(750, 1500)))
-    expect(lightness(suitabilityColor(750, 1500))).toBeLessThan(lightness(suitabilityColor(5000, 1500)))
+    expect(lightness(suitabilityColor(650, 650, 1400))).toBeLessThan(lightness(suitabilityColor(1000, 650, 1400)))
+    expect(lightness(suitabilityColor(1000, 650, 1400))).toBeLessThan(lightness(suitabilityColor(5000, 650, 1400)))
+    // Spots 100 kWh apart near the top differ clearly once the scale is stretched (the fixed 0..max scale blurred them).
+    const d = suitabilityColor(1300, 1250, 1350).map((c, i) => Math.abs(c - suitabilityColor(1250, 1250, 1350)[i]))
+    expect(Math.max(...d) * 255).toBeGreaterThan(60)
   })
 
   it('says the figure with weather, the ideal and the shading loss, or labels the clear-sky fallback', () => {
     const roof = { kind: 'roof' as const, x: 0, y: 9, z: 0, azimuth: 180, tilt: 30, size: 1, top: 9 }
     expect(suitabilityText(roof, { ideal: 1840, weather: 1387, shadingShare: 0.04 })).toEqual({
-      title: 'Roof, 30\u00b0 south',
-      figure: '~1,390 kWh a year per kW of panels',
-      detail: 'with local weather (ideal 1,840) \u00b7 shading loss 4%',
+      headline: 'About 1,390 kWh a year per kW',
+      detail: 'Roof, 30\u00b0 south \u00b7 with local weather (ideal 1,840) \u00b7 shading loss 4%',
     })
     const clear = suitabilityText(roof, { ideal: 1840, shadingShare: 0.001 })
-    expect(clear.figure).toBe('~1,840 kWh a year per kW of panels')
-    expect(clear.detail).toBe('clear sky, no weather data \u00b7 shading loss <1%')
+    expect(clear.headline).toBe('About 1,840 kWh a year per kW')
+    expect(clear.headline).not.toContain('~')
+    expect(clear.detail).toBe('Roof, 30\u00b0 south \u00b7 clear sky, no weather data \u00b7 shading loss <1%')
   })
 })

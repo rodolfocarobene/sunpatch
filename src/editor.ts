@@ -31,8 +31,11 @@ import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-
 import type { Draft, Selection, View } from './editor-draw'
 
 export interface PlanEditor {
-  /** Shows `building` (and faint `neighbors` footprints for context) and edits `plan`. */
-  open(building: Building, neighbors: Building[], plan: Plan): void
+  /**
+   * Shows `building` (and faint `neighbors` footprints for context) and edits `plan`. `panelId` is the panel already
+   * selected elsewhere (the Panels tab): it stays selected here, so the two views share one selection.
+   */
+  open(building: Building, neighbors: Building[], plan: Plan, panelId?: string | null): void
   setVisible(visible: boolean): void
   /** Shows a message in the status line until the next action. */
   notify(text: string): void
@@ -1137,12 +1140,13 @@ export function createPlanEditor(
   setTool('select')
 
   return {
-    open(b, n, p) {
+    open(b, n, p, panelId) {
       building = b
       neighbors = n
       plan = clone(p)
       history = []
-      selection = null
+      const panel = panelId ? plan.panels.findIndex((q) => q.id === panelId) : -1
+      selection = panel >= 0 ? { kind: 'panel', index: panel } : null
       drag = null
       draft = { outline: [] }
       message = undefined

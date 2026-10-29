@@ -4,7 +4,7 @@ const WIDTH = 284
 
 export interface SuitabilityPopover {
   /** Shows the answer for a spot; it stays hidden until the scene reports where the spot is on screen. */
-  show(text: { title: string; figure: string; detail: string }): void
+  show(text: { headline: string; detail: string }): void
   /** Follows the marked quad on screen; hidden while it is out of view. */
   moveTo(at: { x: number; y: number; visible: boolean } | null): void
   hide(): void
@@ -12,7 +12,7 @@ export interface SuitabilityPopover {
 }
 
 /**
- * A small box at the chosen quad of the suitability map: what the surface is, its yearly energy for each kW of panels, and a button
+ * A small box at the chosen quad of the suitability map: its yearly energy for each kW of panels (the answer), what the surface is, and a button
  * that places a panel there. Closes on its button, or when the caller hides it (a click elsewhere, Esc).
  */
 export function createSuitabilityPopover(container: HTMLElement, handlers: { onClose(): void; onPlace(): void }): SuitabilityPopover {
@@ -26,12 +26,10 @@ export function createSuitabilityPopover(container: HTMLElement, handlers: { onC
       <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
     <strong class="spotHead"></strong>
-    <span class="suitFigure"></span>
     <span class="spotDetail"></span>
     <button type="button" class="primary suitPlace">Place a panel here</button>`
   container.appendChild(box)
-  const title = box.querySelector('.spotHead')!
-  const figure = box.querySelector('.suitFigure')!
+  const head = box.querySelector('.spotHead')!
   const detail = box.querySelector('.spotDetail')!
   let isOpen = false
 
@@ -49,8 +47,7 @@ export function createSuitabilityPopover(container: HTMLElement, handlers: { onC
 
   return {
     show(text) {
-      title.textContent = text.title
-      figure.textContent = text.figure
+      head.textContent = text.headline
       detail.textContent = text.detail
       isOpen = true
       box.style.visibility = 'hidden'

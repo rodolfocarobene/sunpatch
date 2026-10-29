@@ -25,7 +25,7 @@ import { parseGreen, scatterTrees } from './trees'
 import { minutesOfDay } from './daylight'
 import { createPanelCard, formatKwh, type CardState, type EnergyView } from './panel-card'
 import { createPanelTotals } from './panel-totals'
-import { panelInside, referenceEnergy, referenceLine, verdict } from './panel-verdict'
+import { EXCLUDED_INSIDE, panelInside, referenceEnergy, referenceLine, totalsLine, verdict } from './panel-verdict'
 import { DEFAULT_ASSUMPTIONS, panelEnergy, type Assumptions } from './solar'
 import { DAYS_IN_MONTH, type PanelShade } from './panel-shade'
 import { climateKey, loadClimate, type Climate } from './weather'
@@ -94,6 +94,11 @@ function showCards(state: CardState) {
     state.status === 'ready' ? state.energy.verdict.sentence
     : state.status === 'error' ? state.message
     : 'Working out the sun on this panel\u2026'
+  // The same warning treatment and alert role as the Panels card's verdict.
+  const warning = state.status === 'ready' && state.energy.verdict.warning
+  planSummaryText.classList.toggle('warn', warning)
+  if (warning) planSummaryText.setAttribute('role', 'alert')
+  else planSummaryText.removeAttribute('role')
   planSummary.hidden = view !== 'plan' || state.status === 'idle' || selectedPanel === null
 }
 
@@ -178,15 +183,15 @@ function renderTotals() {
     if (shade) energies.set(p.id, panelEnergy(shade.irradiation, panelArea(p), assumptions, DAYS_IN_MONTH, climate?.clearness))
   }
   const figure = (e: { ideal: number; weather?: number }) => (climate && e.weather !== undefined ? e.weather : e.ideal)
+  const indoor = new Set(panels.filter((p) => site && panelInside(p, site.selected)).map((p) => p.id))
   const items = panels.map((p, i) => {
     const e = energies.get(p.id)
-    return { id: p.id, label: `Panel ${i + 1}`, detail: e ? `${formatKwh(figure(e))} a year` : 'Analysing\u2026' }
+    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : e ? `${formatKwh(figure(e))} a year` : 'Analysing\u2026'
+    return { id: p.id, label: `Panel ${i + 1}`, detail }
   })
   let total: string | null = null
   if (panels.length > 0 && !totals.busy() && energies.size === panels.length) {
-    const sum = [...energies.values()].reduce((t, e) => t + figure(e), 0)
-    const count = `${panels.length} ${panels.length === 1 ? 'panel' : 'panels'}`
-    total = `${count} \u00b7 ~${formatKwh(sum)} a year${climate ? ' with local weather' : ', clear sky'}`
+    total = totalsLine(panels.map((p) => ({ kwh: figure(energies.get(p.id)!), inside: indoor.has(p.id) })), climate !== undefined)
   }
   ui.setPanelList({ items, selected: selectedPanel, total })
 }
@@ -294,11 +299,11 @@ function paintSuitability() {
   const { samples, irradiation } = suitResult
   suitEnergy = samples.map((_, i) => surfaceEnergy(irradiation, i * IRRADIATION_STRIDE, assumptions, climate?.clearness))
   const figures = suitEnergy.map((e) => e.weather ?? e.ideal)
-  const { max, ticks } = rampScale(figures)
+  const { min, max, ticks, observed } = rampScale(figures)
   const colors = new Float32Array(samples.length * 3)
-  figures.forEach((v, i) => colors.set(suitabilityColor(v, max), i * 3))
+  figures.forEach((v, i) => colors.set(suitabilityColor(v, min, max), i * 3))
   sunScene.setSuitability({ samples, colors })
-  ui.setSuitabilityStatus({ kind: 'ready', max, ticks, weather: climate !== undefined, count: samples.length })
+  ui.setSuitabilityStatus({ kind: 'ready', ticks, observed, weather: climate !== undefined, count: samples.length })
   if (suitPicked !== null) showSuitPick()
 }
 
@@ -348,6 +353,8 @@ ui.onSuitability((on) => {
     sunScene.setSuitability(null)
   }
 })
+sunScene.onBuildingInView((inView) => ui.setSuitabilityFrame(!inView))
+ui.onSuitabilityFrame(() => sunScene.frameSelected())
 sunScene.onSuitabilityClick((index) => {
   suitPicked = index
   if (index === null) closeSuitPick()
@@ -678,7 +685,7 @@ function openEditor(): boolean {
     (b) => !own.has(b.id) && !hidden.has(b.id) && distanceToRing(b.outer, c) < NEIGHBOR_RADIUS_M,
   )
   if (!plan) setPlan(defaultPlan(selected, origin))
-  editor.open(selected, neighbors, plan!)
+  editor.open(selected, neighbors, plan!, selectedPanel)
   return true
 }
 
