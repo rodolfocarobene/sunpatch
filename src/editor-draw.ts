@@ -55,6 +55,8 @@ export function editOnFloor(plan: Plan, base: number, e: { bottom: number; top: 
 
 export interface Draft {
   outline: Point[]
+  /** Wall tool: the chain's points so far (start, then each wall's end); the last one is where the next wall starts. */
+  wallChain?: Point[]
   wallStart?: Point
   cursor?: Point
   snap?: Snap

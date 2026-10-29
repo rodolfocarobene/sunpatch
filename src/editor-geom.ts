@@ -144,6 +144,31 @@ export function normalizeWindows(plan: Plan): Plan {
   return plan
 }
 
+/** Walls shorter than this are not created (metres); also how close to the chain's start counts as closing it. */
+export const MIN_WALL_LENGTH = 0.05
+
+export interface ChainStep {
+  /** The chain's points after the click: its start, then the end of every wall so far. Empty once closed. */
+  chain: Point[]
+  /** The wall this click adds. */
+  wall?: Segment
+  closed: boolean
+  tooShort?: boolean
+}
+
+/**
+ * One click of the Wall tool. The first click starts the chain, each further click adds a wall from
+ * the previous end point, and a click back on the start (after at least two walls) closes and ends it.
+ */
+export function chainStep(chain: Point[], p: Point): ChainStep {
+  if (!chain.length) return { chain: [p], closed: false }
+  const last = chain[chain.length - 1]
+  if (Math.hypot(p.x - last.x, p.z - last.z) < MIN_WALL_LENGTH) return { chain, closed: false, tooShort: true }
+  const closes = chain.length >= 3 && Math.hypot(p.x - chain[0].x, p.z - chain[0].z) < MIN_WALL_LENGTH
+  const end = closes ? chain[0] : p
+  return { chain: closes ? [] : [...chain, p], wall: [last, end], closed: closes }
+}
+
 /** Projects p onto the line through `origin` along the closest of the given directions (unit vectors, both senses). */
 export function constrainToDirections(origin: Point, p: Point, directions: Point[]): Point {
   const vx = p.x - origin.x

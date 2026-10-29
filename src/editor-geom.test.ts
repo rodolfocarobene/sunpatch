@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chainStep,
   clampWindowT,
   clampWindowVertical,
   normalizeWindows,
@@ -217,5 +218,37 @@ describe('fitBounds', () => {
     expect(fitBounds(tiny, 1000, 800, { left: 0, right: 0, top: 0, bottom: 0 }, limits).scale).toBeLessThanOrEqual(400)
     const huge = [{ x: 0, z: 0 }, { x: 5000, z: 5000 }]
     expect(fitBounds(huge, 1000, 800, { left: 0, right: 0, top: 0, bottom: 0 }, limits).scale).toBe(1)
+  })
+})
+
+describe('chainStep', () => {
+  const P = (x: number, z: number): Point => ({ x, z })
+  it('starts the chain on the first click without a wall', () => {
+    const s = chainStep([], P(0, 0))
+    expect(s.chain).toEqual([P(0, 0)])
+    expect(s.wall).toBeUndefined()
+  })
+  it('adds a wall on the second click and continues from its end', () => {
+    const a = chainStep([P(0, 0)], P(4, 0))
+    expect(a.wall).toEqual([P(0, 0), P(4, 0)])
+    const b = chainStep(a.chain, P(4, 3))
+    expect(b.wall).toEqual([P(4, 0), P(4, 3)])
+    expect(b.chain).toEqual([P(0, 0), P(4, 0), P(4, 3)])
+  })
+  it('ignores a click on the current end (the second click of a double-click)', () => {
+    const s = chainStep([P(0, 0), P(4, 0)], P(4, 0.01))
+    expect(s.tooShort).toBe(true)
+    expect(s.wall).toBeUndefined()
+  })
+  it('closes and ends the chain when clicking its start after two walls', () => {
+    const s = chainStep([P(0, 0), P(4, 0), P(4, 3)], P(0.01, 0))
+    expect(s.closed).toBe(true)
+    expect(s.wall).toEqual([P(4, 3), P(0, 0)])
+    expect(s.chain).toEqual([])
+  })
+  it('does not close after a single wall', () => {
+    const s = chainStep([P(0, 0), P(4, 0)], P(0, 0.2))
+    expect(s.closed).toBe(false)
+    expect(s.chain).toHaveLength(3)
   })
 })

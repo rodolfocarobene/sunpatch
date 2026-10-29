@@ -10,6 +10,7 @@ import {
   constrainToDirections,
   distanceToSegment,
   fitBounds,
+  chainStep,
   nearestEdge,
   projectOnSegment,
   ringSegments,
@@ -44,9 +45,15 @@ const storageKey = (buildingId: string): string => `sun-in-house:plan:${building
 const HELP: Record<Tool, string> = {
   select: 'Click a window or wall to select it; drag a window along its edge. Drag empty space to pan.',
   outline: 'Click the corners of your apartment; click the first point or double-click to close. Esc cancels.',
-  wall: 'Click where the wall starts, then where it ends. Shift snaps to 0 or 90 degrees. Esc cancels.',
+  wall: 'Click where the wall starts, then where it ends; each next click continues from there. Click the first point to close, double-click or Esc to stop. Shift snaps to 0 or 90 degrees.',
   window: 'Click near an outline edge to add a window, or click a window to select it.',
   fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees.',
+}
+// One short line under the tools for the tools without options, so that row is never an empty gap.
+const TOOL_HINT: Partial<Record<Tool, string>> = {
+  select: 'Drag a window along its edge.',
+  wall: 'Click to chain walls. Esc to stop.',
+  window: 'Click an outline edge to add one.',
 }
 const VIEWPOINT_HELP = 'Walk start: this is where Walk inside puts you. Drag the camera to move it, the white dot to turn it.'
 const VIEWPOINT_CLEARANCE = 0.25
@@ -170,7 +177,7 @@ export function createPlanEditor(
     toolButtons.set(t, b)
     toolRow.appendChild(b)
   }
-  // One reserved row under the tools: the Add/Cut choice for fixes, what the Outline tool replaces, else empty.
+  // One reserved row under the tools: the Add/Cut choice for fixes, what the Outline tool replaces, else a short hint.
   // It keeps its height so nothing below it moves when the tool changes.
   const optionsRow = document.createElement('div')
   optionsRow.className = 'editor-row editor-options'
@@ -248,7 +255,7 @@ export function createPlanEditor(
     const lost = clearsNote(plan.windows.length)
     wholeFloorNote.textContent = lost
     wholeFloorButton.title = `Reset the outline to the building footprint${lost ? `. ${lost}; Ctrl+Z undoes it` : ''}`
-    optionNote.textContent = tool === 'outline' ? `Replaces the outline${lost ? `. ${lost}` : ''}` : ''
+    optionNote.textContent = tool === 'outline' ? `Replaces the outline${lost ? `. ${lost}` : ''}` : (TOOL_HINT[tool] ?? '')
     kindGroup.hidden = tool !== 'fix'
     // Rebuilt only when it changes, so a focused field keeps its focus while the drawing redraws.
     const key = `${plan.floor} ${plan.floorHeight} ${levels} ${b.height} ${b.minHeight}`
@@ -359,6 +366,15 @@ export function createPlanEditor(
   }
 
   function undo(): void {
+    // Undo in a wall chain takes back the last segment and the chain continues from its start.
+    if (tool === 'wall' && draft.wallChain) {
+      if (draft.wallChain.length < 2) {
+        draft = { outline: [] }
+        return render()
+      }
+      const chain = draft.wallChain.slice(0, -1)
+      draft = { outline: [], wallChain: chain, wallStart: chain[chain.length - 1] }
+    }
     const prev = history.pop()
     if (!prev) return setMessage('Nothing to undo')
     plan = prev
@@ -684,20 +700,31 @@ export function createPlanEditor(
     render()
   }
 
+  /** Ends the wall chain; the walls already made stay. */
+  function endChain(): void {
+    if (draft.wallChain) draft = { outline: [] }
+  }
+
   function wallClick(e: MouseEvent): void {
     if (!plan) return
-    const snap = wallPoint(e, draft.wallStart)
-    if (!draft.wallStart) {
-      draft.wallStart = snap.point
-      render()
+    const chain = draft.wallChain ?? []
+    const snap = wallPoint(e, chain[chain.length - 1])
+    const step = chainStep(chain, snap.point)
+    if (step.tooShort) {
+      // The second click of a double-click lands here; only a lone first wall needs the warning.
+      if (chain.length === 1) setMessage('Wall is too short', 'error')
       return
     }
-    const a = draft.wallStart
-    if (Math.hypot(snap.point.x - a.x, snap.point.z - a.z) < 0.05) return setMessage('Wall is too short', 'error')
+    if (!step.wall) {
+      draft.wallChain = step.chain
+      draft.wallStart = step.chain[0]
+      return render()
+    }
     const next = clone(plan)
-    next.walls.push({ a, b: snap.point, thickness: DEFAULT_WALL_THICKNESS })
-    draft = { outline: [] }
-    selection = { kind: 'wall', index: next.walls.length - 1 }
+    next.walls.push({ a: step.wall[0], b: step.wall[1], thickness: DEFAULT_WALL_THICKNESS })
+    draft = step.closed ? { outline: [] } : { outline: [], wallChain: step.chain, wallStart: step.chain[step.chain.length - 1] }
+    selection = step.closed ? { kind: 'wall', index: next.walls.length - 1 } : null
+    message = undefined
     commit(next)
   }
 
@@ -866,7 +893,8 @@ export function createPlanEditor(
   svg.addEventListener('pointercancel', endDrag)
 
   svg.addEventListener('dblclick', () => {
-    if (tool === 'outline' && draft.outline.length >= 3) finishOutline()
+    if (tool === 'wall') endChain()
+    else if (tool === 'outline' && draft.outline.length >= 3) finishOutline()
     else if (tool === 'fix' && draft.outline.length >= 3) finishFix()
   })
 
