@@ -73,7 +73,10 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    - **Panel** (`P`): click to place a solar panel anywhere, inside or outside the outline. Near a wall it snaps and
      faces outward (vertical); elsewhere it faces south at 30 degrees. Drag to move, drag the white dot to turn,
      and set tilt, facing, height and modules in the box (presets: *Balcony railing*, *Roof stand*, *Ground*).
-     Panels show in 3D, cast shadows, and count in the sun map.
+     Panels show in 3D, cast shadows, and count in the sun map. Snapping only uses the building's outside walls,
+     never an apartment wall inside it.
+   - **Panel shading**: select a panel (in the Plan, or click it in 3D) to see a card with its direct-sun hours a year,
+     the share lost to shading, and a month by hour chart of how much of it is in sun; hover a cell for the figure.
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press

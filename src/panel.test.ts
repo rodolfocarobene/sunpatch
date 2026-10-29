@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultPlan } from './plan'
 import type { Panel } from './plan'
-import { azimuthOf, edgeOutward, FACADE_GAP, hitsPanel, newPanel, panelCorners, panelFootprint, panelTip, presetPatch, snapPanel } from './panel'
+import { azimuthOf, edgeOutward, exteriorEdge, FACADE_GAP, hitsPanel, newPanel, panelCorners, panelFootprint, panelTip, presetPatch, snapPanel } from './panel'
 
 const base: Panel = { id: 'a', x: 0, z: 0, elevation: 1, width: 1, height: 2, tilt: 90, azimuth: 0 }
 const square = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }]
@@ -72,6 +72,20 @@ describe('snapPanel', () => {
     const hole = [{ x: 4, z: 4 }, { x: 6, z: 4 }, { x: 6, z: 6 }, { x: 4, z: 6 }]
     expect(snapPanel({ x: 5, z: 4.1 }, [], [hole], 1)!.azimuth).toBeCloseTo(180)
     expect(edgeOutward(hole, 0, true).z).toBeCloseTo(1)
+  })
+
+  it('ignores apartment edges inside the building but keeps those on its exterior', () => {
+    const inner = [{ x: 0, z: 0 }, { x: 5, z: 0 }, { x: 5, z: 5 }, { x: 0, z: 5 }]
+    const accept = exteriorEdge(building)
+    // The click is nearest the buried edge x = 5; the footprint's own edge x = 0 is the only exterior one near.
+    expect(snapPanel({ x: 5.2, z: 3 }, [square, inner], [], 1, accept)).toBeUndefined()
+    expect(snapPanel({ x: 5.2, z: 3 }, [square, inner], [], 1)!.point.x).toBeCloseTo(5 + FACADE_GAP)
+    const s = snapPanel({ x: 3, z: 0.2 }, [square, inner], [], 1, accept)!
+    expect(s.point.z).toBeCloseTo(-FACADE_GAP)
+    expect(s.azimuth).toBeCloseTo(0)
+    // An edge on the footprint's courtyard counts as exterior.
+    const court = { ...building, holes: [[{ x: 4, z: 4 }, { x: 6, z: 4 }, { x: 6, z: 6 }, { x: 4, z: 6 }]] }
+    expect(snapPanel({ x: 5, z: 4.1 }, [], [court.holes[0]], 1, exteriorEdge(court))!.azimuth).toBeCloseTo(180)
   })
 
   it('does not snap beyond the tolerance', () => {

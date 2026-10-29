@@ -23,6 +23,8 @@ import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
 import { dayLabel, minutesOfDay } from './daylight'
+import { createPanelCard, type CardState } from './panel-card'
+import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-job'
 import { createSunMapJob } from './sunmap-job'
 import { createSunMapPopover } from './sunmap-popover'
 import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
@@ -53,6 +55,56 @@ let probePoint: Point | undefined
 let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
 let sunKey = ''
 let sunTimer: number | undefined
+
+// Panel shading: the selected panel (in the Plan editor or clicked in 3D) is analysed in a worker and shown on a card.
+const shadeJob = createPanelShadeJob()
+const sceneCard = createPanelCard({ onClose: () => selectPanel(null) })
+sceneCard.el.id = 'panelCard3d'
+app.appendChild(sceneCard.el)
+const planCard = createPanelCard()
+let selectedPanel: string | null = null
+/** Key of the request last sent, so repeated asks for the same scene and panel do not restart the card. */
+let shadeAsked = ''
+
+function showCards(state: CardState) {
+  sceneCard.set(state)
+  planCard.set(state)
+}
+
+function selectPanel(id: string | null) {
+  if (id === selectedPanel) return
+  selectedPanel = id
+  shadeAsked = ''
+  if (id) requestShade()
+  else {
+    shadeJob.stop()
+    showCards({ status: 'idle' })
+  }
+}
+
+function requestShade() {
+  if (!selectedPanel || !sunDay) return
+  const panel = plan?.panels.find((p) => p.id === selectedPanel)
+  if (!panel) return selectPanel(null)
+  const req = {
+    sceneVersion: sunScene.sceneVersion(),
+    panel: { ...panel },
+    lat: sunDay.lat,
+    lon: sunDay.lon,
+    year: sunDay.when.getFullYear(),
+    occluders: () => sunScene.occluders(),
+  }
+  const key = panelShadeKey(req)
+  if (key === shadeAsked) return
+  shadeAsked = key
+  shadeJob.request(req)
+}
+
+shadeJob.onState((state) => {
+  if (state.status === 'ready') showCards({ status: 'ready', shade: state.shade })
+  else if (state.status === 'computing') showCards({ status: 'computing' })
+  else if (state.status === 'error') showCards({ status: 'error', message: state.message })
+})
 
 /** Asks for the sun map after the current synchronous changes (a pick sets buildings, then the plan) are done. */
 function scheduleSunMap() {
@@ -115,6 +167,7 @@ ui.onSunMap((on) => {
   }
 })
 sunScene.onSceneChange(() => {
+  requestShade()
   sunKey = ''
   sunResult = undefined
   closeProbe()
@@ -139,12 +192,14 @@ function escape() {
   else if (action === 'exit-walk') sunScene.stopWalk()
 }
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !walking) escape() // walking, the walk controls report Esc themselves
+  if (e.key !== 'Escape' || walking) return
+  if (view === '3d' && selectedPanel && !popover.open) selectPanel(null)
+  else escape() // walking, the walk controls report Esc themselves
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    __sunpatch: { scene: sunScene, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
+    __sunpatch: { scene: sunScene, selectPanel, shadeJob, plan: () => plan, result: () => sunResult, floorY: () => (site && plan ? floorBase(site.selected, plan) : 0) },
   })
 }
 
@@ -178,7 +233,13 @@ ui.onChange((when, sun, strip, place) => {
 const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
 let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'
-const editor = createPlanEditor(document.body, setPlan, { autosave: () => !exampleMode, onSwitch: (id, at) => switchTo(id, at) })
+const editor = createPlanEditor(document.body, setPlan, {
+  autosave: () => !exampleMode,
+  onSwitch: (id, at) => switchTo(id, at),
+  panelCard: planCard.el,
+  onPanelSelect: selectPanel,
+})
+sunScene.onPanelClick(selectPanel)
 sunScene.onPartClick(togglePartAt)
 sunScene.onBuildingClick((id, at) => switchTo(id, at))
 const chip = createStatusChip(app, () => last && void refine(last, current))

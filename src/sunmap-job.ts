@@ -77,6 +77,7 @@ export function createSunMapJob(): SunMapJob {
 
   function onWorker(m: WorkerOut) {
     if (!running || m.id !== running.id) return
+    if (m.kind === 'shaded') return // answers for the panel job's own worker
     if (m.kind === 'progress') {
       emit({ status: 'computing', progress: m.done })
       return

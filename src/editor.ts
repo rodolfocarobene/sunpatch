@@ -25,7 +25,7 @@ import { isClick } from './click'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
-import { azimuthOf, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
+import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
 import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
@@ -130,7 +130,19 @@ export function createPlanEditor(
   container: HTMLElement,
   onChange: (plan: Plan) => void,
   /** autosave() false keeps edits out of localStorage (the built-in example). */
-  { autosave = () => true, onSwitch }: { autosave?: () => boolean; onSwitch?: (buildingId: string, at: Point) => void } = {},
+  {
+    autosave = () => true,
+    onSwitch,
+    panelCard,
+    onPanelSelect,
+  }: {
+    autosave?: () => boolean
+    onSwitch?: (buildingId: string, at: Point) => void
+    /** The shading card, a box at the bottom left of the Plan view (it shows itself while a panel is selected). */
+    panelCard?: HTMLElement
+    /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
+    onPanelSelect?: (id: string | null) => void
+  } = {},
 ): PlanEditor {
   const root = document.createElement('div')
   root.className = 'editor'
@@ -150,6 +162,7 @@ export function createPlanEditor(
   statusLine.appendChild(statusText)
   side.append(toolbar, props)
   root.append(svg, side, statusLine)
+  if (panelCard) root.append(panelCard)
   container.appendChild(root)
 
   let building: Building | undefined
@@ -291,11 +304,13 @@ export function createPlanEditor(
     if (!force && props.contains(document.activeElement)) return
     if (!selection) {
       props.hidden = true
+      onPanelSelect?.(null)
       return
     }
     props.hidden = false
     const p = plan
     const sel = selection
+    onPanelSelect?.(sel.kind === 'panel' ? p.panels[sel.index]?.id ?? null : null)
     if (sel.kind === 'viewpoint') {
       const vp = effectiveViewpoint(p)
       const heading = Math.round((((-vp.yaw * 180) / Math.PI) % 360 + 360) % 360)
@@ -695,7 +710,7 @@ export function createPlanEditor(
   function panelAt(p: Point, free: boolean): Panel {
     const snap = free
       ? undefined
-      : snapPanel(p, [building!.outer, plan!.outline.outer], [...building!.holes, ...plan!.outline.holes], tol(SNAP_PX * 1.5))
+      : snapPanel(p, [building!.outer, plan!.outline.outer], [...building!.holes, ...plan!.outline.holes], tol(SNAP_PX * 1.5), exteriorEdge(building!))
     return newPanel(p, building!, plan!, snap)
   }
 
@@ -940,7 +955,7 @@ export function createPlanEditor(
       const to = { x: p.x + drag.dx, z: p.z + drag.dz }
       // A vertical panel (railing, facade) snaps to walls as it is dragged; the others move freely.
       const snap = q.tilt >= 80 && !drag.free && !e.shiftKey && building
-        ? snapPanel(p, [building.outer, plan.outline.outer], [...building.holes, ...plan.outline.holes], tol(SNAP_PX * 1.5))
+        ? snapPanel(p, [building.outer, plan.outline.outer], [...building.holes, ...plan.outline.holes], tol(SNAP_PX * 1.5), exteriorEdge(building))
         : undefined
       if (snap) Object.assign(q, snap.point, { azimuth: snap.azimuth })
       else Object.assign(q, to)
