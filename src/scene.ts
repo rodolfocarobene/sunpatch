@@ -699,7 +699,7 @@ export function createScene(container: HTMLElement): SunScene {
     const corners = suitCorners(suitData.samples[suitIndex])
     const mid = [0, 1, 2].map((k) => (corners[k] + corners[3 + k] + corners[6 + k] + corners[9 + k]) / 4)
     // From far away a 1 m cell is a few pixels: the ring grows with the distance so it stays findable.
-    const grow = Math.min(8, Math.max(1, camera.position.distanceTo(new Vector3(mid[0], mid[1], mid[2])) / 40))
+    const grow = Math.min(10, Math.max(1, camera.position.distanceTo(new Vector3(mid[0], mid[1], mid[2])) / 25))
     const ring = (outer: number, inner: number, color: number) => {
       const pos: number[] = []
       for (const k of [outer * grow, inner * grow]) for (let v = 0; v < 4; v++) for (let d = 0; d < 3; d++) pos.push(mid[d] + (corners[v * 3 + d] - mid[d]) * k)
@@ -1133,7 +1133,7 @@ export function createScene(container: HTMLElement): SunScene {
   }
   renderer.setAnimationLoop(render)
   // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
-  if (import.meta.env.DEV) Object.assign(window, { __sunpatchCamera: camera })
+  if (import.meta.env.DEV) Object.assign(window, { __sunpatchCamera: camera, __sunpatchControls: controls })
 
   return {
     update,

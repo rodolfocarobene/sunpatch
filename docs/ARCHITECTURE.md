@@ -56,6 +56,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
 | `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it. |
 | `solar.ts`, `weather.ts`, `panel-totals.ts` | Panel energy: clear-sky model and kWh, NASA POWER climate (fetch, parse, cache), analysis of every panel for the totals line. |
+| `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures, the worker job that runs it progressively, the click popover. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 
 ## The selection model
@@ -202,7 +203,29 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   on failure the card shows the ideal figure with a Retry. PVGIS is not used: it sends no CORS header. Assumptions
   are edited in the card and recompute without new rays. `panel-totals.ts` runs the shading of every panel through a
   second job (one at a time) for the totals line in the 3D panel. Tests use `fixtures/nasa-power-milan.json`.
-- `window.__sunpatch` and `window.__sunpatchCamera` are exposed in the dev server only, for the visual checks.
+- **Panel suitability** (`suitability.ts`): where to put panels. Candidate surfaces around the selected building
+  (`surfaceSamples`): the facade is the outer boundary of the merged footprint (`selected.outer` and its courtyard
+  holes, so a party wall between members is never sampled; cells pressed against an unselected taller neighbour are
+  dropped), 1 m along by about 1 m up from the member's `minHeight` to its eaves, vertical and facing out; the roof
+  is each member's flat roof at its own height on a 1 m grid, 0.3 m from the edge, once where members overlap (the
+  taller wins); the ground is a 2 m grid within 18 m of the footprint, outside every building plus 1 m. Roof and
+  ground samples are a 30 degree stand facing south (north when the latitude is negative); rays start at the stand's
+  middle. `traceSamples` runs the same BVH rays as the panel card on the same 12 days at 30-minute slots and returns
+  beam, unshaded beam and diffuse per month; `surfaceEnergy` feeds them to `panelEnergy` with an area of 1/efficiency
+  so the result is kWh per kWp a year, ideal and with the NASA POWER factor, the same figure a panel card gives.
+  `suitability-job.ts` runs it in a worker instance of its own (`sunmap.worker.ts`, message `suit`, 400 samples per
+  turn with progress, so a newer request can stop it), cached per (scene version, place); a newer request terminates
+  the run. `main.ts` asks only while the switch is on, waits for the climate before colouring, recolours when the
+  climate or the assumptions change, and drops the map when the scene changes (not when a panel is placed from it:
+  the old map stays until the update arrives). The scene (`setSuitability`) draws one vertex-coloured quad per sample
+  (facade quads 8 cm off the wall, flat ones 8 cm above the surface) with the sun-map ramp, as an apartment line so the
+  second render pass draws it over the walls. It has its own picking: a click returns the nearest quad unless a
+  solid is closer, so orbit, building switching, panel clicks and double-click to walk are untouched. While it shows,
+  the cutaway is off (`cutawayNow`): the facade and roof of the floors above need a building behind them; the
+  checkbox is disabled meanwhile and walking turns the map off. "Place a panel here" (`panelFor`) adds a panel with
+  the preset of the surface: facade vertical and facing out at the cell's height, roof the 30 degree stand at the roof
+  height, ground the stand at `GROUND_ELEVATION`.
+- `window.__sunpatch`, `window.__sunpatchCamera` and `window.__sunpatchControls` are exposed in the dev server only, for the visual checks.
 
 ## Testing
 

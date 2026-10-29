@@ -24,6 +24,8 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
 - **Watch the sun move**: pick a date and a time, or press Play to run through the day. A cutaway view hides the
   floors above so you can look into your rooms from outside.
 - **Solar panels**: place panels on a facade, roof or the ground and see their shading and yearly energy.
+- **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
+  building, in kWh per kWp a year with local weather. Click a spot and place a panel there.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.
@@ -82,10 +84,20 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      weather*, what shading costs, and a bar chart by month. Open *Assumptions* to change the module efficiency
      (21%) and system losses (14%). The 3D panel adds up all panels, for example *3 panels, ~1,050 kWh/year with
      local weather*. It is an estimate: direct sun is traced in 3D, diffuse light is approximated and not shaded.
+   - **Where to put panels**: in the 3D view tick **Panel suitability** (see below).
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
    **Play**. Keep **Hide floors above** on to see inside.
+   Tick **Panel suitability** to colour the outside of the building and its surroundings by the yearly energy a
+   panel would make there, in kWh/kWp/yr (the legend has the scale). The facade is sampled every metre (panels
+   vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
+   2 m grid; roofs and ground use a 30 degree stand facing south (north in the southern hemisphere). It takes a
+   few seconds to a minute for a big building (a progress bar shows), runs only when ticked, and is kept for
+   the same scene and place. Click a spot for its figure with local weather, the ideal clear-sky one and the loss to
+   shading, and press **Place a panel here** to add a panel with the matching preset to your plan, selected so its
+   card opens. The floors above stay visible while the map shows (so the facade and roof have something behind
+   them), and it is exclusive with **Sun map**. Esc closes the popover.
    Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend gives hours and the share
    of the day's daylight). Click a spot on the floor to read its hours and times, for example *3 h 10 min of
    direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
@@ -177,7 +189,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
   query per picked building, and caches the results.
 - Weather for the panel energy: monthly clear-sky index from [NASA POWER](https://power.larc.nasa.gov/) climatology
   (25-year averages). One request per place, rounded to 0.1 degrees, cached in the browser for a month, and made
-  only once a panel exists. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
+  only once a panel exists or the suitability map is on. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
 
 ## License
 
