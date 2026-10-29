@@ -15,6 +15,8 @@ export interface WalkHandlers {
   exit(): void
   stepTime(minutes: number): void
   togglePlay(): void
+  /** The H key: show or hide the floors above. */
+  toggleCutaway(): void
 }
 
 export interface WalkControls {
@@ -59,6 +61,7 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
     else if (e.key === '[' || e.code === 'BracketLeft') handlers.stepTime(-15)
     else if (e.key === ']' || e.code === 'BracketRight') handlers.stepTime(15)
     else if (e.code === 'KeyP') handlers.togglePlay()
+    else if (e.code === 'KeyH') handlers.toggleCutaway()
     else if (MOVES[e.code]) held.add(MOVES[e.code])
     else return
     e.preventDefault()
@@ -145,6 +148,8 @@ export interface WalkHud {
   /** Mirrors the panel's time: slider position, label and the day strip's CSS background. */
   setTime(minutes: number, strip: string): void
   setPlaying(playing: boolean): void
+  /** Mirrors the panel's "Hide floors above" checkbox on the HUD button. */
+  setCutaway(hidden: boolean): void
 }
 
 export interface WalkHudHandlers {
@@ -152,6 +157,8 @@ export interface WalkHudHandlers {
   /** The slider was dragged to this many minutes of the day. */
   setMinutes(minutes: number): void
   togglePlay(): void
+  /** The floors-above button was pressed. */
+  toggleCutaway(): void
 }
 
 export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers): WalkHud {
@@ -174,6 +181,7 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
       <span><kbd>Shift</kbd> faster</span>
       <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
       <span><kbd>P</kbd> play</span>
+      <button type="button" class="walkFloors" aria-pressed="true" title="Show or hide the floors above (H)"></button>
       <button type="button" class="walkExit">Exit walk <kbd>Esc</kbd></button>
     </div>`
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
@@ -184,7 +192,12 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
   const strip = hud.querySelector<HTMLElement>('.dayStrip')!
   const clock = hud.querySelector('.walkClock')!
   const playButton = hud.querySelector<HTMLButtonElement>('.walkPlay')!
+  const floorsButton = hud.querySelector<HTMLButtonElement>('.walkFloors')!
   hud.querySelector('.walkExit')!.addEventListener('click', handlers.exit)
+  floorsButton.addEventListener('click', () => {
+    handlers.toggleCutaway()
+    floorsButton.blur()
+  })
   playButton.addEventListener('click', () => {
     handlers.togglePlay()
     playButton.blur()
@@ -203,6 +216,10 @@ export function createWalkHud(container: HTMLElement, handlers: WalkHudHandlers)
       range.value = String(minutes)
       clock.textContent = formatClock(minutes)
       strip.style.background = background
+    },
+    setCutaway(hidden) {
+      floorsButton.innerHTML = `Floors above: ${hidden ? 'hidden' : 'shown'} <kbd>H</kbd>`
+      floorsButton.setAttribute('aria-pressed', String(hidden))
     },
     setPlaying(playing) {
       playButton.textContent = playing ? 'Pause' : 'Play'

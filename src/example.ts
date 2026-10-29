@@ -16,6 +16,9 @@ export interface Example {
   origin: Origin
   plan: Plan
   green: Green
+  /** The Overpass elements it was built from, and where they are centred (for switching buildings without a request). */
+  elements: OverpassElement[]
+  near: Origin
 }
 
 const inside = (ring: Point[], p: Point) => buildingContains({ outer: ring, holes: [] } as unknown as Building, p)
@@ -59,8 +62,9 @@ export function buildExample(elements: OverpassElement[]): Example {
   if (!first) throw new Error('example building missing from the fixture')
   const origin = unproject(ringCentroid(first.outer), EXAMPLE_NEAR)
   const { buildings } = parseOverpass(elements, origin)
-  const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!)
-  return { buildings, selected, origin, plan: examplePlan(selected, origin), green: parseGreen(elements, origin) }
+  // The sample apartment is drawn on the palace alone: flooding would add its neighbours and move the facade.
+  const selected = mergeSelection(buildings, buildings.find((b) => b.id === first.id)!, { ids: [first.id] })
+  return { buildings, selected, origin, plan: examplePlan(selected, origin), green: parseGreen(elements, origin), elements, near: EXAMPLE_NEAR }
 }
 
 /** Loaded on demand so the normal app does not carry the fixture. */

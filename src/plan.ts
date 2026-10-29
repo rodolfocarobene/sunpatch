@@ -9,6 +9,8 @@ export interface Plan {
   version: 1
   /** OSM id ("way/123") or tile id of the building the plan was drawn on. */
   buildingId: string
+  /** Ids of the OSM polygons that made up the selected building when the plan was saved; absent in older plans. */
+  selection?: string[]
   origin: Origin
   /** 0 = ground floor. */
   floor: number
@@ -91,6 +93,7 @@ export function defaultPlan(b: Building, origin: Origin, floor = 0): Plan {
   return {
     version: 1,
     buildingId: b.id,
+    ...(b.sources && { selection: b.sources }),
     origin,
     floor: Math.min(floor, levelCount(b) - 1),
     floorHeight: defaultFloorHeight(b),

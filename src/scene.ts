@@ -32,11 +32,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
-import { hiddenOutlines, partsOf, ringCentroid, type Building } from './osm'
+import { hiddenOutlines, partsOf, pickBuilding, ringCentroid, type Building } from './osm'
 import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
@@ -67,6 +68,9 @@ const OUTLINE_GHOST_OPACITY = 0.8
 const OUTLINE_LIFT = 0.03
 // About 4 px on screen at the usual orbit distance (a 0.16 m ribbon came out at 2 px); the same as the facade wall it sits on.
 const OUTLINE_WIDTH = 0.3
+// Hover cue on a building that a click would switch to (the amber of the outline, kept faint).
+const HOVER_OPACITY = 0.28
+const HOVER_EDGE_OPACITY = 0.9
 const APARTMENT_SHADOW_MAP = 2048
 const SKY_DAY = new Color(0x8fbfe8)
 const SKY_NIGHT = new Color(0x0b1020)
@@ -111,6 +115,10 @@ export interface SunScene {
   /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
   setWalkHandlers(handlers: WalkHandlers & { change(walking: boolean): void }): void
   resize(): void
+  /** Called with the id of the building polygon under a shift-click (not a drag) in the 3D view. */
+  onPartClick(handler: (polygonId: string) => void): void
+  /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
+  onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
   /** Pauses rendering while the 3D view is hidden. */
   setActive(active: boolean): void
   dispose(): void
@@ -336,6 +344,7 @@ export function createScene(container: HTMLElement): SunScene {
   let glowMaterials: MeshStandardMaterial[] = []
   let floorMesh: Mesh | undefined
   let solidMeshes: Mesh[] = []
+  let selectedIds = new Set<string>()
 
   // Faces sit a hair behind their own edge lines so the lines do not flicker.
   function offsetFaces<T extends MeshStandardMaterial>(material: T): T {
@@ -426,16 +435,17 @@ export function createScene(container: HTMLElement): SunScene {
 
   function applyCutaway() {
     // Still drawn into the shadow map (the depth pass ignores the material), but invisible to the camera.
-    // Walking needs the ceiling whatever the user chose.
+    // The same in walk mode: with the floors above hidden the ceiling is open to the sky, and the sun still
+    // comes in only through the windows because the hidden block keeps casting into the apartment.
     for (const m of [ceilingMaterial, addedAboveMaterial]) {
-      if (m) m.colorWrite = m.depthWrite = !cutaway || walking
+      if (m) m.colorWrite = m.depthWrite = !cutaway
     }
   }
 
   /** Edge lines of the apartment; the ceiling's follow the ceiling (hidden by cutaway), the ghost outline shows when the floors above are not hidden. */
   function showAptLines(on: boolean) {
     for (const { line, kind } of aptLines) {
-      const shown = kind === 'ceiling' ? !cutaway || walking : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : true
+      const shown = kind === 'ceiling' ? !cutaway : kind === 'ghost' ? !cutaway && !walking : kind === 'outline' ? !walking : true
       line.visible = on && shown
     }
   }
@@ -449,6 +459,7 @@ export function createScene(container: HTMLElement): SunScene {
 
   function populate() {
     stopWalk()
+    clearHover()
     clearWorld()
     apartmentMeshes = new Set()
     aptLines = []
@@ -464,6 +475,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (selected && !selected.sources && hidden.has(selected.id)) {
       for (const p of partsOf(selected, buildings)) highlighted.add(p.id)
     }
+    selectedIds = highlighted
     const selectedPieces = selected?.members ?? buildings.filter((b) => highlighted.has(b.id) && !hidden.has(b.id))
     const addMesh = (b: Building, color: number) => {
       const mesh = new Mesh(buildingGeometry(b), new MeshStandardMaterial({ color }))
@@ -552,6 +564,7 @@ export function createScene(container: HTMLElement): SunScene {
     exit: () => walkHandlers?.exit(),
     stepTime: (m) => walkHandlers?.stepTime(m),
     togglePlay: () => walkHandlers?.togglePlay(),
+    toggleCutaway: () => walkHandlers?.toggleCutaway(),
   })
 
   function startWalk(at?: { x: number; z: number }): boolean {
@@ -563,6 +576,7 @@ export function createScene(container: HTMLElement): SunScene {
     }
     const start = walkStart(plan, at)
     walking = true
+    clearHover()
     controls.enabled = false
     camera.fov = WALK_FOV
     camera.near = WALK_NEAR
@@ -603,6 +617,102 @@ export function createScene(container: HTMLElement): SunScene {
     if (hit?.object !== floorMesh || !insideOutline(plan, { x: hit.point.x, z: hit.point.z })) return
     startWalk({ x: hit.point.x, z: hit.point.z })
   })
+
+  // A click (without dragging) names the building polygon under the cursor: shift adds it to or removes it from the
+  // selection, a plain click on another building switches to it.
+  let partClick: ((polygonId: string) => void) | undefined
+  let buildingClick: ((polygonId: string, at: { x: number; z: number }) => void) | undefined
+  let downAt: { x: number; y: number } | undefined
+  renderer.domElement.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }))
+  // The building polygon under the pointer and the scene point hit, or undefined (sky, ground, glass, hidden floors).
+  function polygonAt(clientX: number, clientY: number): { polygon: Building; hit: Vector3; dir: Vector3 } | undefined {
+    const rect = renderer.domElement.getBoundingClientRect()
+    const ndc = new Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
+    raycaster.setFromCamera(ndc, camera)
+    const seen = (o: Object3D) =>
+      o instanceof Mesh && !glassMeshes.includes(o) && [o.material].flat().every((m) => m.colorWrite && !m.transparent)
+    const hit = raycaster.intersectObjects(world.children, true).find((h) => seen(h.object))
+    if (!hit) return undefined
+    // A wall hit lies on the polygon's edge: step a little way along the ray, into the building.
+    const dir = raycaster.ray.direction
+    const flat = Math.hypot(dir.x, dir.z) || 1
+    const at = { x: hit.point.x + (dir.x / flat) * 0.15, z: hit.point.z + (dir.z / flat) * 0.15 }
+    const hidden = hiddenOutlines(buildings)
+    const here = buildings.filter((b) => !hidden.has(b.id) && hit.point.y >= b.minHeight - 0.3 && hit.point.y <= b.height + 0.3)
+    const polygon = pickBuilding(here, at)
+    return polygon && { polygon, hit: hit.point, dir }
+  }
+
+  renderer.domElement.addEventListener('click', (e) => {
+    if (walking || !(e.shiftKey ? partClick : buildingClick) || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    const found = polygonAt(e.clientX, e.clientY)
+    if (!found) return
+    if (e.shiftKey) partClick?.(found.polygon.id)
+    else if (!selectedIds.has(found.polygon.id)) buildingClick?.(found.polygon.id, { x: found.hit.x, z: found.hit.z })
+  })
+
+  // Hover cue for switching buildings: a pointer cursor and an amber tint on an unselected building. One raycast
+  // per animation frame at most, and none while a button is down (orbit or pan drag) or while walking.
+  let hoverMark: Group | undefined
+  let hoverId: string | undefined
+  let hoverEvent: { x: number; y: number } | undefined
+  let hoverFrame = 0
+  function clearHover() {
+    hoverEvent = undefined
+    if (hoverMark) {
+      scene.remove(hoverMark)
+      for (const child of hoverMark.children) {
+        if (child instanceof Mesh || child instanceof LineSegments) {
+          child.geometry.dispose()
+          child.material.dispose()
+        }
+      }
+      hoverMark = undefined
+    }
+    hoverId = undefined
+    if (!walking) renderer.domElement.style.cursor = ''
+  }
+  function showHover(polygon: Building) {
+    if (polygon.id === hoverId) return
+    clearHover()
+    hoverId = polygon.id
+    const geometry = buildingGeometry(polygon)
+    const tint = new Mesh(
+      geometry,
+      new MeshBasicMaterial({
+        color: OUTLINE_COLOR, transparent: true, opacity: HOVER_OPACITY, depthWrite: false, toneMapped: false,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      }),
+    )
+    const edges = new LineSegments(
+      new EdgesGeometry(geometry, EDGE_ANGLE_DEG),
+      new LineBasicMaterial({ color: OUTLINE_COLOR, transparent: true, opacity: HOVER_EDGE_OPACITY, depthWrite: false, toneMapped: false }),
+    )
+    hoverMark = new Group()
+    hoverMark.add(tint, edges)
+    scene.add(hoverMark)
+  }
+  function updateHover() {
+    hoverFrame = 0
+    if (!hoverEvent || walking || !buildingClick) return
+    const found = polygonAt(hoverEvent.x, hoverEvent.y)
+    if (!found || selectedIds.has(found.polygon.id)) {
+      if (hoverId !== undefined) clearHover()
+      return
+    }
+    showHover(found.polygon)
+    renderer.domElement.style.cursor = 'pointer'
+  }
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (walking || e.buttons !== 0) {
+      if (hoverId !== undefined) clearHover()
+      return
+    }
+    hoverEvent = { x: e.clientX, y: e.clientY }
+    if (!hoverFrame) hoverFrame = requestAnimationFrame(updateHover)
+  })
+  renderer.domElement.addEventListener('pointerleave', clearHover)
+  renderer.domElement.addEventListener('pointerdown', clearHover)
 
   function setTrees(trees: Tree[]) {
     scene.remove(treeGroup)
@@ -688,6 +798,12 @@ export function createScene(container: HTMLElement): SunScene {
     setPlan,
     setTrees,
     setCutaway,
+    onPartClick(handler) {
+      partClick = handler
+    },
+    onBuildingClick(handler) {
+      buildingClick = handler
+    },
     startWalk,
     stopWalk,
     setWalkHandlers(handlers) {
