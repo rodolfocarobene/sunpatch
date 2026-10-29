@@ -82,6 +82,11 @@ touch). `selectBuilding` in `src/block.ts` turns the clicked polygon into one se
   plan, then, if the point is within 250 m of the loaded Overpass data (`loaded`), re-parses those elements around the
   new building and floods again (no request); otherwise it is a map pick (tile preview, then Overpass). The new
   building's own saved plan opens, or none.
+- An outline is left out of `members` (and of the scene, `hiddenOutlines` in `osm.ts`) only when its parts cover at
+  least 90% of it (`partsCover`): a podium outline with one tower part keeps the podium. A member that lies inside a
+  taller one with the same footprint (the same building mapped twice) is not drawn (`buried` in `block.ts`); both
+  stay in `sources`. Fixtures for these stacked shapes are `fixtures/overpass-stacked-*.json`, tested in
+  `src/stacked.test.ts`.
 - `apartment.ts` cuts every member around the one apartment outline, each with its own height and min height;
   whatever of any member lies above the ceiling slab goes to the cutaway group.
 - The `?example=milan` sample keeps Palazzo Reale alone (`ids: [id]`): flooding adds its neighbours and moves the
@@ -111,7 +116,12 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
   only the narrow light and redraws the apartment meshes at the same depth, with everything else set to
   `colorWrite = false` so it still occludes and casts shadows.
 - Cutaway hides the part above the apartment from the camera only (`colorWrite`/`depthWrite` off), so it keeps
-  casting shadows into the rooms.
+  casting shadows into the rooms. Walk mode uses the same state: the panel checkbox "Hide floors above", the
+  walk HUD's "Floors above" button and the `H` key are one switch (`ui.ts` owns it). Hidden, the ceiling is open to
+  the sky; shown, it is drawn. The floor's sun patches are the same pixels either way, since the sun reaches the
+  rooms only through the windows.
+- 3D hover: with the pointer over an unselected building (one raycast per animation frame, none while a button is
+  down or in walk mode) the cursor becomes a pointer and the polygon gets a faint amber tint and edges.
 - Interior brightness from bounced light is approximated with an emissive term proportional to daylight.
 
 ## Testing

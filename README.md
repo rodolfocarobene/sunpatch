@@ -57,7 +57,7 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
 1. **Map**: search an address or move the map, then click your building. The app switches to the 3D view.
    Your building is every outline that touches the one you clicked, so it may include neighbours of other
    heights. In 3D, **Shift-click** a building to add it to the selection or take it out.
-   To work on another building, click it in 3D, or click a grey neighbour in Plan with the Select tool.
+   To work on another building, click it in 3D (it lights up when you point at it), or click a grey neighbour in Plan with the Select tool.
    Your plan is saved first.
 2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
    OpenStreetMap data. Then:
@@ -70,9 +70,11 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
-   **Play**. Keep **Cutaway** on to see inside.
+   **Play**. Keep **Hide floors above** on to see inside.
 4. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
-   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave.
+   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. `H` (or the
+   **Floors above** button) hides or shows the floors above; it is the same switch as in the 3D panel. Hidden,
+   you see the sky through the ceiling, and the sun still comes in only through the windows.
 
 Times are in your browser's time zone, so use the app from the same time zone as the place you are looking at.
 
