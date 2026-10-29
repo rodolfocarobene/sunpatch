@@ -35,7 +35,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | File | Role |
 |---|---|
 | `main.ts` | App state and wiring: views (Map / Plan / 3D / Panels), picking, OSM refinement, plan loading. |
-| `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play; in Panels the suitability switch, the panel list and the docked card), status chip. |
+| `ui.ts`, `chip.ts`, `style.css` | Left panel (views, one-line building identity from `building-line.ts`, dismissible switching hint, overlay toggles, location and accuracy; in Panels the suitability switch, the panel list and the docked card), the docked date/time bar (`#dock`), status chip. |
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
@@ -51,7 +51,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `apartment.ts` | Plan → geometry: blocks below/above, rest of the storey, facade walls with window openings, interior walls, glass. |
 | `edits.ts` | Building fixes: carving cuts per height range and adding prisms (`polygon-clipping`). |
 | `scene.ts` | three.js scene: buildings, lights, shadows, cutaway, sun disc, sky, two-pass apartment rendering, walk mode. |
-| `walk.ts`, `walk-geom.ts` | First-person controls and HUD; collision, start position and look direction. |
+| `walk.ts`, `walk-geom.ts` | First-person controls and HUD (key hints, compass; the time controls are the docked bar); collision, start position and look direction. |
+| `popover-place.ts` | Where a floor popover goes: above or below its point, inside the band between the compass and the docked bar. |
 | `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
 | `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts`, `panel-verdict.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it; the card's one-sentence verdict, shade warning and reference panel (pure). |
@@ -174,6 +175,12 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
 - **Click**: with the map on, a plain click on the floor (`onFloorClick`, not a drag, not through a hidden ceiling)
   marks the point and opens the popover; a click elsewhere or `Esc` closes it. The popover follows the point on
   screen (`onProbeScreen`) and a double-click still walks.
+- **Docked time bar**: date chips, date input, time slider with day strip, label, Play and the sun summary live in one
+  `#dock` box at the bottom centre, built in `ui.ts` (which owns the time state; the walk HUD no longer has its own
+  slider). It shows in the 3D view and in walk mode only; Map, Plan and Panels hide it. The walk key hints
+  (`createWalkHud(app, ui.dock, ...)`) are prepended to the same dock, so they sit just above the bar. In walk mode the
+  slider and Play hand the keyboard back to the walk after use. The popovers read the dock's rect (`freeBand`) to stay
+  clear of it.
 - **In walk mode** the left panel collapses to the tabs plus the same "Hide floors above" and "Sun map" controls
   (and the legend, without its hint); `H` and `M` flip them. There is no floors button in the HUD any more: two
   controls for one state would compete. A plain click on the floor (same `isClick` threshold as 3D, raycast from the

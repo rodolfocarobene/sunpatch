@@ -1,4 +1,5 @@
 import { DAY_MAX } from './daylight'
+import { freeBand, popoverTop } from './popover-place'
 import { clock, duration, type SpotStats } from './sunmap'
 
 /** The text of the popover: the answer first ("3 h 10 min of direct sun"), then the share and each interval. */
@@ -106,10 +107,10 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
       }
       box.style.visibility = ''
       const height = box.offsetHeight
-      const below = at.y - height - GAP < 8
+      const { minTop, maxBottom } = freeBand()
       const left = Math.min(window.innerWidth - WIDTH / 2 - 8, Math.max(WIDTH / 2 + 8, at.x))
       box.style.left = `${left}px`
-      box.style.top = `${below ? at.y + GAP : at.y - height - GAP}px`
+      box.style.top = `${popoverTop(at.y, height, GAP, minTop, maxBottom)}px`
     },
     setNow: place,
     hide,

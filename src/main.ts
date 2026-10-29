@@ -22,7 +22,7 @@ import { defaultPlan, floorBase, rebasePlan, type Plan } from './plan'
 import { createScene } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
-import { dayLabel, minutesOfDay } from './daylight'
+import { minutesOfDay } from './daylight'
 import { createPanelCard, formatKwh, type CardState, type EnergyView } from './panel-card'
 import { createPanelTotals } from './panel-totals'
 import { panelInside, referenceEnergy, referenceLine, verdict } from './panel-verdict'
@@ -37,7 +37,7 @@ import { createSuitabilityPopover } from './suitability-popover'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
 import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
-import { createUI, sunSentence, type View } from './ui'
+import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
 
@@ -47,12 +47,7 @@ const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
 const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
-const hud = createWalkHud(app, {
-  exit: () => sunScene.stopWalk(),
-  setMinutes: (minutes) => ui.setMinutes(minutes),
-  togglePlay: () => ui.togglePlay(),
-})
-ui.onPlaying((playing) => hud.setPlaying(playing))
+const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
@@ -464,8 +459,6 @@ sunScene.setWalkHandlers({
 })
 ui.onChange((when, sun, strip, place) => {
   hud.setSun(sun)
-  hud.setStatus(`${dayLabel(when.getMonth(), when.getDate())} \u00b7 ${sunSentence(sun, 'up')}`)
-  hud.setTime(minutesOfDay(when), strip)
   sunDay = { when, strip, ...place }
   popover.setNow(minutesOfDay(when))
   // Only another day or place needs a new sun map; the time slider just moves along it.
