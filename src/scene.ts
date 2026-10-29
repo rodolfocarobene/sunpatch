@@ -22,6 +22,7 @@ import {
   Sprite,
   SpriteMaterial,
   DoubleSide,
+  FrontSide,
   EdgesGeometry,
   LineBasicMaterial,
   LineSegments,
@@ -509,8 +510,14 @@ export function createScene(container: HTMLElement): SunScene {
     // Still drawn into the shadow map (the depth pass ignores the material), but invisible to the camera.
     // The same in walk mode: with the floors above hidden the ceiling is open to the sky, and the sun still
     // comes in only through the windows because the hidden block keeps casting into the apartment.
+    // Its shadow is recorded from its sun-facing side while hidden: by default the map holds the back faces, so
+    // the slab's underside sits exactly at the wall tops and the top of the storey, and the normal bias lets the
+    // sun leak along them. The top of the block is metres away, so nothing under it can leak. Drawn, the block
+    // keeps the default, which is what stops its own roof from acne.
     for (const m of [ceilingMaterial, addedAboveMaterial]) {
-      if (m) m.colorWrite = m.depthWrite = !cutawayNow()
+      if (!m) continue
+      m.colorWrite = m.depthWrite = !cutawayNow()
+      m.shadowSide = cutawayNow() ? FrontSide : null
     }
   }
 
