@@ -23,6 +23,9 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
   recess. Fixes cast shadows like the rest of the building.
 - **Watch the sun move**: pick a date and a time, or press Play to run through the day. A cutaway view hides the
   floors above so you can look into your rooms from outside.
+- **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
+  slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
+  day's daylight and the times, drawn on a day strip like the time slider's.
 - **Walk inside** in first person at eye height, see the sun disc through the windows and step the time while you
   look around.
 - Plans are saved in the browser automatically and can be exported and imported as JSON.
@@ -71,6 +74,11 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. Set the date and move the time slider, or press
    **Play**. Keep **Hide floors above** on to see inside.
+   Tick **Sun map** to colour the floor by hours of direct sun on that date (the legend gives hours and the share
+   of the day's daylight). Click a spot on the floor to read its hours and times, for example *3 h 10 min of
+   direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it. Changing the date
+   recomputes the map (a few seconds, in the background); moving the time slider does not. It stays on while
+   you walk.
 4. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
    faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. `H` (or the
    **Floors above** button) hides or shows the floors above; it is the same switch as in the 3D panel. Hidden,
@@ -88,6 +96,8 @@ building data.
   shadows by metres, so check your neighbours on the map.
 - Roofs are flat, and trees, awnings and most balconies are missing. Use **Building fix** for the ones that matter
   to you.
+- The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to
+  about a hand's width. It counts the sun as a point, so the soft edge of a shadow is a sharp line.
 - Only direct sunlight is simulated. The general brightness of the rooms is a simple stand-in for light bouncing
   around, not a measurement.
 - Distant terrain (hills, mountains) is not modelled yet, so very low sun near sunrise and sunset may be
@@ -110,6 +120,10 @@ building data.
    per height range with `polygon-clipping`.
 5. **Sharp patches**: a second, narrow sun light covers only your building with a high-resolution shadow map,
    rendered in a second pass so the room gets centimetre-level sun patches without lighting anything twice.
+6. **Sun map**: the floor is sampled every 25 cm, and from each sample a ray goes toward the sun every 5 minutes
+   from sunrise to sunset. A ray counts as lit when it reaches the sky past every shadow caster in the scene (a
+   BVH from [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) in a Web Worker); window glass lets it
+   through.
 
 More detail for contributors is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -136,7 +150,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 ## Roadmap
 
 - Terrain horizon from an elevation model, so hills and mountains block the low sun.
-- A sun-hours heat map of the floor for a day or a season.
 - Time zone of the chosen place instead of the browser's.
 
 ## Data and attribution
