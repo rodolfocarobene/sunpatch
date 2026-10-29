@@ -34,8 +34,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 
 | File | Role |
 |---|---|
-| `main.ts` | App state and wiring: views (Map / Plan / 3D), picking, OSM refinement, plan loading. |
-| `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play), status chip. |
+| `main.ts` | App state and wiring: views (Map / Plan / 3D / Panels), picking, OSM refinement, plan loading. |
+| `ui.ts`, `chip.ts`, `style.css` | Left panel (views, building info, location, date/time, play; in Panels the suitability switch, the panel list and the docked card), status chip. |
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
@@ -54,8 +54,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `walk.ts`, `walk-geom.ts` | First-person controls and HUD; collision, start position and look direction. |
 | `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
-| `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it. |
-| `solar.ts`, `weather.ts`, `panel-totals.ts` | Panel energy: clear-sky model and kWh, NASA POWER climate (fetch, parse, cache), analysis of every panel for the totals line. |
+| `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts`, `panel-verdict.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it; the card's one-sentence verdict, shade warning and reference panel (pure). |
+| `solar.ts`, `weather.ts`, `panel-totals.ts` | Panel energy: clear-sky model and kWh, NASA POWER climate (fetch, parse, cache), analysis of every panel for the Panels list and its total. |
 | `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures, the worker job that runs it progressively, the click popover. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 
@@ -188,9 +188,22 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   cos(incidence), so it is energy and not just hours) and the annual cos x lit sum in hours (`annualCosHours`, for
   the energy step). `panel-shade-job.ts` runs it in its own worker instance (same `sunmap.worker.ts`, message
   `shade`), debounced 250 ms and cached per (scene version, panel parameters, place). The card (`panel-card.ts`)
-  shows in the Plan view at the bottom left while a panel is selected and floats at the right in 3D after a plain
-  click on a panel (`scene.onPanelClick`; a click elsewhere or `Esc` closes it). Panel snapping in the editor
-  accepts only exterior edges (`exteriorEdge` in `panel.ts`).
+  is docked in the left panel of the Panels view (`ui.cardSlot`), the only place it shows: a panel is selected from
+  the list, by a plain click on it in the Panels view (`scene.onPanelClick`; main.ts ignores it in 3D), or in the
+  Plan editor, where a one-sentence summary with "Open in Panels" sits at the end of the panel's properties in the
+  right column (`panelSummary` option of `createPlanEditor`). Esc or the close button deselects. Panel snapping in
+  the editor accepts only exterior edges (`exteriorEdge` in `panel.ts`).
+- **Views**: Map, Plan, 3D and Panels. 3D and Panels are the same `scene` and camera (`setView` in main.ts only changes
+  which controls the left panel shows and runs `setActive` for both), so switching keeps the camera. The suitability
+  map belongs to Panels and is switched off when another tab opens; Panels creates the default plan when there is none,
+  because panels live in the plan. Panels, their shadows and the sun map keep rendering in every view.
+- **Panel card text** (`panel-verdict.ts`): `verdict` gives the sentence ("About 568 kWh a year with local weather, 76%
+  of the ideal. Shading costs under 1%."; clear-sky wording while the weather loads or fails). It becomes a warning
+  when `panelInside` (centre inside the footprint and lowest edge under the roof) or `shadingLoss >= SHADE_WARNING_LOSS`
+  (0.95). `referenceEnergy` is the yardstick: an unshaded panel of the same size, 30 degrees, facing the equator, from
+  `openIrradiation` (the same days, slots and clear-sky model as `shadePanel` with no rays), through `panelEnergy` with
+  the current assumptions and climate. Everything else (ideal figure, months, hours, chart, assumptions) is folded
+  under "Details".
 - **Panel energy** (`solar.ts`, `weather.ts`): `shadePanel` also sums, per month, the clear-sky irradiation of a
   representative day: beam = Meinel DNI (1353 x 0.68^(AM^0.678), Kasten-Young air mass) x cos(incidence) x lit share
   (and the same with nothing in the way), plus isotropic diffuse (DHI = 10% of DNI, sky (1+cos tilt)/2, ground
@@ -202,7 +215,7 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   `loadClimate` once a plan has panels, kept in memory and localStorage for 30 days, never retried automatically;
   on failure the card shows the ideal figure with a Retry. PVGIS is not used: it sends no CORS header. Assumptions
   are edited in the card and recompute without new rays. `panel-totals.ts` runs the shading of every panel through a
-  second job (one at a time) for the totals line in the 3D panel. Tests use `fixtures/nasa-power-milan.json`.
+  second job (one at a time) for the Panels list and its total. Tests use `fixtures/nasa-power-milan.json`.
 - **Panel suitability** (`suitability.ts`): where to put panels. Candidate surfaces around the selected building
   (`surfaceSamples`): the facade is the outer boundary of the merged footprint (`selected.outer` and its courtyard
   holes, so a party wall between members is never sampled; cells pressed against an unselected taller neighbour are
@@ -222,7 +235,7 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   second render pass draws it over the walls. It has its own picking: a click returns the nearest quad unless a
   solid is closer, so orbit, building switching, panel clicks and double-click to walk are untouched. While it shows,
   the cutaway is off (`cutawayNow`): the facade and roof of the floors above need a building behind them; the
-  checkbox is disabled meanwhile and walking turns the map off. "Place a panel here" (`panelFor`) adds a panel with
+  map only exists in the Panels view, where the cutaway switch is not shown, and leaving it or walking turns the map off. "Place a panel here" (`panelFor`) adds a panel with
   the preset of the surface: facade vertical and facing out at the cell's height, roof the 30 degree stand at the roof
   height, ground the stand at `GROUND_ELEVATION`.
 - `window.__sunpatch`, `window.__sunpatchCamera` and `window.__sunpatchControls` are exposed in the dev server only, for the visual checks.
