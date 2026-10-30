@@ -56,7 +56,7 @@ import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pi
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
-import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
+import { CELL, sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
@@ -87,6 +87,9 @@ const heightRuler = createHeightRuler(document.body, {
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
 let sunResult: SunMapResult | undefined
+const HEADLINE_CELL = 0.5
+/** Sample spacing of the request behind `sunResult`; the painted map needs the fine grid. */
+let tracedCell = CELL
 /** Where the user clicked, kept so the popover can be redone when the result changes. */
 let plan: Plan | undefined // declared early: the sun callback below can fire before the building is picked
 let probePoint: Point | undefined
@@ -583,6 +586,8 @@ function requestSunMap() {
   }
   const { selected } = site
   const { when, lat, lon } = sunDay
+  // Without the painted map only "is any spot lit" is asked, which a coarser grid answers in a fraction of the time.
+  tracedCell = sunMapOn ? CELL : HEADLINE_CELL
   sunJob.request({
     sceneVersion: sunScene.sceneVersion(),
     plan,
@@ -590,6 +595,7 @@ function requestSunMap() {
     day: when,
     lat,
     lon,
+    cell: tracedCell,
     occluders: () => sunScene.occluders(),
   })
 }
@@ -728,11 +734,14 @@ ui.onSunMap((on) => {
   if (on && suitOn) ui.setSuitability(false)
   sunScene.setSunMapVisible(on)
   if (on) {
-    if (sunResult) {
+    if (sunResult && tracedCell <= CELL) {
       // The headline's trace is the sun map: paint it without tracing again.
       sunScene.setSunMap({ grid: sunResult.grid, minutes: sampleMinutes(sunResult) })
       ui.setSunMapStatus({ kind: 'ready', daylightMinutes: sunResult.daylightMinutes, day: sunDay?.when ?? new Date() })
-    } else scheduleSunMap()
+    } else {
+      sunResult = undefined // a coarse headline trace is no map to click on
+      scheduleSunMap()
+    }
   } else {
     if (view !== '3d') sunJob.stop() // in 3D the headline keeps the job and its result
     sunScene.setSunMap(null)

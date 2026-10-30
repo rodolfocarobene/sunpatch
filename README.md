@@ -40,6 +40,9 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
   each month and which plants of a built-in catalogue of about 70 would grow there, month by month, with a reason
   for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
   not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C.
+- **Headline answer**: under the building line the 3D tab says when direct sun reaches the apartment floor on the chosen
+  date, e.g. "Sun inside on 21 Dec: 10:20–13:35 · 3 h 15 min", with the time when most of the floor is lit. It follows
+  the date and presets of the sun bar.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.

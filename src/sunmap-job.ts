@@ -1,6 +1,6 @@
 import { dateValue, STEP } from './daylight'
 import type { Plan } from './plan'
-import { floorGrid, sunSlots, type Grid, type Slots, type SunMapResult } from './sunmap'
+import { CELL, floorGrid, sunSlots, type Grid, type Slots, type SunMapResult } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 import { t } from './i18n'
 
@@ -16,6 +16,8 @@ export interface SunMapRequest {
   day: Date
   lat: number
   lon: number
+  /** Distance between floor samples; the default is the sun map's. A coarser grid answers "any spot lit" much faster. */
+  cell?: number
   /** Triangles of every occluder; only called when the worker does not hold this scene yet. */
   occluders(): Float32Array
 }
@@ -36,7 +38,7 @@ export interface SunMapJob {
 }
 
 /** The scene version covers the plan too: every plan, building, edit or tree change goes through the scene. */
-const keyOf = (r: SunMapRequest) => `${r.sceneVersion}|${dateValue(r.day)}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}`
+const keyOf = (r: SunMapRequest) => `${r.sceneVersion}|${dateValue(r.day)}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}|${r.cell ?? CELL}`
 
 /**
  * Runs the sun map in a Web Worker: the triangles go over once per scene (the worker keeps the BVH), each date
@@ -106,7 +108,7 @@ export function createSunMapJob(): SunMapJob {
     }
     if (running) return // finished results pick up `latest`
     const start = performance.now()
-    const grid = floorGrid(req.plan)
+    const grid = floorGrid(req.plan, req.cell)
     const slots = sunSlots(req.day, req.lat, req.lon)
     if (!grid.count || !slots.starts.length) {
       ready(key, grid, slots, new Uint8Array(grid.count * slots.starts.length), 0)

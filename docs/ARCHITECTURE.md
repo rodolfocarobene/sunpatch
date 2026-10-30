@@ -56,6 +56,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `walk.ts`, `walk-geom.ts` | First-person controls and HUD (key hints, compass; the time controls are the docked bar); collision, start position and look direction. |
 | `popover-place.ts` | Where a floor popover goes: above or below its point, inside the band between the compass and the docked bar. |
 | `sunmap.ts` | Sun map, pure part: floor sampling grid, time slots, lit intervals, share of daylight, colour ramp, overlay texels. |
+| `headline.ts` | The 3D tab's headline: any-sample-lit per slot into at most two stretches, total minutes, the peak slot, and the sentence (pure). |
 | `sunmap-trace.ts`, `sunmap.worker.ts`, `sunmap-job.ts` | Sun map rays: occluder collection and BVH tracing (three-mesh-bvh), the worker that runs them, and the job that debounces, caches and reports progress. |
 | `panel-shade.ts`, `panel-shade-job.ts`, `panel-card.ts`, `panel-verdict.ts` | Panel shading analysis: samples, 12 days of rays, the month x hour matrix and totals; its worker job (debounced, cached); the card that shows it; the card's one-sentence verdict, shade warning and reference panel (pure). |
 | `solar.ts`, `weather.ts`, `panel-totals.ts` | Panel energy: clear-sky model and kWh, NASA POWER climate (fetch, parse, cache), analysis of every panel for the Panels list and its total. |
@@ -216,6 +217,12 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   plan edits; the date and place come from the UI. Requests are debounced (250 ms), one runs at a time, and the
   newest request waits for it. Moving the time slider never recomputes. While a map computes, the old overlay is
   removed (it would show another day) and the legend shows progress.
+- **Headline** (`headline.ts`): the 3D tab's sentence ("Sun inside on 21 Dec: 10:20–13:35 · 3 h 15 min") reads the same
+  lit flags: a slot counts when any sample is lit, runs closer than 10 minutes are written as one stretch (the total
+  counts lit slots only), and at most the two longest stretches are listed, then an ellipsis. With the map off the job
+  is asked with a 0.5 m grid (`SunMapRequest.cell`, about a quarter of the rays); switching the map on retraces at
+  0.25 m. A fine result is reused for the headline. No windows means no trace: the line links to Plan instead.
+  Everything cancels the way the map does (scene version, date and place are in the cache key).
 - **Overlay** (`scene.ts`, `paintSunMap`): the plan outline as one flat mesh just above the floor, textured with one
   texel per grid cell and filtered smoothly; cells that are not floor take their nearest floor colour so nothing
   fades at walls. It is registered in `aptLines`, so the two-pass render draws it in the second pass, over the
