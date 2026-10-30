@@ -3,9 +3,11 @@ import type { Building, HeightSource } from './osm'
 export interface BuildingLine {
   /** Name or street address from the OSM tags, when the data has one. */
   title: string | null
-  /** "Relation 36488", "Map-tile outline"; `href` is the OSM page of a real object. */
+  /** "OpenStreetMap" for a real object, "Map-tile outline" for a preview; `href` is the OSM page of a real object. */
   label: string
   href: string | null
+  /** The OSM id as OSM names it ("Relation 36488"): for the link's tooltip and the hover note, not the visible label. */
+  osmId: string | null
   /** The rest of the line: "3 parts", "9 m", "3 levels". */
   facts: string[]
   /** Where the height came from, for a tooltip. */
@@ -33,7 +35,7 @@ export function heightSourceLabel(b: Building): string | null {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-/** The one-line identity of the selected building: "Relation 36488 · 9 m · 3 levels". */
+/** The one-line identity of the selected building: "OpenStreetMap · 9 m · 3 levels". */
 export function buildingLine(b: Building): BuildingLine {
   const osmPath = b.id.split('#')[0]
   const tile = b.id.startsWith('tile/')
@@ -47,8 +49,9 @@ export function buildingLine(b: Building): BuildingLine {
   const min = b.minHeight > 0 ? `, starts at ${b.minHeight.toFixed(1)} m` : ''
   return {
     title: b.tags.name || street || null,
-    label: tile ? 'Map-tile outline' : capitalise(osmPath.replace('/', ' ')),
+    label: tile ? 'Map-tile outline' : 'OpenStreetMap',
     href: tile ? null : `https://www.openstreetmap.org/${osmPath}`,
+    osmId: tile ? null : capitalise(osmPath.replace('/', ' ')),
     facts,
     heightNote: `Height ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})${was}${b.levels === undefined ? '; levels unknown' : ''}`,
     source: heightSourceLabel(b),
@@ -59,5 +62,5 @@ export function buildingLine(b: Building): BuildingLine {
 export function hoverLines(b: Building): string[] {
   const line = buildingLine(b)
   const height = [`${Math.round(b.height * 10) / 10} m`, line.source].filter(Boolean).join(' \u00b7 ')
-  return [line.title ?? line.label, height, 'Right-click to edit the height']
+  return [line.title ?? line.osmId ?? line.label, height, 'Right-click to edit the height']
 }
