@@ -19,6 +19,8 @@ export interface FindInput {
   note?: string
   stats: KindStats[]
   canShowBest: boolean
+  /** The floors above are hidden, so the roof spots are left out of the summary and counts. */
+  roofHidden?: boolean
 }
 
 export interface FindPanel {
@@ -131,6 +133,7 @@ export function createFindPanel(options: {
           }
           parts.push(list)
         }
+        if (input.roofHidden) parts.push(el('p', 'cardNote small', 'Roof spots are not counted while the floors above are hidden.'))
         if (input.canShowBest) parts.push(button('Show the best spot', options.onBest))
       }
       if (input.note) parts.push(el('p', 'cardNote small', input.note))

@@ -142,6 +142,8 @@ export interface GardenHit {
   z: number
   apartmentFloor: boolean
   normalY: number
+  /** The floors above are hidden and this is the cut through the selected building, not its roof. */
+  cut?: boolean
 }
 
 export interface SunScene {
@@ -1124,7 +1126,15 @@ export function createScene(container: HTMLElement): SunScene {
     if (!built) return gardenClick(null)
     const normalY = built.face ? built.face.normal.clone().transformDirection(built.object.matrixWorld).y : 0
     const { x, y, z } = built.point
-    gardenClick({ x, y, z, normalY, apartmentFloor: built.object === floorMesh && plan !== null && insideOutline(plan, { x, z }) })
+    const onFloor = built.object === floorMesh && plan !== null && insideOutline(plan, { x, z })
+    // With the floors above hidden, the top of the visible storey is the cut through the building, not a roof. Inside the
+    // apartment's outline the click means the floor under it.
+    const cut = !onFloor && cutawayNow() && normalY > 0.7 && apartmentMeshes.has(built.object as Mesh)
+    if (cut && floorMesh && plan && insideOutline(plan, { x, z })) {
+      const down = new Raycaster(new Vector3(x, y, z), new Vector3(0, -1, 0)).intersectObject(floorMesh, false)[0]
+      if (down) return gardenClick({ x, y: down.point.y, z, normalY: 1, apartmentFloor: true })
+    }
+    gardenClick({ x, y, z, normalY, apartmentFloor: onFloor, cut })
   })
 
   // A click on a quad of the suitability map names its sample (the nearer of the quad and whatever the camera sees
