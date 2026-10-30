@@ -53,7 +53,7 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 #panel button.primary:hover:not(:disabled), .maplibregl-popup-content button:hover { background: #e89a14; border-color: var(--accent-strong); }
 #panel button.primary:active:not(:disabled), .maplibregl-popup-content button:active { background: #d98d0c; }
 #panel button.primary:disabled { background: var(--bg-band); border-color: var(--line); }
-input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select {
+input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select, .findPanel select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px;
 }
 input::placeholder { color: var(--muted); opacity: 1; }
@@ -450,11 +450,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 
 /* Garden view: "Find a place for" picker, the legend of the plant map and its summary. */
 .findPanel { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
-.findPanel .findRow { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.findPanel .findRow select { flex: 1; min-width: 0; font-weight: 400; }
-.findPanel .findLabel { flex: none; }
-.findPanel .findRow:first-child .findLabel { width: 6.2em; }
-.findPanel .findRow:nth-child(2) .findLabel { width: 6.2em; text-align: right; }
+#panel .findPanel label.findRow { color: var(--text); font-weight: 600; }
+#panel .findPanel label.findRow + label.findRow { flex-direction: row; align-items: center; gap: 8px; }
+.findPanel .findRow select { min-width: 0; font-weight: 400; }
+.findPanel .findRow + .findRow select { flex: 1; }
 .findPanel .findResult { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .findPanel .findResult > * { align-self: stretch; }
 .findPanel .findResult > button { align-self: flex-start; }
