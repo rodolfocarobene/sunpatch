@@ -4,6 +4,7 @@ import type { Panel, Plan, Viewpoint } from './plan'
 import { floorBase, ringOf } from './plan'
 import type { Snap } from './editor-geom'
 import { startPosition, windowYaw } from './walk-geom'
+import { fmt1Fixed, fmtNumber, t } from './i18n'
 import { panelFootprint, panelTip, facing, footprintDepth } from './panel'
 
 export interface View {
@@ -235,12 +236,12 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
       })
     }
     const c = ringCentroid(e.outline)
-    const range = `${e.bottom.toFixed(1)}\u2013${e.top.toFixed(1)} m`
-    const t = svgEl(g, 'text', {
+    const range = `${fmt1Fixed(e.bottom)}\u2013${fmt1Fixed(e.top)} m`
+    const text = svgEl(g, 'text', {
       x: c.x, y: c.z, 'font-size': 11 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
       fill: e.kind === 'add' ? '#3b2a8c' : '#a61e1e', stroke: C.surface, 'stroke-width': 3 * px, 'paint-order': 'stroke',
     })
-    t.textContent = e.kind === 'add' ? `+${range}` : `cut ${range}`
+    text.textContent = e.kind === 'add' ? t('editor.addRange', { range }) : t('editor.cutRange', { range })
     if (sel) {
       for (const p of e.outline) {
         svgEl(g, 'circle', { cx: p.x, cy: p.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
@@ -253,7 +254,7 @@ function drawEdits(root: SVGElement, s: Scene, px: number): void {
 function drawPanel(root: SVGElement, p: Panel, px: number, selected: boolean, opacity = 1): void {
   const g = svgEl(root, 'g', { 'data-role': 'panel', opacity })
   const title = svgEl(g, 'title', {})
-  title.textContent = `Solar panel: tilt ${Math.round(p.tilt)} deg, faces ${Math.round(p.azimuth)} deg, lowest edge ${p.elevation.toFixed(1)} m`
+  title.textContent = t('editor.panelTitle', { tilt: Math.round(p.tilt), az: Math.round(p.azimuth), h: fmt1Fixed(p.elevation) })
   const ring = panelFootprint(p, Math.max(0.1, 5 * px))
   const d = pathOf([ring])
   if (selected) svgEl(g, 'path', { d, fill: C.accent, stroke: C.accent, 'stroke-width': 10 * px, 'stroke-linejoin': 'round', opacity: 0.85 })
@@ -281,7 +282,7 @@ function drawViewpoint(root: SVGElement, s: Scene, px: number): void {
   const color = vp.auto ? C.muted : C.text
   const g = svgEl(root, 'g', { 'data-role': 'viewpoint' })
   const title = svgEl(g, 'title', {})
-  title.textContent = `This is where Walk inside puts you${vp.auto ? ' (automatic: drag to fix it)' : ''}`
+  title.textContent = t(vp.auto ? 'editor.viewpointTitleAuto' : 'editor.viewpointTitle')
   const a0 = vp.yaw - VIEW_FOV / 2
   const a1 = vp.yaw + VIEW_FOV / 2
   const at = (a: number): string => `${vp.x - Math.sin(a) * VIEW_LENGTH} ${vp.z - Math.cos(a) * VIEW_LENGTH}`
@@ -305,7 +306,7 @@ function drawViewpoint(root: SVGElement, s: Scene, px: number): void {
     'text-anchor': 'middle', 'dominant-baseline': 'middle',
     fill: C.text, stroke: C.surface, 'stroke-width': 3.5 * px, 'paint-order': 'stroke',
   })
-  label.textContent = 'Walk start'
+  label.textContent = t('editor.walkStart')
 }
 
 function drawDraft(root: SVGElement, s: Scene, px: number): void {
@@ -322,10 +323,10 @@ function drawDraft(root: SVGElement, s: Scene, px: number): void {
     const a = draft.wallStart
     const b = draft.cursor
     svgEl(root, 'line', { x1: a.x, y1: a.z, x2: b.x, y2: b.z, stroke: C.accentStrong, 'stroke-width': DEFAULT_PREVIEW, opacity: 0.6 })
-    label = { at: b, text: `${Math.hypot(b.x - a.x, b.z - a.z).toFixed(2)} m` }
+    label = { at: b, text: `${metres2(Math.hypot(b.x - a.x, b.z - a.z))} m` }
   } else if (pts.length && draft.cursor) {
     const a = pts[pts.length - 1]
-    label = { at: draft.cursor, text: `${Math.hypot(draft.cursor.x - a.x, draft.cursor.z - a.z).toFixed(2)} m` }
+    label = { at: draft.cursor, text: `${metres2(Math.hypot(draft.cursor.x - a.x, draft.cursor.z - a.z))} m` }
   }
   if (draft.snap && draft.snap.kind !== 'none') {
     const p = draft.snap.point
@@ -335,7 +336,7 @@ function drawDraft(root: SVGElement, s: Scene, px: number): void {
       : { cx: p.x, cy: p.z, r, fill: 'none', stroke: '#2f9e44', 'stroke-width': 2 * px })
   }
   if (label) {
-    const t = svgEl(root, 'text', {
+    const text = svgEl(root, 'text', {
       x: label.at.x + 10 * px,
       y: label.at.z - 10 * px,
       'font-size': 12 * px,
@@ -344,11 +345,14 @@ function drawDraft(root: SVGElement, s: Scene, px: number): void {
       'stroke-width': 3 * px,
       'paint-order': 'stroke',
     })
-    t.textContent = label.text
+    text.textContent = label.text
   }
 }
 
 const DEFAULT_PREVIEW = 0.1
+
+/** A length with two decimals in the current locale ("3.25" / "3,25"). */
+export const metres2 = (m: number): string => fmtNumber(m, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function drawOverlay(svg: SVGSVGElement, v: View): void {
   const g = svgEl(svg, 'g', { fill: C.text, stroke: C.text, 'font-family': 'system-ui, sans-serif', 'font-size': 12 })
@@ -360,6 +364,6 @@ function drawOverlay(svg: SVGSVGElement, v: View): void {
   const bx = SCALE_BAR_POS.x
   const by = v.h - SCALE_BAR_POS.y
   svgEl(g, 'path', { d: `M${bx} ${by - 5}V${by}H${bx + len * v.scale}V${by - 5}`, fill: 'none', 'stroke-width': 2 })
-  const t = svgEl(g, 'text', { x: bx, y: by - 9, stroke: 'none' })
-  t.textContent = `${len} m`
+  const text = svgEl(g, 'text', { x: bx, y: by - 9, stroke: 'none' })
+  text.textContent = `${fmtNumber(len)} m`
 }

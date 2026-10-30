@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix' | 'panel'
 
 export type Shortcut = { tool: Tool } | { action: 'fit' }
@@ -16,7 +18,7 @@ export function shortcutFor(e: { key: string; ctrlKey?: boolean; metaKey?: boole
 }
 
 /** "1 window" / "3 windows". */
-export const windowCount = (n: number): string => `${n} window${n === 1 ? '' : 's'}`
+export const windowCount = (n: number): string => t('editor.windows', { n })
 
 /** What replacing the outline costs, e.g. "Clears 3 windows"; '' when nothing is lost. */
-export const clearsNote = (windows: number): string => (windows > 0 ? `Clears ${windowCount(windows)}` : '')
+export const clearsNote = (windows: number): string => (windows > 0 ? t('editor.clears', { windows: windowCount(windows) }) : '')

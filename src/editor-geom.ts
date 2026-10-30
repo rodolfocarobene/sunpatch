@@ -1,6 +1,7 @@
 import { FACADE_THICKNESS, SLAB_THICKNESS, ringOf, type Plan, type Window } from './plan'
 import { buildingContains, pickBuilding, type Building, type Point } from './osm'
 import { parseHeights } from './heights'
+import { t } from './i18n'
 
 export type Segment = [Point, Point]
 
@@ -230,48 +231,48 @@ const isRing = (v: unknown): v is Point[] => Array.isArray(v) && v.length >= 3 &
 /** Checks a parsed JSON value against the Plan contract; returns the plan or an error message. */
 export function validatePlan(value: unknown): { plan: Plan } | { error: string } {
   const p = value as Plan | null
-  if (!p || typeof p !== 'object') return { error: 'Not a plan object' }
-  if (p.version !== 1) return { error: 'Unsupported plan version' }
-  if (typeof p.buildingId !== 'string' || !p.buildingId) return { error: 'Missing buildingId' }
-  if (!p.origin || !isNum(p.origin.lat) || !isNum(p.origin.lon)) return { error: 'Invalid origin' }
-  if (!Number.isInteger(p.floor) || p.floor < 0) return { error: 'Invalid floor' }
-  if (!isNum(p.floorHeight) || p.floorHeight <= 0) return { error: 'Invalid floorHeight' }
-  if (!p.outline || !isRing(p.outline.outer)) return { error: 'Invalid outline' }
-  if (!Array.isArray(p.outline.holes) || !p.outline.holes.every(isRing)) return { error: 'Invalid outline holes' }
-  if (!Array.isArray(p.walls)) return { error: 'Invalid walls' }
+  if (!p || typeof p !== 'object') return { error: t('editor.errNotObject') }
+  if (p.version !== 1) return { error: t('editor.errVersion') }
+  if (typeof p.buildingId !== 'string' || !p.buildingId) return { error: t('editor.errBuildingId') }
+  if (!p.origin || !isNum(p.origin.lat) || !isNum(p.origin.lon)) return { error: t('editor.errOrigin') }
+  if (!Number.isInteger(p.floor) || p.floor < 0) return { error: t('editor.errFloor') }
+  if (!isNum(p.floorHeight) || p.floorHeight <= 0) return { error: t('editor.errFloorHeight') }
+  if (!p.outline || !isRing(p.outline.outer)) return { error: t('editor.errOutline') }
+  if (!Array.isArray(p.outline.holes) || !p.outline.holes.every(isRing)) return { error: t('editor.errHoles') }
+  if (!Array.isArray(p.walls)) return { error: t('editor.errWalls') }
   for (const w of p.walls) {
-    if (!w || !isPoint(w.a) || !isPoint(w.b) || !isNum(w.thickness) || w.thickness <= 0) return { error: 'Invalid wall' }
+    if (!w || !isPoint(w.a) || !isPoint(w.b) || !isNum(w.thickness) || w.thickness <= 0) return { error: t('editor.errWall') }
   }
-  if (!Array.isArray(p.windows)) return { error: 'Invalid windows' }
+  if (!Array.isArray(p.windows)) return { error: t('editor.errWindows') }
   const rings = [p.outline.outer, ...p.outline.holes]
   for (const w of p.windows) {
-    if (!w || !Number.isInteger(w.ring) || w.ring < 0 || w.ring >= rings.length) return { error: 'Invalid window ring' }
-    if (!Number.isInteger(w.edge) || w.edge < 0 || w.edge >= rings[w.ring].length) return { error: 'Invalid window edge' }
-    if (!isNum(w.t) || w.t < 0 || w.t > 1) return { error: 'Invalid window position' }
+    if (!w || !Number.isInteger(w.ring) || w.ring < 0 || w.ring >= rings.length) return { error: t('editor.errWindowRing') }
+    if (!Number.isInteger(w.edge) || w.edge < 0 || w.edge >= rings[w.ring].length) return { error: t('editor.errWindowEdge') }
+    if (!isNum(w.t) || w.t < 0 || w.t > 1) return { error: t('editor.errWindowPos') }
     if (!isNum(w.width) || w.width <= 0 || !isNum(w.sill) || w.sill < 0 || !isNum(w.height) || w.height <= 0) {
-      return { error: 'Invalid window size' }
+      return { error: t('editor.errWindowSize') }
     }
   }
   if (p.viewpoint !== undefined) {
     const v = p.viewpoint
-    if (!v || !isNum(v.x) || !isNum(v.z) || !isNum(v.yaw)) return { error: 'Invalid viewpoint' }
+    if (!v || !isNum(v.x) || !isNum(v.z) || !isNum(v.yaw)) return { error: t('editor.errViewpoint') }
   }
   if (p.edits !== undefined) {
-    if (!Array.isArray(p.edits)) return { error: 'Invalid edits' }
+    if (!Array.isArray(p.edits)) return { error: t('editor.errEdits') }
     for (const e of p.edits) {
-      if (!e || (e.kind !== 'add' && e.kind !== 'cut')) return { error: 'Invalid edit kind' }
-      if (!isRing(e.outline)) return { error: 'Invalid edit outline' }
-      if (!isNum(e.bottom) || !isNum(e.top) || e.bottom >= e.top) return { error: 'Invalid edit heights' }
+      if (!e || (e.kind !== 'add' && e.kind !== 'cut')) return { error: t('editor.errEditKind') }
+      if (!isRing(e.outline)) return { error: t('editor.errEditOutline') }
+      if (!isNum(e.bottom) || !isNum(e.top) || e.bottom >= e.top) return { error: t('editor.errEditHeights') }
     }
   }
   const panels = p.panels ?? []
-  if (!Array.isArray(panels)) return { error: 'Invalid panels' }
+  if (!Array.isArray(panels)) return { error: t('editor.errPanels') }
   for (const q of panels) {
-    if (!q || typeof q.id !== 'string' || !q.id || !isPoint(q)) return { error: 'Invalid panel' }
-    if (!isNum(q.elevation) || !isNum(q.azimuth)) return { error: 'Invalid panel position' }
-    if (!isNum(q.width) || q.width <= 0 || !isNum(q.height) || q.height <= 0) return { error: 'Invalid panel size' }
-    if (!isNum(q.tilt) || q.tilt < 0 || q.tilt > 90) return { error: 'Invalid panel tilt' }
-    if (q.count !== undefined && (!Number.isInteger(q.count) || q.count < 1)) return { error: 'Invalid panel count' }
+    if (!q || typeof q.id !== 'string' || !q.id || !isPoint(q)) return { error: t('editor.errPanel') }
+    if (!isNum(q.elevation) || !isNum(q.azimuth)) return { error: t('editor.errPanelPos') }
+    if (!isNum(q.width) || q.width <= 0 || !isNum(q.height) || q.height <= 0) return { error: t('editor.errPanelSize') }
+    if (!isNum(q.tilt) || q.tilt < 0 || q.tilt > 90) return { error: t('editor.errPanelTilt') }
+    if (q.count !== undefined && (!Number.isInteger(q.count) || q.count < 1)) return { error: t('editor.errPanelCount') }
   }
   // Heights are the user's own; entries that are not usable are dropped rather than failing the whole plan.
   const { heights: _, ...rest } = p
