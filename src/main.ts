@@ -826,6 +826,7 @@ else mapView.focusSearch() // the search is the first thing to do on the map
 async function openExample() {
   const { buildings, selected, origin, plan: examplePlan, green, elements, near } = await loadExample()
   loaded = { elements, center: near }
+  last = { clicked: near, origin } // a point inside the example building: Undo after switching away comes back to it
   show(buildings, selected, origin, false)
   sunScene.setTrees(scatterTrees(green, buildings))
   setPlan(examplePlan)
