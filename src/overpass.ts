@@ -1,4 +1,5 @@
 import { project, type OverpassElement } from './osm'
+import { t } from './i18n'
 
 export const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -101,5 +102,5 @@ export async function fetchBuildingData(lat: number, lon: number, options: Fetch
       last = (err as Error).message
     }
   }
-  throw new Error(`OpenStreetMap servers are unavailable right now (${last}).`)
+  throw new Error(t('shell.osmDown', { reason: String(last) }))
 }

@@ -325,3 +325,15 @@ re-runs `show` on `site.full` when the loaded Overpass data still covers the cir
 otherwise `refine` fetches the bigger circle with the selection kept. Either way `setBuildings` bumps the scene version, so
 the sun map, panels and garden recompute. `dataExtent(radius)` sizes the ground plane and the shadow frustum (about 1.12 x
 the radius) and the sun distance; there is no fog. Trees stay within 300 m (`TREE_RADIUS_M`) or the radius if smaller.
+
+## Languages (English, Italian)
+
+`src/i18n.ts` holds `t(key, params)` (`{name}` interpolation, one/other plurals picked by the `n` param with
+`Intl.PluralRules`), `fmtNumber` / `fmtTime` / `fmtDay` (locale `en-GB` or `it-IT`) and the language choice: `localStorage`
+`sunpatch.lang`, else `navigator.languages` (`it*` is Italian), else English; it sets `<html lang>`. The dictionary is split
+in typed sections, one file each in `src/i18n/` (`defineStrings({ en, it })` fails to compile when a key is missing in one
+language), merged in `src/i18n/index.ts`; a missing `it` key falls back to `en`, and `i18n.test.ts` checks both languages
+have the same keys and params. Switching (`lang-switch.ts`, in the panel header) stores the choice and reloads the page,
+because most text is built once at load; the open building, tab and date/time survive through `session.ts`
+(`sessionStorage`, read once after the reload), and plans and options are already in `localStorage`. A native
+`<input type="date">` is shown in the browser's own format, which the page language cannot change.

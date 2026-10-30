@@ -1,4 +1,5 @@
 import SunCalc from 'suncalc'
+import { fmtDay, t } from './i18n'
 
 /** The time slider runs 0..DAY_MAX minutes in steps of STEP. */
 export const DAY_MAX = 1435
@@ -22,9 +23,8 @@ export interface PresetDate {
 const pad = (n: number) => String(n).padStart(2, '0')
 export const dateValue = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-/** The one short date format of the app: "21 Dec" (month is 0-11). */
-export const dayLabel = (month: number, day: number) => `${day} ${MONTHS[month]}`
+/** The one short date format of the app: "21 Dec" / "21 dic" (month is 0-11). */
+export const dayLabel = fmtDay
 
 /** Solstices and the March equinox in `year`; Winter and Summer swap south of the equator. */
 export function presetDates(year: number, lat: number, today: Date): PresetDate[] {
@@ -32,10 +32,10 @@ export function presetDates(year: number, lat: number, today: Date): PresetDate[
   const dec = `${year}-12-21`
   const jun = `${year}-06-21`
   return [
-    { id: 'winter', label: 'Winter', title: `Winter solstice, ${south ? dayLabel(5, 21) : dayLabel(11, 21)}`, date: south ? jun : dec },
-    { id: 'equinox', label: 'Equinox', title: `March equinox, ${dayLabel(2, 20)}`, date: `${year}-03-20` },
-    { id: 'summer', label: 'Summer', title: `Summer solstice, ${south ? dayLabel(11, 21) : dayLabel(5, 21)}`, date: south ? dec : jun },
-    { id: 'today', label: 'Today', title: 'Today', date: dateValue(today) },
+    { id: 'winter', label: t('sun.winter'), title: t('sun.winterTitle', { d: south ? dayLabel(5, 21) : dayLabel(11, 21) }), date: south ? jun : dec },
+    { id: 'equinox', label: t('sun.equinox'), title: t('sun.equinoxTitle', { d: dayLabel(2, 20) }), date: `${year}-03-20` },
+    { id: 'summer', label: t('sun.summer'), title: t('sun.summerTitle', { d: south ? dayLabel(11, 21) : dayLabel(5, 21) }), date: south ? dec : jun },
+    { id: 'today', label: t('sun.today'), title: t('sun.today'), date: dateValue(today) },
   ]
 }
 

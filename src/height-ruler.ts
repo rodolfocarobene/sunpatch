@@ -1,5 +1,6 @@
 import { FLOOR_M, MAX_FLOORS, MAX_HEIGHT_M, overrideFor, type HeightOverride } from './heights'
 import type { Building } from './osm'
+import { fmt1, t } from './i18n'
 
 /** The finer step with Shift held, in metres. */
 export const FINE_M = 0.5
@@ -29,7 +30,7 @@ export function heightFromDrag(startHeight: number, minHeight: number, dyPx: num
 /** "8 floors · 24 m": the floors above where the building starts, then the top above the ground. */
 export function rulerLabel(height: number, minHeight: number): string {
   const floors = round1((height - minHeight) / FLOOR_M)
-  return `${floors} ${floors === 1 ? 'floor' : 'floors'} · ${round1(height)} m`
+  return t('hr.label', { n: floors, h: fmt1(height) })
 }
 
 /** The override a ruler height makes: whole floors are stored as floors (the apartment gets that many storeys), 0.5 m steps as metres. */
@@ -77,11 +78,11 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   box.id = 'heightRuler'
   box.hidden = true
   box.setAttribute('role', 'group')
-  box.setAttribute('aria-label', 'Height ruler: drag to change the height. The Height box (right-click) does it by typing.')
+  box.setAttribute('aria-label', t('hr.aria'))
   box.innerHTML = `
     <div class="hrTrack"></div>
     <div class="hrTicks" aria-hidden="true"></div>
-    <div class="hrHandle" title="Drag to change the height (Shift: 0.5 m steps)"><span class="hrGrip" aria-hidden="true"></span></div>
+    <div class="hrHandle" title="${t('hr.handle')}"><span class="hrGrip" aria-hidden="true"></span></div>
     <output class="hrLabel"></output>`
   container.appendChild(box)
   const track = box.querySelector<HTMLElement>('.hrTrack')!

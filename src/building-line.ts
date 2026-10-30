@@ -1,3 +1,5 @@
+import { fmt1, fmt1Fixed, t, type Key } from './i18n'
+import { isGuessed } from './heights'
 import type { Building, HeightSource } from './osm'
 
 export interface BuildingLine {
@@ -14,22 +16,24 @@ export interface BuildingLine {
   heightNote: string
   /** Set when the height is a guess or the user's own: "height guessed: 9 m default"; null for heights from the data. */
   source: string | null
+  /** The source is a guess or an estimate (not the user's own height). */
+  guess: boolean
 }
 
-const HEIGHT_SOURCE: Record<HeightSource, string> = {
-  tag: 'from height tag',
-  levels: 'from levels x 3 m',
-  default: 'default, no data',
-  tile: 'from map tiles',
-  parts: 'estimated from the parts above it',
-  user: 'set by you',
+const HEIGHT_SOURCE: Record<HeightSource, Key> = {
+  tag: 'bld.srcTag',
+  levels: 'bld.srcLevels',
+  default: 'bld.srcDefault',
+  tile: 'bld.srcTile',
+  parts: 'bld.srcParts',
+  user: 'bld.srcUser',
 }
 
 /** The short label of a guessed or user-set height; null when the data has the height. */
 export function heightSourceLabel(b: Building): string | null {
-  if (b.heightSource === 'user') return 'height set by you'
-  if (b.heightSource === 'default') return `height guessed: ${Math.round(b.height * 10) / 10} m default`
-  if (b.heightSource === 'parts') return 'height estimated from its parts'
+  if (b.heightSource === 'user') return t('bld.labelUser')
+  if (b.heightSource === 'default') return t('bld.labelDefault', { h: fmt1(b.height) })
+  if (b.heightSource === 'parts') return t('bld.labelParts')
   return null
 }
 
@@ -42,25 +46,26 @@ export function buildingLine(b: Building): BuildingLine {
   const parts = b.members?.length ?? 1
   const street = [b.tags['addr:street'], b.tags['addr:housenumber']].filter(Boolean).join(' ')
   const facts: string[] = []
-  if (parts > 1) facts.push(`${parts} parts`)
-  facts.push(`${Math.round(b.height * 10) / 10} m`)
-  if (b.levels !== undefined) facts.push(`${b.levels} ${b.levels === 1 ? 'level' : 'levels'}`)
-  const was = b.dataHeight ? ` (the data had ${b.dataHeight.height.toFixed(1)} m: ${HEIGHT_SOURCE[b.dataHeight.heightSource]})` : ''
-  const min = b.minHeight > 0 ? `, starts at ${b.minHeight.toFixed(1)} m` : ''
+  if (parts > 1) facts.push(t('bld.parts', { n: parts }))
+  facts.push(`${fmt1(b.height)} m`)
+  if (b.levels !== undefined) facts.push(t('bld.levels', { n: b.levels }))
+  const was = b.dataHeight ? t('bld.heightWas', { h: fmt1Fixed(b.dataHeight.height), source: t(HEIGHT_SOURCE[b.dataHeight.heightSource]) }) : ''
+  const min = b.minHeight > 0 ? t('bld.heightMin', { m: fmt1Fixed(b.minHeight) }) : ''
   return {
     title: b.tags.name || street || null,
-    label: tile ? 'Map-tile outline' : 'OpenStreetMap',
+    label: tile ? t('bld.tile') : t('bld.osm'),
     href: tile ? null : `https://www.openstreetmap.org/${osmPath}`,
     osmId: tile ? null : capitalise(osmPath.replace('/', ' ')),
     facts,
-    heightNote: `Height ${b.height.toFixed(1)} m (${HEIGHT_SOURCE[b.heightSource]}${min})${was}${b.levels === undefined ? '; levels unknown' : ''}`,
+    heightNote: t('bld.heightNote', { h: fmt1Fixed(b.height), source: t(HEIGHT_SOURCE[b.heightSource]), min, was, levels: b.levels === undefined ? t('bld.levelsUnknown') : '' }),
     source: heightSourceLabel(b),
+    guess: isGuessed(b),
   }
 }
 
 /** The hover note on a building in 3D: its name or id, its height with where that came from, and how to change it. */
 export function hoverLines(b: Building, ruler = false): string[] {
   const line = buildingLine(b)
-  const height = [`${Math.round(b.height * 10) / 10} m`, line.source].filter(Boolean).join(' \u00b7 ')
-  return [line.title ?? line.osmId ?? line.label, height, ruler ? 'Drag the ruler to change it (Shift: 0.5 m steps), or right-click to type it' : 'Right-click to edit the height']
+  const height = [`${fmt1(b.height)} m`, line.source].filter(Boolean).join(' \u00b7 ')
+  return [line.title ?? line.osmId ?? line.label, height, ruler ? t('bld.hoverRuler') : t('bld.hoverEdit')]
 }

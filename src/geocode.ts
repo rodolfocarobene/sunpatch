@@ -1,4 +1,5 @@
 import { distanceToRing, MAX_SNAP_M, pointInPolygon, project, ringArea } from './osm'
+import { t } from './i18n'
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 
@@ -98,11 +99,11 @@ export function hitLabel(hit: GeoHit, q = ''): string {
   const number = requestedHouseNumber(q)
   switch (numberMatch(hit, number)) {
     case 'exact':
-      return `house number ${hit.address?.house_number}`
+      return t('map.houseNumber', { n: hit.address?.house_number ?? '' })
     case 'other':
-      return `house number ${hit.address?.house_number}, not ${number}`
+      return t('map.houseNumberOther', { n: hit.address?.house_number ?? '', q: number ?? '' })
     case 'street':
-      return `street only, no house number ${number} in the data`
+      return t('map.streetOnly', { q: number ?? '' })
     default:
       return [hit.category, hit.type].filter(Boolean).join(' / ')
   }

@@ -1,4 +1,5 @@
 import { buildingLine } from './building-line'
+import { fmt1, t } from './i18n'
 import { freeBand, popoverTop } from './popover-place'
 import { FLOOR_M, heightIn, overrideFor, validHeight, type HeightOverride } from './heights'
 import type { Building } from './osm'
@@ -11,8 +12,8 @@ const WIDTH = 272
 /** What the form shows for a building: the title, the line under it, and whether the height is the user's own. */
 export function heightHeading(b: Building): { title: string; now: string; mine: boolean } {
   const line = buildingLine(b)
-  const was = b.dataHeight ? `The data had ${Math.round(b.dataHeight.height * 10) / 10} m (${b.dataHeight.heightSource === 'default' ? 'a guess' : 'from OpenStreetMap'}).` : ''
-  const now = [`${Math.round(b.height * 10) / 10} m`, line.source].filter(Boolean).join(' · ')
+  const was = b.dataHeight ? t('hp.dataHad', { h: fmt1(b.dataHeight.height), source: b.dataHeight.heightSource === 'default' ? t('hp.aGuess') : t('hp.fromOsm') }) : ''
+  const now = [`${fmt1(b.height)} m`, line.source].filter(Boolean).join(' · ')
   return { title: line.title ? `${line.title} · ${line.label}` : line.label, now: was ? `${now}. ${was}` : now, mine: b.heightSource === 'user' }
 }
 
@@ -20,7 +21,9 @@ export function heightHeading(b: Building): { title: string; now: string; mine: 
 export function conversion(b: Building, value: number, unit: Unit): string {
   if (!validHeight(value, unit)) return ''
   const { height } = overrideFor(b, value, unit)
-  return unit === 'floors' ? `${value} ${value === 1 ? 'floor' : 'floors'} × ${FLOOR_M} m = ${Math.round((height - b.minHeight) * 10) / 10} m${b.minHeight > 0 ? ` above ${b.minHeight} m` : ''}` : `about ${Math.round((value - b.minHeight) / FLOOR_M * 10) / 10} floors`
+  return unit === 'floors'
+    ? t('hp.conv', { n: value, floor: FLOOR_M, h: fmt1(height - b.minHeight) }) + (b.minHeight > 0 ? t('hp.convAbove', { min: fmt1(b.minHeight) }) : '')
+    : t('hp.convAbout', { n: Math.round((value - b.minHeight) / FLOOR_M * 10) / 10 })
 }
 
 export interface HeightPopover {
@@ -45,22 +48,22 @@ export function createHeightPopover(container: HTMLElement, handlers: HeightPopo
   box.id = 'heightPopover'
   box.hidden = true
   box.setAttribute('role', 'dialog')
-  box.setAttribute('aria-label', 'Building height')
+  box.setAttribute('aria-label', t('hp.aria'))
   box.noValidate = true
   box.innerHTML = `
-    <button type="button" class="spotClose" aria-label="Close" title="Close (Esc)">
+    <button type="button" class="spotClose" aria-label="${t('hp.close')}" title="${t('hp.closeTitle')}">
       <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
     <strong class="spotHead"></strong>
     <span class="spotDetail hpNow"></span>
     <div class="hpRow">
-      <label>Height <input class="hpValue" type="number" inputmode="decimal" min="1" step="1"></label>
-      <select class="hpUnit" aria-label="Unit"><option value="floors">floors</option><option value="m">metres</option></select>
-      <button type="submit" class="primary">Set</button>
+      <label>${t('hp.height')} <input class="hpValue" type="number" inputmode="decimal" min="1" step="1"></label>
+      <select class="hpUnit" aria-label="${t('hp.unit')}"><option value="floors">${t('hp.floors')}</option><option value="m">${t('hp.metres')}</option></select>
+      <button type="submit" class="primary">${t('hp.set')}</button>
     </div>
     <span class="spotDetail hpSum"></span>
     <span class="hpError" role="alert"></span>
-    <button type="button" class="hpReset">Reset to the data</button>`
+    <button type="button" class="hpReset">${t('hp.reset')}</button>`
   container.appendChild(box)
   const q = <T extends HTMLElement>(sel: string) => box.querySelector<T>(sel)!
   const input = q<HTMLInputElement>('.hpValue')
@@ -99,7 +102,7 @@ export function createHeightPopover(container: HTMLElement, handlers: HeightPopo
     if (!target) return
     const value = input.valueAsNumber
     if (!validHeight(value, unitNow())) {
-      error.textContent = unitNow() === 'floors' ? 'Enter a whole number of floors, 1 or more.' : 'Enter a height in metres, above 0.'
+      error.textContent = unitNow() === 'floors' ? t('hp.errFloors') : t('hp.errMetres')
       return
     }
     const id = target.id

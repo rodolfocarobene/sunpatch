@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export interface StatusChip {
   loading(): void
   /** Shows the text for a few seconds (longer with an action button, e.g. Undo), then hides. */
@@ -24,7 +26,7 @@ export function createStatusChip(container: HTMLElement, onRetry: () => void): S
   const text = document.createElement('span')
   const retry = document.createElement('button')
   retry.type = 'button'
-  retry.textContent = 'Retry'
+  retry.textContent = t('shell.retry')
   let act: (() => void) | undefined
   retry.addEventListener('click', () => (act ?? onRetry)())
   el.append(text, retry)
@@ -34,7 +36,7 @@ export function createStatusChip(container: HTMLElement, onRetry: () => void): S
   function show(kind: 'loading' | 'done' | 'failed', message: string, action?: ChipAction) {
     window.clearTimeout(timer)
     act = action && (() => (hide(), action.run()))
-    retry.textContent = action?.label ?? 'Retry'
+    retry.textContent = action?.label ?? t('shell.retry')
     el.hidden = false
     el.dataset.kind = kind
     text.textContent = message
@@ -46,7 +48,7 @@ export function createStatusChip(container: HTMLElement, onRetry: () => void): S
   }
 
   return {
-    loading: () => show('loading', 'Loading detailed OpenStreetMap buildings...'),
+    loading: () => show('loading', t('shell.chipLoading')),
     done(message, action) {
       show('done', message, action)
       timer = window.setTimeout(hide, action ? ACTION_MS : DONE_MS)

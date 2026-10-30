@@ -1,6 +1,7 @@
 import { unproject, type Building, type Origin, type Point } from './osm'
+import { t } from './i18n'
 
-export const MAP_PICK_HINT = 'Click on a building to pick it.'
+export const MAP_PICK_HINT = t('map.pick')
 
 /** The bottom chip of the map: it only guides the first pick; once a building is picked the panel says how to switch. */
 export function mapIdleHint(picked: boolean): string {

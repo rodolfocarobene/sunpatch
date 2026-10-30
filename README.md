@@ -240,6 +240,9 @@ bundled fixture; its edits are never autosaved.
 `/dev/editor.html` (plan editor on a test building) and `/dev/apartment.html` (a test apartment; try
 `?walk=1&edits=1`).
 
+The app is in English and Italian: the language is the stored choice (`sunpatch.lang`, set by the EN / IT switch at
+the top of the left panel), else the browser's. Text lives in `src/i18n/*.ts`; the header of `src/i18n.ts` says how to add some.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ## Roadmap
