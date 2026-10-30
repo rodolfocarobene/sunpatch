@@ -337,3 +337,7 @@ have the same keys and params. Switching (`lang-switch.ts`, in the panel header)
 because most text is built once at load; the open building, tab and date/time survive through `session.ts`
 (`sessionStorage`, read once after the reload), and plans and options are already in `localStorage`. A native
 `<input type="date">` is shown in the browser's own format, which the page language cannot change.
+
+Month names come from `fmtMonth` (Intl). Plants show `nameIt` in Italian (`plantName`), and the plant search matches either
+name (`plantMatches`, accent- and case-insensitive). The Italian garden sentences leave the plant name out where English uses
+it (Italian needs an article that depends on the plant's gender), so the parity test lets `it` drop a `{name}` param.
