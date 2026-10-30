@@ -13,10 +13,11 @@ export const FIND_KINDS: FindKind[] = ['indoor', 'ground', 'roof']
 export type Step = 0 | 1 | 2
 export const stepOf = (rating: Rating): Step => (rating === 'good' ? 2 : rating === 'ok' ? 1 : 0)
 
-/** The two coloured steps (sRGB hex): a calm green and a soft amber, apart for people who confuse red and green by lightness. */
-export const STEP_COLORS: Record<1 | 2, number> = { 2: 0x2f9e78, 1: 0xe3b04b }
+/** The two coloured steps read from the --rate-good / --rate-ok tokens in style.css, so the pills, legend and map share one scale. */
+export const stepColor = (step: 1 | 2): string => getComputedStyle(document.documentElement).getPropertyValue(step === 2 ? '--rate-good' : '--rate-ok').trim()
+/** An OK cell is drawn at this share of a good cell's side: a size cue that does not rely on colour. */
+export const OK_CELL_SCALE = 0.62
 export const STEP_LABELS: Record<Step, string> = { 2: 'Good', 1: 'OK', 0: 'Poor' }
-export const cssColor = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`
 
 /** Side of a spot's square on the map, metres (the sampling cell of its kind). */
 export const CELL_SIZE: Record<FindKind, number> = { indoor: 0.5, ground: 2, roof: 1 }

@@ -150,9 +150,9 @@ export function splitPlants(ranked: PlantResult[]): { fit: PlantResult[]; poor: 
   return { fit: ranked.filter((r) => r.rating !== 'poor'), poor: ranked.filter((r) => r.rating === 'poor') }
 }
 
-/** The short answer of the spot card: the best few plants and how many more are listed below. */
-export function topPlants(fit: PlantResult[], n = 3): { shown: PlantResult[]; more: number } {
-  return { shown: fit.slice(0, n), more: Math.max(0, fit.length - n) }
+/** The spot card's list: the best few plants shown, the others kept behind "Show all". */
+export function topPlants(fit: PlantResult[], n = 3): { shown: PlantResult[]; rest: PlantResult[] } {
+  return { shown: fit.slice(0, n), rest: fit.slice(n) }
 }
 
 /** A way out of a "no": one short line, and optionally the month the Month control can switch to. */

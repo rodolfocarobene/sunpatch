@@ -129,12 +129,12 @@ describe('spotDeadEnd', () => {
 
 describe('topPlants', () => {
   const plants = (n: number) => Array.from({ length: n }, (_, i) => ({ i }) as never)
-  it('shows the first three and counts the rest', () => {
-    expect(topPlants(plants(7))).toMatchObject({ more: 4 })
+  it('shows the first three and keeps the rest', () => {
+    expect(topPlants(plants(7)).rest).toHaveLength(4)
     expect(topPlants(plants(7)).shown).toHaveLength(3)
   })
   it('has no rest for a short list', () => {
-    expect(topPlants(plants(2))).toMatchObject({ more: 0 })
-    expect(topPlants([])).toEqual({ shown: [], more: 0 })
+    expect(topPlants(plants(2)).rest).toEqual([])
+    expect(topPlants([])).toEqual({ shown: [], rest: [] })
   })
 })

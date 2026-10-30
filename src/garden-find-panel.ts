@@ -1,4 +1,4 @@
-import { cssColor, STEP_COLORS, type FindKind, type KindStats } from './garden-find'
+import { type FindKind, type KindStats } from './garden-find'
 import type { GardenTrace } from './garden-card'
 import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { PLANTS, type PlantKind } from './plants'
@@ -78,10 +78,9 @@ export function createFindPanel(options: {
   const result = el('div', 'findResult')
   root.append(plantSelect, result)
 
-  const swatch = (css: string | null, text: string): HTMLElement => {
+  const swatch = (kind: 'good' | 'ok' | 'none', text: string): HTMLElement => {
     const s = el('span', 'legendItem')
-    const box = el('i', css ? 'legendSwatch' : 'legendSwatch none')
-    if (css) box.style.background = css
+    const box = el('i', `legendSwatch ${kind}`)
     box.setAttribute('aria-hidden', 'true')
     s.append(box, text)
     return s
@@ -125,7 +124,7 @@ export function createFindPanel(options: {
         }
         const legend = el('div', 'findLegend')
         legend.setAttribute('aria-label', 'Colours of the plant map')
-        legend.append(swatch(cssColor(STEP_COLORS[2]), 'Good'), swatch(cssColor(STEP_COLORS[1]), 'OK'), swatch(null, 'Poor: not coloured'))
+        legend.append(swatch('good', 'Good'), swatch('ok', 'OK, smaller'), swatch('none', 'Poor: not coloured'))
         parts.push(legend)
         if (input.summary) parts.push(withRole(el('p', 'findSummary', input.summary), 'status'))
         if (input.deadEnd) {
