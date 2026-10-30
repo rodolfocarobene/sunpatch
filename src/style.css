@@ -266,6 +266,15 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #statusChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
+/* "Frame the view": the one way back to a good camera, bottom right in 3D, Panels and Garden (not while walking). */
+#reframe {
+  position: fixed; bottom: 16px; right: 16px; z-index: 10; padding: 6px 12px; font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+  color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); box-shadow: var(--shadow);
+}
+#reframe:hover { background: var(--bg-band); border-color: var(--accent-strong); }
+#reframe:active { background: var(--line); }
+#panel.walking ~ #reframe { display: none; }
+
 /* The docked bar: date, time and the sun's position for the 3D view and walk mode; the walk key hints stack above it. */
 #dock {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10;

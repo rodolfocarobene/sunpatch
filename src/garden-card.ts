@@ -20,6 +20,8 @@ export interface GardenCardInput {
   kind: PickedKind | null
   /** A roof spot on another building than the picked one. */
   neighbourRoof?: boolean
+  /** Where the spot is in words (see spotPlace); the plain kind is used without it. */
+  place?: string
   /** A one-line note for a click that made no spot (a facade), shown with the hint. */
   hint?: string
   trace: GardenTrace
@@ -244,7 +246,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         return
       }
       close.hidden = false
-      const where = el('h4', '', whereText(input.kind, input.neighbourRoof))
+      const where = el('h4', '', input.place ?? whereText(input.kind, input.neighbourRoof))
       head.replaceChildren(where, ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
       const { trace } = input
       if (trace.status === 'idle' || trace.status === 'running') {

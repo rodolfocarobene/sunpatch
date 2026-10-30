@@ -45,7 +45,7 @@ import {
 } from 'three'
 import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { fitDistance, freeAspect, metresPerPixel } from './frame'
+import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel } from './frame'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
@@ -107,6 +107,11 @@ const SUIT_OPACITY = 0.92
 const GARDEN_MAP_LIFT = 0.06
 const GARDEN_MAP_GAP = 0.06
 const GARDEN_MAP_OPACITY = 0.78
+/** How long the camera takes to slide a spot into view, milliseconds. */
+const SLIDE_MS = 600
+/** The spot's pulse: how long one spreading ring takes, and how many are sent. */
+const GARDEN_PULSE_MS = 1100
+const GARDEN_PULSES = 3
 const PROBE_COLOR = 0x1f2a37
 const PROBE_RING = 0xfffdf8
 const SKY_DAY = new Color(0x8fbfe8)
@@ -196,12 +201,15 @@ export interface SunScene {
   onSuitabilityScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
   /** Called with the index of the sample under a plain click (not a drag) while the map shows, or null for a click anywhere else. */
   onSuitabilityClick(handler: (index: number | null) => void): void
-  /** While the map shows: whether the selected building is in view; the handler hears each change. The camera is never moved for the map. */
-  onBuildingInView(handler: (inView: boolean) => void): void
-  /** Frames the whole selected building (the legend's "Frame the building"). */
-  frameSelected(): void
-  /** Frames the apartment (or the whole building) when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
-  frameOnEntry(target: 'apartment' | 'building'): void
+  /**
+   * Frames what a view is about, whatever the camera did before: the apartment (3D), the whole building (Panels) or the
+   * apartment with the ground around the building and, with the floors shown, the roof (Garden).
+   */
+  frameView(target: FrameTarget): void
+  /** The same when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
+  frameOnEntry(target: FrameTarget): void
+  /** Brings a scene point into view when it is off screen (under the panel, past an edge or behind the camera): a gentle slide, no zoom. */
+  revealPoint(at: { x: number; y: number; z: number }): void
   /** How many pixels at the left of the scene the panel covers: the apartment is centred in the rest. */
   setFrameInset(inset: () => number): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
@@ -219,6 +227,8 @@ export interface SunScene {
   setGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind; cell?: number }[]; steps: Step[] } | null): void
   dispose(): void
 }
+
+export type FrameTarget = 'apartment' | 'building' | 'garden'
 
 function addBox(scene: Group, spec: number[], color: number): Mesh {
   const [x, z, w, d, h] = spec
@@ -454,6 +464,7 @@ export function createScene(container: HTMLElement): SunScene {
   // Garden view: whether clicks pick a spot, and the marker on it.
   let gardenPicking = false
   let gardenAt: { x: number; y: number; z: number } | null = null
+  let gardenPulseFrom = 0
   let gardenMark: Group | undefined
   let gardenClick: ((hit: GardenHit | null) => void) | undefined
   let gardenMapMeshes: Mesh[] = []
@@ -728,8 +739,13 @@ export function createScene(container: HTMLElement): SunScene {
     if (!gardenAt) return
     const flatRing = (inner: number, outer: number, color: number) => flat(color, new RingGeometry(inner, outer, 32).rotateX(-Math.PI / 2))
     gardenMark = new Group()
-    gardenMark.add(flatRing(0.17, 0.25, PROBE_RING), flatRing(0.1, 0.17, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.045, 16).rotateX(-Math.PI / 2)))
+    // Bigger than the probe: a light ring round a dark one, a dot, and a ring that spreads out a few times (not with reduced motion).
+    gardenMark.add(flatRing(0.5, 0.7, PROBE_RING), flatRing(0.34, 0.5, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.1, 20).rotateX(-Math.PI / 2)))
+    const pulse = flatRing(0.4, 0.5, PROBE_COLOR)
+    pulse.name = 'pulse'
+    gardenMark.add(pulse)
     gardenMark.position.set(gardenAt.x, gardenAt.y + 0.03, gardenAt.z)
+    gardenPulseFrom = performance.now()
     for (const child of gardenMark.children) {
       child.renderOrder = 1
       aptLines.push({ line: child, kind: 'garden' })
@@ -855,25 +871,6 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   // Where the chosen quad is on screen, so its popover can follow while the camera moves.
-  // Whether the building is in view: its middle is on screen and the camera is not much farther than the framing distance.
-  let viewHandler: ((inView: boolean) => void) | undefined
-  let viewShown: boolean | undefined
-  const viewPoint = new Vector3()
-  function reportBuildingView() {
-    if (!viewHandler) return
-    let inView = true
-    if (suitOn && !walking && selectedBuilding) {
-      const { c, dist } = buildingFraming(selectedBuilding)
-      viewPoint.set(c.x, selectedBuilding.height / 2, c.z)
-      const far = camera.position.distanceTo(viewPoint) > dist * 3
-      viewPoint.project(camera)
-      inView = !far && viewPoint.z < 1 && Math.abs(viewPoint.x) < 0.9 && Math.abs(viewPoint.y) < 0.9
-    }
-    if (inView === viewShown) return
-    viewShown = inView
-    viewHandler(inView)
-  }
-
   const suitScreen = new Vector3()
   function reportSuitMark() {
     if (!suitHandler) return
@@ -973,8 +970,8 @@ export function createScene(container: HTMLElement): SunScene {
 
   // From above at ~45 degrees, on the side opposite the windows so they are seen from inside. The apartment fills
   // about half of the part of the screen the left panel leaves free, and sits in the middle of it.
-  function frameApartment(b: Building, p: Plan) {
-    const { c, radius } = apartmentBounds(b, p, true)
+  function frameApartment(b: Building, p: Plan, garden = false) {
+    const { c, radius: apartmentRadius } = apartmentBounds(b, p, true)
     const out = new Vector3()
     for (const w of p.windows) {
       const ring = w.ring === 0 ? p.outline.outer : p.outline.holes[w.ring - 1]
@@ -985,7 +982,17 @@ export function createScene(container: HTMLElement): SunScene {
       out.addScaledVector(normal, Math.sign(normal.dot(mid)) || 1)
     }
     const side = out.lengthSq() > 1e-6 ? out.normalize().negate() : new Vector3(0, 0, 1)
-    const target = new Vector3(c.x, floorBase(b, p) + 1, c.z)
+    const floorY = floorBase(b, p) + 1
+    let radius = apartmentRadius
+    let aim = floorY
+    if (garden) {
+      let reach = 0
+      for (const q of b.outer) reach = Math.max(reach, Math.hypot(q.x - c.x, q.z - c.z))
+      const rise = cutawayNow() ? 0 : Math.max(0, b.height - floorY)
+      radius = gardenRadius(apartmentRadius, reach, rise)
+      aim = floorY + rise / 2
+    }
+    const target = new Vector3(c.x, aim, c.z)
     const width = container.clientWidth || window.innerWidth
     const height = container.clientHeight || window.innerHeight
     const inset = Math.min(frameInset(), width / 2)
@@ -996,6 +1003,47 @@ export function createScene(container: HTMLElement): SunScene {
     const slide = right.multiplyScalar((inset / 2) * metresPerPixel(dist, ORBIT_FOV, height))
     frame(position.sub(slide), target.sub(slide))
   }
+
+  function frameTarget(target: FrameTarget) {
+    if (!selectedBuilding || walking) return
+    if (target === 'building' || !plan) frameBuilding(selectedBuilding)
+    else frameApartment(selectedBuilding, plan, target === 'garden')
+  }
+
+  // A slide of the camera and its target together (so the view keeps its angle and distance) that puts a point in the
+  // middle of the free area; it is not the user's own move, so a camera framed by the scene stays "unmoved".
+  let slideTo: { from: { position: Vector3; target: Vector3 }; to: { position: Vector3; target: Vector3 }; start: number } | undefined
+  const reducedMotion = (): boolean => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  function revealPoint(at: { x: number; y: number; z: number }) {
+    if (walking) return
+    const width = container.clientWidth || window.innerWidth
+    const height = container.clientHeight || window.innerHeight
+    const inset = Math.min(frameInset(), width / 2)
+    const p = new Vector3(at.x, at.y, at.z).project(camera)
+    const px = ((p.x + 1) / 2) * width
+    const py = ((1 - p.y) / 2) * height
+    if (p.z < 1 && inFreeArea(px, py, width, height, inset)) return
+    const offset = camera.position.clone().sub(controls.target)
+    const dist = offset.length()
+    const right = new Vector3().crossVectors(controls.target.clone().sub(camera.position), camera.up).setY(0).normalize()
+    const slide = right.multiplyScalar((inset / 2) * metresPerPixel(dist, ORBIT_FOV, height))
+    const target = new Vector3(at.x, at.y, at.z).sub(slide)
+    slideTo = {
+      from: { position: camera.position.clone(), target: controls.target.clone() },
+      to: { position: target.clone().add(offset), target },
+      start: performance.now(),
+    }
+    if (reducedMotion()) stepSlide(slideTo.start + SLIDE_MS)
+  }
+  function stepSlide(now: number) {
+    if (!slideTo) return
+    const k = Math.min(1, (now - slideTo.start) / SLIDE_MS)
+    const e = k * k * (3 - 2 * k)
+    camera.position.lerpVectors(slideTo.from.position, slideTo.to.position, e)
+    controls.target.lerpVectors(slideTo.from.target, slideTo.to.target, e)
+    if (k >= 1) slideTo = undefined
+  }
+  controls.addEventListener('start', () => (slideTo = undefined))
 
   function setBuildings(next: Building[], choice: Building | string, { keepCamera = false } = {}) {
     setExtent(DATA_EXTENT)
@@ -1327,7 +1375,10 @@ export function createScene(container: HTMLElement): SunScene {
       walk.update((now - lastFrame) / 1000)
       walkHandlers?.look?.(walk.yaw)
     }
-    else controls.update()
+    else {
+      stepSlide(now)
+      controls.update()
+    }
     lastFrame = now
     placeSky()
     const twoPass = plan !== null && sunUp
@@ -1339,8 +1390,17 @@ export function createScene(container: HTMLElement): SunScene {
     for (const g of glassMeshes) g.visible = true
     reportProbe()
     reportSuitMark()
-    reportBuildingView()
-    if (gardenMark) gardenMark.scale.setScalar(Math.min(8, Math.max(1, camera.position.distanceTo(gardenMark.position) / 20)))
+    if (gardenMark) {
+      gardenMark.scale.setScalar(Math.min(10, Math.max(1, camera.position.distanceTo(gardenMark.position) / 14)))
+      const pulse = gardenMark.getObjectByName('pulse') as Mesh | undefined
+      if (pulse) {
+        const t = (now - gardenPulseFrom) / GARDEN_PULSE_MS
+        const live = t >= 0 && t < GARDEN_PULSES && !reducedMotion()
+        const k = t % 1
+        pulse.scale.setScalar(1 + k * 2.2)
+        ;(pulse.material as MeshBasicMaterial).opacity = live ? 0.9 * (1 - k) : 0 // faded, not hidden: the apartment-line pass owns visibility
+      }
+    }
   }
   renderer.setAnimationLoop(render)
   // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
@@ -1391,18 +1451,13 @@ export function createScene(container: HTMLElement): SunScene {
       suitOn = on
       applyCutaway()
     },
-    onBuildingInView(handler) {
-      viewHandler = handler
-      viewShown = undefined
-    },
-    frameSelected() {
-      if (selectedBuilding && !walking) frameBuilding(selectedBuilding)
+    frameView(target) {
+      frameTarget(target)
     },
     frameOnEntry(target) {
-      if (!selectedBuilding || walking || userMoved) return
-      if (target === 'apartment' && plan) frameApartment(selectedBuilding, plan)
-      else frameBuilding(selectedBuilding)
+      if (!userMoved) frameTarget(target)
     },
+    revealPoint,
     setFrameInset(inset) {
       frameInset = inset
     },
