@@ -1,7 +1,7 @@
 import { rankPlants, type PlantResult } from './garden'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, splitPlants, sunStrip, tempStrip, whereText, type PlantRow,
+  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
@@ -48,7 +48,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** Indoor spots ignore the weather; this only satisfies the signature. */
 const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: Array(12).fill(0), tMin: Array(12).fill(0), tMax: Array(12).fill(0), tLow: Array(12).fill(0) }
 
-export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void }): GardenCard {
+export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', 'What grows at the selected spot')
@@ -154,6 +154,20 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
           : `${fit.length} of ${ranked.length} plants suit this spot${when}, best first.`,
       ),
     )
+    if (fit.length === 0) {
+      const rated = input.month === null ? ranked : rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!)
+      const out = spotDeadEnd(rated, input.month)
+      if (out) {
+        const line = el('p', 'plantsNext', out.text)
+        if (out.switchMonth !== undefined) {
+          const month = out.switchMonth
+          const go = Object.assign(el('button', 'link', `Show ${MONTH_NAMES[month]}`), { type: 'button' })
+          go.addEventListener('click', () => options.onMonth(month))
+          line.append(' ', go)
+        }
+        box.append(line)
+      }
+    }
     if (fit.length > 0) {
       const list = el('ul', 'plantList')
       list.append(...fit.map((r) => rowItem(plantRow(r, input.month), true)))

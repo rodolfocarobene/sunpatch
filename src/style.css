@@ -436,6 +436,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .gardenBusy, .gardenCard .gardenProblem { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .gardenCard .gardenBusy .gardenBar { align-self: stretch; }
 .gardenCard .plantsLead { margin: 0; font-weight: 600; text-wrap: pretty; }
+.gardenCard .plantsNext { margin: 0; text-wrap: pretty; }
 .gardenCard .gardenPlants { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .gardenCard .plantList { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .gardenCard .plantRow { display: flex; flex-direction: column; gap: 1px; padding: 6px 0; border-top: 1px solid var(--line); }
@@ -463,6 +464,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .findPanel .legendSwatch { width: 12px; height: 12px; border-radius: 2px; box-sizing: border-box; }
 .findPanel .legendSwatch.none { border: 1px dashed var(--muted); }
 .findPanel .findSummary { margin: 0; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findNext { margin: 0; line-height: 1.4; text-wrap: pretty; }
 .findPanel .findCounts { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .findPanel .findCounts strong { color: var(--text); font-weight: 650; }
 .findPanel .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }

@@ -1,6 +1,7 @@
 import { POT_HEIGHT, type GardenSpot, type SpotKind, type SunnySpot } from './garden-spots'
-import type { IssueKind, Rating } from './garden'
+import { assess, type IssueKind, type Rating, type Temperatures } from './garden'
 import type { Plant } from './plants'
+import { MONTH_NAMES, hoursText, monthsText, type DeadEnd } from './garden-text'
 
 // "Find a place for ...": one plant scored over every spot of the garden analysis. The words, the three colour steps and
 // the kind filtering live here, apart from the DOM and the scene, so they can be tested.
@@ -160,3 +161,49 @@ export function bestSpot(spots: SunnySpot[], scored: (Scored | undefined)[], mon
 
 /** The surface height under a spot (spots stand `POT_HEIGHT` above it): what a click on that surface would report. */
 export const surfaceY = (spot: GardenSpot): number => spot.y - POT_HEIGHT
+
+/** Per month, how many of the spots are good for a plant and how many only OK. */
+export interface MonthCount {
+  good: number
+  ok: number
+}
+
+/** The plant over the given spots in each month (each spot is rated once; a month's rating is read from its year). */
+export function monthCounts(plant: Plant, spots: SunnySpot[], climate: Temperatures): MonthCount[] {
+  const counts: MonthCount[] = Array.from({ length: 12 }, () => ({ good: 0, ok: 0 }))
+  for (const s of spots) {
+    assess(plant, s, climate).year.forEach((r, m) => {
+      if (r.rating === 'good') counts[m].good++
+      else if (r.rating === 'ok') counts[m].ok++
+    })
+  }
+  return counts
+}
+
+/**
+ * The way out of "finds no suitable spot": the months the plant does find one (and the month with most good spots, to
+ * switch to), or, when no month works anywhere, the sunniest any spot gets against what the plant needs (or the
+ * reason most spots share). Undefined when the data holds no other month to point to.
+ */
+export function findDeadEnd(plant: Plant, month: number | null, counts: MonthCount[], spots: SunnySpot[], why?: IssueKind): DeadEnd | undefined {
+  const name = cap(plant.name)
+  const working = counts.map((c) => c.good + c.ok > 0)
+  const withGood = counts.map((c) => c.good > 0)
+  if (working.some(Boolean)) {
+    const usable = withGood.some(Boolean) ? withGood : working
+    const others = usable.map((u, m) => u && m !== month)
+    if (!others.some(Boolean)) return undefined
+    const better = (a: number, b: number) => counts[a].good > counts[b].good || (counts[a].good === counts[b].good && counts[a].ok > counts[b].ok)
+    const best = others.map((o, m) => (o ? m : -1)).filter((m) => m >= 0).reduce((b, m) => (better(m, b) ? m : b))
+    return { text: `${name} ${withGood.some(Boolean) ? 'does well' : 'is only fair'} here in ${monthsText(others)}.`, switchMonth: best }
+  }
+  if (spots.length === 0) return undefined
+  let sunMax = 0
+  let sunMonth = 0
+  for (const s of spots) s.sunMinutes.forEach((m, i) => { if (m > sunMax) { sunMax = m; sunMonth = i } })
+  if (why === 'dark' || (why === undefined && sunMax / 60 < plant.sun.min)) {
+    return { text: `Nowhere suitable all year; the sunniest spot gets ${hoursText(sunMax)} in ${MONTH_NAMES[sunMonth]}, ${plant.name} needs ${hoursText(plant.sun.min * 60)}.` }
+  }
+  const reason = why ? WHY[why] : undefined
+  return { text: reason ? `Nowhere suitable all year (${reason}).` : 'Nowhere suitable in any month.' }
+}

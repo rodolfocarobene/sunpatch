@@ -10,7 +10,12 @@ export interface SurfaceHit {
   apartmentFloor: boolean
   /** Height component of the surface normal: 1 faces up, 0 is a wall, -1 faces down. */
   normalY: number
+  /** With the floors above hidden: the cut through the selected building (the top of its visible storey), not its roof. */
+  cut?: boolean
 }
+
+/** What a click means: a spot kind, or the cut through the building (no spot). */
+export type HitKind = PickedKind | 'cut'
 
 /** Surfaces tilted less than about 45 degrees from flat count as ones a pot can stand on. */
 export const FLAT_ENOUGH = 0.7
@@ -20,12 +25,16 @@ export const GROUND_TOP = 0.5
 /**
  * The spot a click makes. The apartment floor is indoors. Any other upward surface is outdoors: the ground when it is
  * at ground level, else a roof, terrace or balcony. Walls (facades) and surfaces facing down give nothing: the caller
- * asks for a floor, ground or roof spot instead of guessing which ground the click was meant for.
+ * asks for a floor, ground or roof spot instead of guessing which ground the click was meant for. The cut surface of
+ * a building whose upper floors are hidden is no roof: it is reported as 'cut'.
  */
-export function classifyHit(hit: SurfaceHit): PickedKind | null {
+export function classifyHit(hit: SurfaceHit): HitKind | null {
   if (hit.apartmentFloor) return 'indoor'
   if (hit.normalY < FLAT_ENOUGH) return null
+  if (hit.cut) return 'cut'
   return hit.y <= GROUND_TOP ? 'ground' : 'roof'
 }
 
 export const FACADE_HINT = 'Pick a floor, ground or roof spot: plants cannot stand on a wall.'
+
+export const CUT_HINT = "That's the cut through the building, not its roof. Untick Hide floors above to pick the roof."

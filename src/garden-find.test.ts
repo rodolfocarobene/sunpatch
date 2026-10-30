@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CELL_SIZE, bestSpot, compass, findSummary, kindStats, kindsFor, stepOf, surfaceY, type KindStats, type Scored } from './garden-find'
+import { CELL_SIZE, bestSpot, compass, findDeadEnd, findSummary, monthCounts, kindStats, kindsFor, stepOf, surfaceY, type KindStats, type Scored } from './garden-find'
 import { POT_HEIGHT, type GardenSpot, type SunnySpot } from './garden-spots'
 import { plantById } from './plants'
 
@@ -121,5 +121,36 @@ describe('bestSpot', () => {
   })
   it('gives the surface height a click there would report', () => {
     expect(surfaceY(spot('ground'))).toBeCloseTo(1 - POT_HEIGHT)
+  })
+})
+
+describe('findDeadEnd', () => {
+  const basil = plant('basil')
+  const climate = { tMean: Array(12).fill(20), tMin: Array(12).fill(14), tMax: Array(12).fill(26), tLow: Array(12).fill(12) }
+  const sunny = (minutes: number[]): SunnySpot => ({ x: 0, y: 1, z: 0, indoor: false, kind: 'ground', sunMinutes: minutes })
+
+  it('names the months that work and switches to the one with most good spots', () => {
+    const spots = [sunny([0, 0, 0, 0, 500, 500, 500, 500, 0, 0, 0, 0]), sunny([0, 0, 0, 0, 0, 500, 500, 0, 0, 0, 0, 0])]
+    const out = findDeadEnd(basil, 11, monthCounts(basil, spots, climate), spots)!
+    expect(out.text).toBe('Basil does well here in May to Aug.')
+    expect(out.switchMonth).toBe(5)
+  })
+
+  it('does not point back to the month already chosen', () => {
+    const spots = [sunny([0, 0, 0, 0, 500, 0, 0, 0, 0, 0, 0, 0])]
+    expect(findDeadEnd(basil, 4, monthCounts(basil, spots, climate), spots)).toBeUndefined()
+  })
+
+  it('gives the sunniest spot against the need when no month works', () => {
+    const spots = [sunny([0, 0, 0, 0, 0, 0, 120, 0, 0, 0, 0, 0]), sunny(Array(12).fill(30))]
+    const out = findDeadEnd(basil, null, monthCounts(basil, spots, climate), spots, 'dark')!
+    expect(out.text).toBe(`Nowhere suitable all year; the sunniest spot gets 2 h in July, basil needs ${basil.sun.min} h.`)
+    expect(out.switchMonth).toBeUndefined()
+  })
+
+  it('names the shared reason when it is not the sun', () => {
+    const spots = [sunny(Array(12).fill(600))]
+    const cold = { ...climate, tMean: Array(12).fill(-5), tMin: Array(12).fill(-9), tMax: Array(12).fill(-1), tLow: Array(12).fill(-12) }
+    expect(findDeadEnd(basil, null, monthCounts(basil, spots, cold), spots, 'frost')!.text).toBe('Nowhere suitable all year (frost).')
   })
 })

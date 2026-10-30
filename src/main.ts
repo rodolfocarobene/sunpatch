@@ -41,12 +41,12 @@ import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
 import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
-import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
+import { bestSpot, findDeadEnd, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
-import { MONTH_NAMES } from './garden-text'
+import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { scoreSpots } from './garden'
 import { plantById, type Plant } from './plants'
-import { classifyHit, FACADE_HINT, type PickedKind } from './garden-pick'
+import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
@@ -98,6 +98,7 @@ const gardenCard = createGardenCard({
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
+  onMonth: setGardenMonth,
 })
 ui.gardenSlot.appendChild(gardenCard.el)
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
@@ -200,6 +201,8 @@ function renderFind() {
   const done = plant && findResult && findTrace.status === 'done'
   const climate = gardenClimate.status === 'ready' ? gardenClimate.climate : undefined
   let summary = ''
+  let roofHidden = false
+  let deadEnd: DeadEnd | undefined
   let stats: ReturnType<typeof kindStats> = []
   if (plant && findResult && done) {
     const { spots } = findResult
@@ -222,7 +225,13 @@ function renderFind() {
       })
     }
     const waiting = !climate && gardenClimate.status !== 'error' && kindsFor(plant).kinds.some((k) => k !== 'indoor') // outdoor spots are not rated yet
-    stats = waiting ? [] : kindStats(spots, findScored)
+    // The roof is not drawn while the floors above are hidden, so it is not counted or named either.
+    stats = waiting ? [] : kindStats(spots, shownScores())
+    if (!waiting && stats.length > 0 && stats.every((s) => s.good === 0 && s.ok === 0)) {
+      const scoredSpots = shownScores().flatMap((r, i) => (r ? [spots[i]] : []))
+      deadEnd = findDeadEnd(plant, gardenMonth, monthCounts(plant, scoredSpots, climate ?? { tMean: [], tMin: [], tMax: [], tLow: [] }), scoredSpots, stats.find((s) => s.why)?.why)
+    }
+    roofHidden = floorsHidden && findScored.some((r, i) => r && spots[i].kind === 'roof')
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
     if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
   }
@@ -233,15 +242,21 @@ function renderFind() {
     weather: gardenClimate.status,
     needsClimate: plant?.outdoor ?? false,
     summary,
+    deadEnd,
     note: plant ? kindsFor(plant).note : undefined,
     stats,
-    canShowBest: done === true && findResult !== undefined && bestSpot(findResult.spots, findScored, gardenMonth) !== undefined,
+    roofHidden,
+    canShowBest: done === true && findResult !== undefined && bestSpot(findResult.spots, shownScores(), gardenMonth) !== undefined,
   })
 }
 
+/** The plant map's scores without the roof spots while the floors above are hidden. */
+const shownScores = (): (Scored | undefined)[] =>
+  findScored.map((r, i) => (floorsHidden && findResult?.spots[i]?.kind === 'roof' ? undefined : r))
+
 function showBestSpot() {
   if (!findResult) return
-  const i = bestSpot(findResult.spots, findScored, gardenMonth)
+  const i = bestSpot(findResult.spots, shownScores(), gardenMonth)
   if (i === undefined) return
   const s = findResult.spots[i]
   selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z)
@@ -309,8 +324,8 @@ gardenJob.onState((state: GardenState) => {
 sunScene.onGardenClick((hit) => {
   if (!hit) return // the sky: the spot stays
   const kind = classifyHit(hit)
-  if (!kind) {
-    gardenHint = FACADE_HINT
+  if (!kind || kind === 'cut') {
+    gardenHint = kind === 'cut' ? CUT_HINT : FACADE_HINT // either way the previous spot stays
     renderGarden()
     return
   }
@@ -885,7 +900,7 @@ let site: { /** The polygons as the data has them. */ raw: Building[]; /** `raw`
 siteDeclared = true
 ui.onCutaway((hidden) => {
   floorsHidden = hidden
-  renderRoofHint()
+  renderGarden() // the roof counts of the plant map follow
 })
 /** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
 let heights: HeightOverrides = {}
