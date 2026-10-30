@@ -104,7 +104,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #about { font-size: var(--text-sm); color: var(--muted); text-decoration: none; }
 #panel #about:hover { color: var(--accent-strong); text-decoration: underline; }
 #panel .langSwitch { display: inline-flex; align-items: center; gap: 1px; font-size: var(--text-xs); color: var(--disabled); }
-#panel .langSwitch button { padding: 2px 5px; background: transparent; border-color: transparent; color: var(--muted); font: inherit; font-weight: 600; letter-spacing: 0.03em; }
+#panel .langSwitch button { min-width: 32px; min-height: 28px; padding: 4px 8px; background: transparent; border-color: transparent; color: var(--muted); font: inherit; font-weight: 600; letter-spacing: 0.03em; }
 #panel .langSwitch button[aria-pressed='true'] { color: var(--text); cursor: default; }
 #panel .langSwitch button:hover:not(:disabled), #panel .langSwitch button:active:not(:disabled) { background: transparent; border-color: transparent; color: var(--accent-strong); }
 #panel .langSwitch button[aria-pressed='true']:hover:not(:disabled) { color: var(--text); }
