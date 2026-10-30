@@ -20,7 +20,7 @@
     --bg-band: #1a222d;
     --surface: #1e2733;
     --text: #f1ece1;
-    --muted: #a9b4c2;
+    --muted: #bcc5d0;
     --line: #2f3b4a;
     --accent: #f7b43f;
     --accent-strong: #f7b43f;
@@ -29,6 +29,8 @@
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
   }
+  /* Grey reads washed out over the warm glow; a warm off-white keeps the lead quiet but legible. */
+  .hero .lead { color: #e6dccb; }
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
