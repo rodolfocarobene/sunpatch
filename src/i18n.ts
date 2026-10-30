@@ -96,5 +96,16 @@ export function fmtDay(month: number, day: number): string {
 /** A length or count with at most one decimal ("9.5", "9" / "9,5" in Italian), rounded as `Math.round(x * 10) / 10` was. */
 export const fmt1 = (n: number): string => fmtNumber(Math.round(n * 10) / 10, { maximumFractionDigits: 1 })
 
+/** Capitalises the first letter (Italian month and plant names are lower case inside a sentence). */
+export const upFirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** The month name in the current language (`month` is 0-11): "June" / "giugno". Use `upFirst` at the start of a sentence. */
+export function fmtMonth(month: number, style: 'long' | 'short' = 'long'): string {
+  const date = new Date(2001, month, 15)
+  const name = date.toLocaleDateString(locale(), { month: 'long' })
+  if (style === 'long') return name
+  return lang === 'en' ? name.slice(0, 3) : date.toLocaleDateString(locale(), { month: 'short' }).replace(/\.$/, '')
+}
+
 /** Exactly one decimal ("9.0"), where the digit matters (heights in the tooltips). */
 export const fmt1Fixed = (n: number): string => fmtNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 })

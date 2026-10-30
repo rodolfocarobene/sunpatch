@@ -1,3 +1,4 @@
+import { fmtMonth, fmtNumber, t, upFirst } from './i18n'
 import type { PanelShade } from './panel-shade'
 import type { Verdict } from './panel-verdict'
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type PanelEnergy } from './solar'
@@ -26,7 +27,6 @@ export interface EnergyView {
 
 export const ACCURACY_URL = 'https://github.com/rodolfocarobene/sunpatch#accuracy-and-limitations'
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 /** The chart's hours (start of the hour, local time); widened when the sun is up outside them. */
 const FIRST_HOUR = 4
 const LAST_HOUR = 21
@@ -41,12 +41,13 @@ export interface CellInfo {
 
 /** What one month x hour cell shows and says: "June, 15:00–16:00: 80% of the panel in sun". */
 export function cellInfo(shade: PanelShade, month: number, hour: number): CellInfo {
-  const when = `${MONTH_NAMES[month]}, ${clock(hour * 60)}–${clock(hour * 60 + 60)}`
-  if (shade.up[month][hour] === 0) return { kind: 'night', share: 0, text: `${when}: sun below the horizon` }
-  if (shade.front[month][hour] === 0) return { kind: 'behind', share: 0, text: `${when}: sun behind the panel` }
+  const when = `${upFirst(fmtMonth(month))}, ${clock(hour * 60)}–${clock(hour * 60 + 60)}`
+  if (shade.up[month][hour] === 0) return { kind: 'night', share: 0, text: t('panels.cellNight', { when }) }
+  if (shade.front[month][hour] === 0) return { kind: 'behind', share: 0, text: t('panels.cellBehind', { when }) }
   const share = shade.lit[month][hour]
-  const behind = shade.front[month][hour] < 0.99 ? '; sun behind the panel for part of the hour' : ''
-  return { kind: 'sun', share, text: `${when}: ${Math.round(share * 100)}% of the panel in sun${behind}` }
+  const pct = Math.round(share * 100)
+  const partBehind = shade.front[month][hour] < 0.99
+  return { kind: 'sun', share, text: t(partBehind ? 'panels.cellSunPartBehind' : 'panels.cellSun', { when, pct }) }
 }
 
 /** The hours the chart covers: 4 to 21, wider if the sun is up before or after. */
@@ -64,19 +65,21 @@ export function chartHours(shade: PanelShade): [number, number] {
   return [first, last]
 }
 
-export const formatKwh = (kwh: number): string => `${Math.round(kwh).toLocaleString('en')} kWh`
+export const formatKwh = (kwh: number): string => `${fmtNumber(Math.round(kwh))} kWh`
 
 /** "Shading costs 120 kWh (8%)", or the good news. */
 export function shadingLine(e: PanelEnergy): string {
   if (e.idealOpen <= 0) return ''
-  if (e.shadingCost < 0.5) return 'Nothing shades this panel'
-  return `Shading costs ${formatKwh(e.shadingCost)} (${formatLoss(e.shadingShare)})`
+  if (e.shadingCost < 0.5) return t('panels.noShade')
+  return t('panels.shadeCost', { kwh: formatKwh(e.shadingCost), loss: formatLoss(e.shadingShare) })
 }
 
-export const formatHours = (h: number): string => `${Math.round(h).toLocaleString('en')} h`
+export const formatHours = (h: number): string => `${fmtNumber(Math.round(h))} h`
 
 /** "12%"; "<1%" for a small loss that would round to nothing. */
-export const formatLoss = (loss: number): string => (loss > 0 && loss < 0.005 ? '<1%' : `${Math.round(loss * 100)}%`)
+export const formatLoss = (loss: number): string => (loss > 0 && loss < 0.005 ? '<1%' : `${fmtNumber(Math.round(loss * 100))}%`)
+
+const fmt2 = (n: number): string => fmtNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const rgbCss = (minutes: number): string => `rgb(${sunColor(minutes).join(', ')})`
 
@@ -93,7 +96,7 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
   el.className = 'panelCard'
   el.hidden = true
   el.setAttribute('role', 'region')
-  el.setAttribute('aria-label', 'Shading of the selected panel')
+  el.setAttribute('aria-label', t('panels.cardAria'))
   const tip = document.createElement('div')
   tip.className = 'heatTip'
   tip.hidden = true
@@ -102,14 +105,14 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
 
   const body = document.createElement('div')
   body.className = 'cardBody'
-  const title = Object.assign(document.createElement('h4'), { textContent: 'Selected panel' })
+  const title = Object.assign(document.createElement('h4'), { textContent: t('panels.cardTitle') })
   el.append(title, body)
   if (options.onClose) {
     const close = document.createElement('button')
     close.type = 'button'
     close.className = 'cardClose'
-    close.title = 'Close (Esc)'
-    close.setAttribute('aria-label', 'Close')
+    close.title = t('sun.closeTitle')
+    close.setAttribute('aria-label', t('sun.close'))
     close.innerHTML = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
     close.addEventListener('click', options.onClose)
     el.append(close)
@@ -135,13 +138,9 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
       const dd = Object.assign(document.createElement('dd'), { textContent: value, title: hint })
       dl.append(dt, dd)
     }
-    row('Direct sun a year', formatHours(shade.annualHours), 'Hours the sun reaches the face, from the 21st of each month scaled to the year (partly shaded hours count in part)')
-    row(
-      'Lost to shading',
-      shade.potentialHours > 0 ? formatLoss(shade.shadingLoss) : 'none',
-      'Share of the energy the face could get from direct sun that obstacles take away, weighted by the angle of the sun',
-    )
-    row('With no obstacles', formatHours(shade.potentialHours), 'Hours the sun is in front of the face, with nothing in the way')
+    row(t('panels.figYear'), formatHours(shade.annualHours), t('panels.figYearHint'))
+    row(t('panels.figLost'), shade.potentialHours > 0 ? formatLoss(shade.shadingLoss) : t('panels.figLostNone'), t('panels.figLostHint'))
+    row(t('panels.figOpen'), formatHours(shade.potentialHours), t('panels.figOpenHint'))
     return dl
   }
 
@@ -149,7 +148,7 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const [first, last] = chartHours(shade)
     const table = document.createElement('table')
     table.className = 'heat'
-    table.setAttribute('aria-label', 'Share of the panel in direct sun, by month and hour')
+    table.setAttribute('aria-label', t('panels.chartAria'))
     const head = table.createTHead().insertRow()
     head.append(document.createElement('td'))
     for (let h = first; h <= last; h++) {
@@ -162,7 +161,7 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const rows = table.createTBody()
     for (let m = 0; m < 12; m++) {
       const tr = rows.insertRow()
-      const th = Object.assign(document.createElement('th'), { scope: 'row', textContent: MONTH_NAMES[m].slice(0, 3) })
+      const th = Object.assign(document.createElement('th'), { scope: 'row', textContent: upFirst(fmtMonth(m, 'short')) })
       tr.append(th)
       for (let h = first; h <= last; h++) {
         const info = cellInfo(shade, m, h)
@@ -192,7 +191,7 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     svg.setAttribute('viewBox', `0 0 ${W} ${H + 14}`)
     svg.setAttribute('class', 'energyBars')
     svg.setAttribute('role', 'img')
-    svg.setAttribute('aria-label', `Energy by month in kWh${realistic ? ', with local weather and ideal' : ', ideal'}`)
+    svg.setAttribute('aria-label', t(realistic ? 'panels.barsAriaWeather' : 'panels.barsAriaIdeal'))
     const add = (tag: string, attrs: Record<string, string>, text?: string) => {
       const n = document.createElementNS(ns, tag)
       for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v)
@@ -204,10 +203,13 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
       const x = m * slot + (slot - bar) / 2
       const ideal = (energy.monthIdeal[m] / top) * H
       const real = realistic ? (realistic[m] / top) * H : 0
-      const text = `${MONTH_NAMES[m]}: ${realistic ? `${formatKwh(realistic[m])} with weather, ` : ''}${formatKwh(energy.monthIdeal[m])} ideal`
+      const monthName = upFirst(fmtMonth(m))
+      const text = realistic
+        ? t('panels.barTipWeather', { month: monthName, real: formatKwh(realistic[m]), ideal: formatKwh(energy.monthIdeal[m]) })
+        : t('panels.barTipIdeal', { month: monthName, ideal: formatKwh(energy.monthIdeal[m]) })
       if (realistic) add('rect', { class: 'idealMark', x: String(x), y: String(H - ideal + 0.5), width: String(bar), height: String(Math.max(0, ideal - 1)), rx: '2' })
       add('rect', { class: 'realBar', x: String(x), y: String(H - (realistic ? real : ideal)), width: String(bar), height: String(Math.max(1, realistic ? real : ideal)), rx: '2' })
-      add('text', { x: String(x + bar / 2), y: String(H + 11), class: 'barLabel', 'text-anchor': 'middle' }, MONTH_NAMES[m][0])
+      add('text', { x: String(x + bar / 2), y: String(H + 11), class: 'barLabel', 'text-anchor': 'middle' }, upFirst(fmtMonth(m))[0])
       const hit = add('rect', { x: String(m * slot), y: '0', width: String(slot), height: String(H + 14), fill: 'transparent', tabindex: '0', 'aria-label': text }) as SVGElement
       hit.addEventListener('mouseenter', () => showTip(hit as unknown as HTMLElement, text))
       hit.addEventListener('focus', () => showTip(hit as unknown as HTMLElement, text))
@@ -221,8 +223,8 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const key = document.createElement('div')
     key.className = 'energyKey'
     key.innerHTML = realistic
-      ? '<span><i class="swatch real" aria-hidden="true"></i>With local weather</span><span><i class="swatch ideal" aria-hidden="true"></i>Ideal, clear sky</span>'
-      : '<span><i class="swatch real" aria-hidden="true"></i>Ideal, clear sky, kWh a month</span>'
+      ? `<span><i class="swatch real" aria-hidden="true"></i>${t('panels.keyWeather')}</span><span><i class="swatch ideal" aria-hidden="true"></i>${t('panels.keyIdeal')}</span>`
+      : `<span><i class="swatch real" aria-hidden="true"></i>${t('panels.keyIdealMonth')}</span>`
     wrap.append(key)
     return wrap
   }
@@ -234,7 +236,7 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     details.addEventListener('toggle', () => {
       assumptionsOpen = details.open
     })
-    const summary = Object.assign(document.createElement('summary'), { textContent: 'Assumptions' })
+    const summary = Object.assign(document.createElement('summary'), { textContent: t('panels.assumptions') })
     const field = (label: string, value: number, min: number, max: number, set: (v: number) => Assumptions): HTMLElement => {
       const l = document.createElement('label')
       const input = document.createElement('input')
@@ -258,13 +260,13 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const grid = document.createElement('div')
     grid.className = 'assumeFields'
     grid.append(
-      field('Module efficiency', a.efficiency, 5, 40, (v) => ({ ...a, efficiency: v })),
-      field('System losses', a.losses, 0, 60, (v) => ({ ...a, losses: v })),
+      field(t('panels.efficiency'), a.efficiency, 5, 40, (v) => ({ ...a, efficiency: v })),
+      field(t('panels.losses'), a.losses, 0, 60, (v) => ({ ...a, losses: v })),
     )
-    const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: 'Reset' })
+    const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('panels.reset') })
     reset.addEventListener('click', () => options.onAssumptions?.({ ...DEFAULT_ASSUMPTIONS }))
     const facts = note(
-      `This panel is about ${view.energy.kwp.toFixed(2)} kWp (${view.area.toFixed(2)} m\u00b2 at ${Math.round(a.efficiency * 100)}%). kWp is the panel's rated power; 1 kWp is about 5 m\u00b2 of panels. Losses cover wiring, inverter, heat and dirt; 14% is the PVGIS convention.`,
+      t('panels.facts', { kwp: fmt2(view.energy.kwp), area: fmt2(view.area), eff: Math.round(a.efficiency * 100) }),
       'cardNote small',
     )
     details.append(summary, grid, facts, reset)
@@ -275,13 +277,13 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
   function headline(view: EnergyView): HTMLElement {
     const box = document.createElement('section')
     box.className = 'cardHead'
-    box.setAttribute('aria-label', 'Summary')
+    box.setAttribute('aria-label', t('panels.summary'))
     const { verdict } = view
     const sentence = note(verdict.sentence, verdict.warning ? 'cardVerdict warn' : 'cardVerdict')
     if (verdict.warning) sentence.setAttribute('role', 'alert')
     box.append(sentence)
     if (view.weather === 'error') {
-      const retry = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: 'Retry the weather' })
+      const retry = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('panels.retryWeather') })
       retry.addEventListener('click', () => options.onRetry?.())
       box.append(retry)
     }
@@ -297,20 +299,20 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     box.addEventListener('toggle', () => {
       detailsOpen = box.open
     })
-    box.append(Object.assign(document.createElement('summary'), { textContent: 'Details' }))
+    box.append(Object.assign(document.createElement('summary'), { textContent: t('shell.details') }))
     const ideal = document.createElement('div')
     ideal.className = 'energyIdeal'
     ideal.append(
-      Object.assign(document.createElement('span'), { textContent: 'Ideal (clear sky)' }),
-      Object.assign(document.createElement('strong'), { textContent: `${formatKwh(view.energy.ideal)} a year` }),
+      Object.assign(document.createElement('span'), { textContent: t('panels.ideal') }),
+      Object.assign(document.createElement('strong'), { textContent: t('panels.perYear', { kwh: formatKwh(view.energy.ideal) }) }),
     )
     const shading = shadingLine(view.energy)
     box.append(ideal, ...(shading ? [note(shading, 'energyShading')] : []), bars(view), figures(shade))
     if (shade.potentialHours > 0) {
       box.append(chart(shade), legend())
-    } else box.append(note('The sun never reaches the front of this panel.'))
+    } else box.append(note(t('panels.neverFront')))
     box.append(
-      note('The 21st of each month in 15 minute steps. Neighbours, trees, the building and other panels shade it.', 'cardNote small'),
+      note(t('panels.method'), 'cardNote small'),
       assumptions(view),
     )
     return box
@@ -320,12 +322,12 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
     const box = document.createElement('div')
     box.className = 'heatLegend'
     box.innerHTML = `
-      <span class="legendLabel">Share of the panel in direct sun</span>
+      <span class="legendLabel">${t('panels.legendShare')}</span>
       <div class="legendBar" style="background:${sunGradient()}" aria-hidden="true"></div>
       <div class="legendTicks" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>
       <div class="legendKeys">
-        <span><i class="key behind" aria-hidden="true"></i>Sun behind the panel</span>
-        <span><i class="key night" aria-hidden="true"></i>Night</span>
+        <span><i class="key behind" aria-hidden="true"></i>${t('panels.legendBehind')}</span>
+        <span><i class="key night" aria-hidden="true"></i>${t('panels.legendNight')}</span>
       </div>`
     return box
   }
@@ -340,15 +342,15 @@ export function createPanelCard(options: { onClose?: () => void; onAssumptions?:
       hideTip()
       el.hidden = state.status === 'idle'
       el.dataset.status = state.status
-      if (state.status === 'computing') body.replaceChildren(note('Computing…', 'cardBusy'))
+      if (state.status === 'computing') body.replaceChildren(note(t('panels.computing'), 'cardBusy'))
       else if (state.status === 'error') body.replaceChildren(note(state.message, 'cardBusy'))
       else if (state.status === 'ready') {
         const { shade } = state
         const caveat = document.createElement('p')
         caveat.className = 'cardNote small'
         caveat.append(
-          'An estimate: direct sun is traced in 3D, weather comes from NASA POWER averages. ',
-          Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: 'Accuracy and limits' }),
+          t('panels.caveat'),
+          Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: t('panels.accuracy') }),
         )
         body.replaceChildren(headline(state.energy), details(state.energy, shade), caveat)
       }
