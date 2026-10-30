@@ -1,7 +1,7 @@
 import { rankPlants, type PlantResult } from './garden'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, WHERE, hoursText, plantRow, splitPlants, sunStrip, tempStrip, type PlantRow,
+  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, splitPlants, sunStrip, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
@@ -18,6 +18,8 @@ export type GardenTrace =
 export interface GardenCardInput {
   /** Null before a spot is picked. */
   kind: PickedKind | null
+  /** A roof spot on another building than the picked one. */
+  neighbourRoof?: boolean
   /** A one-line note for a click that made no spot (a facade), shown with the hint. */
   hint?: string
   trace: GardenTrace
@@ -46,7 +48,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** Indoor spots ignore the weather; this only satisfies the signature. */
 const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: Array(12).fill(0), tMin: Array(12).fill(0), tMax: Array(12).fill(0), tLow: Array(12).fill(0) }
 
-export function createGardenCard(options: { onMonth: (month: number | null) => void; onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void }): GardenCard {
+export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', 'What grows at the selected spot')
@@ -58,13 +60,6 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
   close.innerHTML = CLOSE_ICON
   close.addEventListener('click', options.onClose)
   const body = el('div', 'cardBody')
-  // The month filter is made once, so it keeps focus while the plants below it change.
-  const filter = el('label', 'monthFilter')
-  const select = el('select')
-  select.append(Object.assign(document.createElement('option'), { value: '', textContent: 'All year' }))
-  MONTH_NAMES.forEach((m, i) => select.append(Object.assign(document.createElement('option'), { value: String(i), textContent: m })))
-  select.addEventListener('change', () => options.onMonth(select.value === '' ? null : Number(select.value)))
-  filter.append('Plants for ', select)
   const results = el('div', 'gardenResults')
   root.append(head, close, body)
   let poorOpen = false
@@ -107,7 +102,7 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
     const most = sunMinutes.indexOf(Math.max(...sunMinutes))
     const least = sunMinutes.indexOf(Math.min(...sunMinutes))
     const range = sunMinutes[most] === sunMinutes[least] ? `${hoursText(sunMinutes[most])} a day all year` : `From ${hoursText(sunMinutes[least])} in ${MONTH_NAMES[least]} to ${hoursText(sunMinutes[most])} in ${MONTH_NAMES[most]}`
-    wrap.append(el('span', 'chartLabel', 'Direct sun at this spot, hours a day'), s, el('span', 'chartCaption', range))
+    wrap.append(el('span', 'chartLabel', 'Direct sun around this spot, hours a day'), s, el('span', 'chartCaption', range))
     return wrap
   }
 
@@ -120,12 +115,17 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
     cells.forEach((c, i) => {
       const top = H - c.highShare * H
       const h = Math.max(2, (c.highShare - c.lowShare) * H)
-      add(s, 'rect', { class: 'tempBar', x: String(i * SLOT + (SLOT - BAR) / 2), y: String(top), width: String(BAR), height: String(h), rx: '2' }, undefined, c.text)
+      add(s, 'rect', { class: c.cold ? 'tempBar cold' : 'tempBar', x: String(i * SLOT + (SLOT - BAR) / 2), y: String(top), width: String(BAR), height: String(h), rx: '2' }, undefined, c.text)
     })
     add(s, 'line', { class: 'baseline', x1: '0', x2: String(W), y1: String(H + 0.5), y2: String(H + 0.5) })
     labels(s, H + 12, month)
     const wrap = el('div', 'gardenChart')
-    wrap.append(el('span', 'chartLabel', 'Typical night and day temperature, °C'), s, el('span', 'chartCaption', `Typical lows and highs run from ${Math.round(min)} to ${Math.round(max)} °C over the year`))
+    const cold = cells.some((c) => c.cold)
+    wrap.append(
+      el('span', 'chartLabel', 'Typical night and day temperature, °C'),
+      s,
+      el('span', 'chartCaption', `Each bar runs from the typical low to the typical high; hover for the numbers. They span ${Math.round(min)} to ${Math.round(max)} °C over the year.${cold ? ' Blue: nights near or below freezing.' : ''}`),
+    )
     return wrap
   }
 
@@ -207,8 +207,6 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
   return {
     el: root,
     set(input) {
-      const keepFocus = document.activeElement === select
-      select.value = input.month === null ? '' : String(input.month)
       if (input.kind === null) {
         head.replaceChildren(el('p', 'cardNote', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
@@ -216,7 +214,7 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
         return
       }
       close.hidden = false
-      const where = el('h4', '', WHERE[input.kind])
+      const where = el('h4', '', whereText(input.kind, input.neighbourRoof))
       head.replaceChildren(where, ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
       const { trace } = input
       if (trace.status === 'idle' || trace.status === 'running') {
@@ -236,10 +234,9 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
       } else {
         if (outdoor) parts.push(tempChart(input.climate!, input.month))
         results.replaceChildren(plants(input, trace.sunMinutes))
-        parts.push(filter, results, caveat())
+        parts.push(results, caveat())
       }
       body.replaceChildren(...parts)
-      if (keepFocus) select.focus()
     },
   }
 }

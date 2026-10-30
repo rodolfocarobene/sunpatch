@@ -222,10 +222,23 @@ export function rankPlants(
     .sort((a, b) => b.score - a.score || a.plant.name.localeCompare(b.plant.name))
 }
 
-/** The reverse: one plant over many spots (same order as `spots`), so a map can be coloured. */
-export function scoreSpots(plant: Plant, spots: Spot[], climate: Temperatures, month?: number): { score: number; rating: Rating }[] {
+const ISSUE_ORDER: IssueKind[] = ['dark', 'frost', 'cold', 'hot', 'glare', 'place']
+
+/**
+ * What mostly holds a plant back at a spot: the severe issue of the chosen month, or without a month the severe issue
+ * found in most months (the first of `dark, frost, cold, hot, glare, place` on a tie). Undefined when nothing severe.
+ */
+export function mainIssue(result: PlantResult, month?: number): IssueKind | undefined {
+  const months = month === undefined ? result.year : [result.year[month]]
+  const counts = new Map<IssueKind, number>()
+  for (const r of months) for (const i of r.issues) if (i.severe) counts.set(i.kind, (counts.get(i.kind) ?? 0) + 1)
+  return ISSUE_ORDER.filter((k) => counts.has(k)).sort((a, b) => counts.get(b)! - counts.get(a)!)[0]
+}
+
+/** The reverse: one plant over many spots (same order as `spots`), so a map can be coloured. `why` is set for poor spots. */
+export function scoreSpots(plant: Plant, spots: Spot[], climate: Temperatures, month?: number): { score: number; rating: Rating; why?: IssueKind }[] {
   return spots.map((s) => {
-    const { score, rating } = assess(plant, s, climate, month)
-    return { score, rating }
+    const result = assess(plant, s, climate, month)
+    return { score: result.score, rating: result.rating, why: result.rating === 'poor' ? mainIssue(result, month) : undefined }
   })
 }

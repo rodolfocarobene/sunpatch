@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
 import { assess } from './garden'
-import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE } from './garden-text'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -12,6 +12,9 @@ describe('spot card text', () => {
   it('says where the spot is and what indoors assumes', () => {
     expect(WHERE.indoor).toBe('Indoors, on the floor')
     expect(WHERE.ground).toBe('Outdoors, on the ground')
+    expect(whereText('roof')).toBe("On this building's roof or terrace")
+    expect(whereText('roof', true)).toBe("On a neighbour's roof")
+    expect(whereText('ground', true)).toBe('Outdoors, on the ground')
     expect(INDOOR_NOTE).toBe('Assumes a heated home, 18-24 °C.')
   })
 
@@ -35,6 +38,8 @@ describe('spot card text', () => {
     expect(Math.min(...t.cells.map((c) => c.lowShare))).toBe(0)
     expect(Math.max(...t.cells.map((c) => c.highShare))).toBe(1)
     expect(t.cells.every((c) => c.lowShare < c.highShare)).toBe(true)
+    const winter = tempStrip({ tMin: [-3, 0, 4, 8, 12, 16, 18, 17, 13, 8, 3, 1], tMax: Array(12).fill(20) })
+    expect(winter.cells.map((c) => c.cold)).toEqual([true, true, false, false, false, false, false, false, false, false, false, true])
     expect(tempStrip({ tMin: Array(12).fill(5), tMax: Array(12).fill(15) }).zeroShare).toBeNull()
     expect(tempStrip({ tMin: Array(12).fill(-10), tMax: Array(12).fill(10) }).zeroShare).toBe(0.5)
   })

@@ -412,6 +412,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .planSummary button { align-self: flex-start; }
 
 /* Garden view: the spot card, docked under the Hide floors above switch. */
+#panel #gardenRoofHint { margin: -4px 0 0 25px; color: var(--muted); font-size: var(--text-xs); text-wrap: pretty; }
 #gardenSlot { display: flex; flex-direction: column; }
 #gardenSlot .gardenCard { position: relative; padding-top: 10px; border-top: 1px solid var(--line); }
 #gardenSlot .gardenCard .cardClose { top: 6px; right: 0; }
@@ -423,14 +424,14 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .chartCaption { color: var(--muted); font-size: var(--text-xs); }
 .gardenCard .gardenStrip { display: block; width: 100%; height: auto; overflow: visible; }
 .gardenCard .realBar { fill: var(--accent-strong); }
-.gardenCard .tempBar { fill: var(--muted); fill-opacity: 0.7; }
+.gardenCard .tempBar { fill: #d98a3d; fill-opacity: 0.8; }
+.gardenCard .tempBar.cold { fill: #5b8bb8; fill-opacity: 0.85; }
+.gardenCard .tempBar:hover { fill-opacity: 1; }
 .gardenCard .zeroLine { stroke: var(--muted); stroke-opacity: 0.6; stroke-dasharray: 2 3; stroke-width: 1; }
 .gardenCard .baseline { stroke: var(--line); stroke-width: 1; }
 .gardenCard .barLabel { font-size: var(--text-xs); fill: var(--muted); }
 .gardenCard .barLabel.on { fill: var(--text); font-weight: 700; }
 .gardenCard .monthMark { fill: var(--bg-band); }
-#panel .monthFilter { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
-.gardenCard .monthFilter select { flex: 1; font-weight: 400; }
 .gardenCard .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
 .gardenCard .gardenBusy, .gardenCard .gardenProblem { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .gardenCard .gardenBusy .gardenBar { align-self: stretch; }

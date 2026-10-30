@@ -124,14 +124,14 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      traced in 3D, diffuse light is approximated and not shaded.
 5. **Garden**: the same 3D scene and camera again, to see what would grow at a spot. Click the apartment floor
    (an indoor spot), the ground, a roof or a terrace (outdoor spots); a ring marks the spot. The card traces the direct
-   sun there for the 21st of each month and shows it as twelve bars, then lists the plants of a built-in catalogue
+   sun around there (a small disc of points about 30 cm across, averaged) for the 21st of each month and shows it as twelve bars, then lists the plants of a built-in catalogue
    of about 30 best first, with a rating (good, OK), the months it grows, the month to sow an annual crop, and one
-   sentence of reason. Pick a month to rate the plants for that month only. The poor ones are kept behind **Why not
-   others?**, each with its reason. Outdoor spots also show the typical night and day temperature by month and need
+   sentence of reason. The **Month** control under the plant picker rates the plants for that month only. The poor ones are kept behind **Why not
+   others?**, each with its reason. Outdoor spots also show the typical night and day temperature by month (a bar from low to high, blue where nights are near or below freezing) and need
    the local climate from NASA POWER; if it cannot load, the card says so and offers **Retry** instead of ratings.
    Indoors the card assumes a heated home at 18-24 degrees C all year, which real rooms may not match. A click on a
    wall (a facade) makes no spot and the card says to pick a floor, ground or roof spot. To click the roof, untick **Hide floors
-   above**. Esc or the close button removes the spot. Plant figures are typical values for a common variety, not checked plant by plant,
+   above** (a line under the switch says so when the building has a roof). The card says whether a roof is the building's own or a neighbour's. Esc or the close button removes the spot. Plant figures are typical values for a common variety, not checked plant by plant,
    and only direct sun is counted.
    **Find a place for...** goes the other way: pick a plant (and a month, or all year) and every spot around the
    building, on its apartment floor and on its roof is coloured green (good) or amber (OK); poor spots stay uncoloured.

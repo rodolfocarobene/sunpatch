@@ -75,6 +75,19 @@ export function gardenSpots(selected: Building, buildings: Building[], plan: Pla
 /** One clicked point: `y` is the surface the click hit, the pot stands `POT_HEIGHT` above it. */
 export const pointSpot = (x: number, y: number, z: number, indoor: boolean): GardenSpot => ({ x, y: y + POT_HEIGHT, z, indoor, kind: 'point' })
 
+/** Radius of the small disc a clicked spot is averaged over, metres. */
+export const DISC_RADIUS = 0.3
+
+/**
+ * A clicked spot as a small disc: the point itself and six more around it (`DISC_RADIUS` away, same height), so that a
+ * pot's sun does not hang on one ray path past a window frame or a railing. `keep` drops points that cannot hold a pot
+ * (e.g. outside the apartment's outline, or in a wall); the centre is always kept.
+ */
+export function discSpots(x: number, y: number, z: number, indoor: boolean, keep: (x: number, z: number) => boolean = () => true): GardenSpot[] {
+  const ring = Array.from({ length: 6 }, (_, i) => ({ x: x + DISC_RADIUS * Math.cos((i * Math.PI) / 3), z: z + DISC_RADIUS * Math.sin((i * Math.PI) / 3) }))
+  return [pointSpot(x, y, z, indoor), ...ring.filter((p) => keep(p.x, p.z)).map((p) => pointSpot(p.x, y, p.z, indoor))]
+}
+
 /** The spots' positions as x, y, z triples for tracing. */
 export function spotPoints(spots: GardenSpot[]): Float32Array {
   const out = new Float32Array(spots.length * 3)
@@ -91,3 +104,7 @@ export interface SunnySpot extends GardenSpot {
 /** The spots joined with their traced minutes (twelve numbers per spot, see traceMonthly). */
 export const withSun = (spots: GardenSpot[], minutes: Float32Array): SunnySpot[] =>
   spots.map((s, i) => ({ ...s, sunMinutes: Array.from(minutes.subarray(i * 12, i * 12 + 12)) }))
+
+/** The mean of the spots' monthly sun: one strip for a disc of points. */
+export const meanSun = (spots: SunnySpot[]): number[] =>
+  Array.from({ length: 12 }, (_, m) => spots.reduce((a, s) => a + s.sunMinutes[m], 0) / spots.length)

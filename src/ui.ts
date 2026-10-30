@@ -85,6 +85,8 @@ export interface UI {
   readonly gardenSlot: HTMLElement
   /** Where the "Find a place for" plant picker is docked. */
   readonly gardenFindSlot: HTMLElement
+  /** Shows or hides the Garden view's line about picking the roof. */
+  setRoofHint(show: boolean): void
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -183,6 +185,7 @@ export function createUI(
     </section>
     <section data-views="garden">
       <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
+      <p id="gardenRoofHint" class="cardNote small" hidden>Untick Hide floors above to see and pick the roof.</p>
       <div id="gardenFindSlot"></div>
       <div id="gardenSlot"></div>
     </section>`
@@ -488,6 +491,9 @@ export function createUI(
     },
     setExample(on) {
       $('exampleNote').hidden = !on
+    },
+    setRoofHint(show) {
+      $('gardenRoofHint').hidden = !show
     },
     setPlanActive(active) {
       $('aptShow').hidden = !active

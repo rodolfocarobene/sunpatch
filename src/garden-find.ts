@@ -1,5 +1,5 @@
 import { POT_HEIGHT, type GardenSpot, type SpotKind, type SunnySpot } from './garden-spots'
-import type { Rating } from './garden'
+import type { IssueKind, Rating } from './garden'
 import type { Plant } from './plants'
 
 // "Find a place for ...": one plant scored over every spot of the garden analysis. The words, the three colour steps and
@@ -38,6 +38,8 @@ export function kindsFor(plant: Plant): Kinds {
 export interface Scored {
   score: number
   rating: Rating
+  /** For a poor spot: what mostly holds the plant back there. */
+  why?: IssueKind
 }
 
 export interface KindStats {
@@ -49,7 +51,12 @@ export interface KindStats {
   centre?: { x: number; z: number }
   /** The rating level the centre was taken over. */
   centreOf?: 'good' | 'ok'
+  /** When no spot of this kind is even OK: the one reason most of them share, if there is a clear one. */
+  why?: IssueKind
 }
+
+/** At least this share of a kind's spots must fail for the same reason before the summary names it. */
+export const CLEAR_REASON = 0.6
 
 /** Counts per kind for the scored spots (an entry of `scored` is undefined when that spot was not scored). */
 export function kindStats(spots: GardenSpot[], scored: (Scored | undefined)[]): KindStats[] {
@@ -65,6 +72,12 @@ export function kindStats(spots: GardenSpot[], scored: (Scored | undefined)[]): 
     if (lead.length > 0) {
       stat.centre = { x: lead.reduce((a, i) => a + spots[i].x, 0) / lead.length, z: lead.reduce((a, i) => a + spots[i].z, 0) / lead.length }
       stat.centreOf = good.length > 0 ? 'good' : 'ok'
+    }
+    if (good.length === 0 && ok.length === 0) {
+      const counts = new Map<IssueKind, number>()
+      for (const i of idx) if (scored[i]!.why) counts.set(scored[i]!.why!, (counts.get(scored[i]!.why!) ?? 0) + 1)
+      const [top, n] = [...counts].sort((a, b) => b[1] - a[1])[0] ?? []
+      if (top && n / idx.length >= CLEAR_REASON) stat.why = top
     }
     out.push(stat)
   }
@@ -89,6 +102,15 @@ function place(stat: KindStats, centre: { x: number; z: number }): string {
 
 const NOWHERE: Record<FindKind, string> = { indoor: 'indoors', ground: 'on the ground', roof: 'on the roof' }
 
+/** Why spots fail, in the words of "Nowhere suitable indoors (not enough direct sun)". Plain "place" has no reason to give. */
+const WHY: Partial<Record<IssueKind, string>> = {
+  dark: 'not enough direct sun',
+  glare: 'too much direct sun',
+  cold: 'too cold',
+  frost: 'frost',
+  hot: 'too hot',
+}
+
 const list = (items: string[]): string => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`)
 
 /**
@@ -111,7 +133,11 @@ export function findSummary(plantName: string, month: string | null, stats: Kind
     parts.push(`${cap(plantName)} finds no suitable spot${when}.`)
     return parts.join(' ')
   }
-  if (none.length > 0) parts.push(`Nowhere suitable ${list(none.map((s) => NOWHERE[s.kind]))}.`)
+  // A kind with a clear reason gets its own sentence, so the reason cannot be read as belonging to the others.
+  const why = (s: KindStats) => (s.why ? WHY[s.why] : undefined)
+  const plain = none.filter((s) => !why(s))
+  if (plain.length > 0) parts.push(`Nowhere suitable ${list(plain.map((s) => NOWHERE[s.kind]))}.`)
+  for (const s of none.filter(why)) parts.push(`Nowhere suitable ${NOWHERE[s.kind]} (${why(s)}).`)
   return parts.join(' ')
 }
 

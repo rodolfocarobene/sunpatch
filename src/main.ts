@@ -5,6 +5,7 @@ import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
 import { EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
+  buildingContains,
   hiddenOutlines,
   parseOverpass,
   project,
@@ -37,8 +38,9 @@ import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-jo
 import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
-import { createGardenJob, type GardenResult, type GardenState } from './garden-job'
-import { gardenSpots, pointSpot } from './garden-spots'
+import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
+import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
+import { insideOutline } from './walk-geom'
 import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
 import { MONTH_NAMES } from './garden-text'
@@ -93,13 +95,12 @@ const findPanel = createFindPanel({
 })
 ui.gardenFindSlot.appendChild(findPanel.el)
 const gardenCard = createGardenCard({
-  onMonth: setGardenMonth,
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
 })
 ui.gardenSlot.appendChild(gardenCard.el)
-let gardenSpot: { kind: PickedKind; x: number; y: number; z: number } | undefined
+let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
 let gardenTrace: GardenCardInput['trace'] = { status: 'idle' }
 let gardenMonth: number | null = null
 let gardenHint: string | undefined
@@ -108,6 +109,7 @@ let gardenClimate: { key: string; status: GardenCardInput['weather']; climate?: 
 function renderGarden() {
   gardenCard.set({
     kind: gardenSpot?.kind ?? null,
+    neighbourRoof: gardenSpot?.neighbourRoof,
     hint: gardenHint,
     trace: gardenTrace,
     weather: gardenClimate.status,
@@ -115,8 +117,18 @@ function renderGarden() {
     month: gardenMonth,
   })
   renderFind()
+  renderRoofHint()
 }
 
+/** The roof cannot be picked while the floors above are hidden: say so, but only when the building has a roof to pick. */
+let roofChecked = { id: '', has: false }
+let floorsHidden = true
+let siteDeclared = false // `site` is declared further down; the first renders run before that
+function renderRoofHint() {
+  if (!siteDeclared) return
+  if (site && roofChecked.id !== site.selected.id) roofChecked = { id: site.selected.id, has: roofSpots(site.selected, sunDay?.lat ?? 45).length > 0 }
+  ui.setRoofHint(floorsHidden && !!site && roofChecked.has)
+}
 function retryGardenClimate() {
   gardenClimate = { key: '', status: 'idle' }
   ensureGardenClimate()
@@ -163,6 +175,7 @@ function requestFind(again = false) {
     lat,
     lon,
     year: when.getFullYear(),
+    slotMinutes: GARDEN_AREA_SLOT_MINUTES,
     spots: () => gardenSpots(selected, buildings, thePlan, lat),
     occluders: () => sunScene.occluders(),
   })
@@ -269,6 +282,7 @@ function ensureGardenClimate() {
 function requestGarden(again = false) {
   if (!gardenSpot || !site || !plan || !sunDay) return
   const { x, y, z, kind } = gardenSpot
+  const thePlan = plan
   if (again) gardenTrace = { status: 'running', progress: 0 }
   gardenJob.request({
     sceneVersion: sunScene.sceneVersion(),
@@ -277,7 +291,7 @@ function requestGarden(again = false) {
     lon: sunDay.lon,
     year: sunDay.when.getFullYear(),
     tag: `${kind} ${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`,
-    spots: () => [pointSpot(x, y, z, kind === 'indoor')],
+    spots: () => discSpots(x, y, z, kind === 'indoor', kind === 'indoor' ? (px, pz) => insideOutline(thePlan, { x: px, z: pz }) : undefined),
     occluders: () => sunScene.occluders(),
   })
   renderGarden()
@@ -287,7 +301,7 @@ gardenJob.onState((state: GardenState) => {
   if (!gardenSpot) return
   gardenTrace =
     state.status === 'running' ? { status: 'running', progress: state.progress }
-    : state.status === 'done' ? { status: 'done', sunMinutes: state.result.spots[0].sunMinutes }
+    : state.status === 'done' ? { status: 'done', sunMinutes: meanSun(state.result.spots) }
     : state.status === 'error' ? { status: 'error', message: state.message }
     : { status: 'idle' }
   renderGarden()
@@ -306,7 +320,9 @@ sunScene.onGardenClick((hit) => {
 /** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
 function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
   gardenHint = undefined
-  gardenSpot = { kind, x, y, z }
+  // A roof outside the picked building's footprints belongs to a neighbour.
+  const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
+  gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }
   gardenTrace = { status: 'running', progress: 0 }
   sunScene.setGardenMark({ x, y, z })
   ensureGardenClimate()
@@ -866,6 +882,11 @@ function pick(lat: number, lon: number) {
 
 /** The building being worked on, with the scene data the plan editor needs. */
 let site: { /** The polygons as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
+siteDeclared = true
+ui.onCutaway((hidden) => {
+  floorsHidden = hidden
+  renderRoofHint()
+})
 /** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
 let heights: HeightOverrides = {}
 const sameHeights = (a: HeightOverrides | undefined, b: HeightOverrides | undefined) => JSON.stringify(a ?? {}) === JSON.stringify(b ?? {})

@@ -68,7 +68,7 @@ export function createFindPanel(options: {
   monthSelect.append(option('', 'All year'))
   MONTH_NAMES.forEach((m, i) => monthSelect.append(option(String(i), m)))
   monthSelect.addEventListener('change', () => options.onMonth(monthSelect.value === '' ? null : Number(monthSelect.value)))
-  monthLabel.append(el('span', 'findLabel', 'in'), monthSelect)
+  monthLabel.append(el('span', 'findLabel', 'Month'), monthSelect)
 
   const result = el('div', 'findResult')
   root.append(plantLabel, monthLabel, result)

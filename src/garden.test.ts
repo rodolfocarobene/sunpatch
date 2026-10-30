@@ -148,6 +148,14 @@ describe('ranking', () => {
     expect(out.map((o) => o.rating)).toEqual(['good', 'poor', 'good'])
     expect(out[0].score).toBeGreaterThan(out[1].score)
   })
+
+  it('names what mostly holds a plant back at a poor spot, and nothing for a good one', () => {
+    const out = scoreSpots(plant('basil'), [southBalcony, northRoom], milan, 6)
+    expect(out[0].why).toBeUndefined()
+    expect(out[1].why).toBe('dark')
+    expect(scoreSpots(plant('basil'), [northRoom], milan)[0].why).toBe('dark')
+    expect(scoreSpots(plant('lettuce'), [southBalcony], milan, 6)[0].why).toBe('hot')
+  })
 })
 
 describe('explanations', () => {
