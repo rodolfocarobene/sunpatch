@@ -26,6 +26,7 @@ import {
   EdgesGeometry,
   LineBasicMaterial,
   LineSegments,
+  LineLoop,
   Group,
   type Intersection,
   DirectionalLight,
@@ -63,6 +64,7 @@ import { POT_HEIGHT } from './garden-spots'
 import { CELL_SIZE, OK_CELL_SCALE, stepColor, type FindKind, type Step } from './garden-find'
 import { hatchedMaterial, hatchStrength } from './hatch'
 import { isGuessed } from './heights'
+import type { RulerAnchor } from './height-ruler'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
@@ -178,6 +180,10 @@ export interface SunScene {
   onBuildingHover(handler: (polygon: Building | null, at: { x: number; y: number }) => void): void
   /** Called with the polygon under a right-click (not a drag): its id and where it is on screen. */
   onBuildingMenu(handler: (polygonId: string, at: { x: number; y: number }) => void): void
+  /** Where the height ruler stands for a polygon (its roof corner nearest the camera, in screen pixels); null when it would be hidden, behind the camera or too small to use. */
+  rulerAnchor(polygon: Building): RulerAnchor | null
+  /** Shows a polygon at another height without rebuilding the world (its mesh is stretched, shadows follow); null puts it back. */
+  previewHeight(polygonId: string, height: number | null): void
   /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
   onBuildingClick(handler: (polygonId: string, at: { x: number; z: number }) => void): void
   /** Called with the id of the panel under a plain click (not a drag) in 3D, or null for a click on anything else. */
@@ -934,6 +940,7 @@ export function createScene(container: HTMLElement): SunScene {
       const mesh = new Mesh(buildingGeometry(b), isGuessed(b) ? hatchedMaterial(color) : new MeshStandardMaterial({ color }))
       mesh.castShadow = true
       mesh.receiveShadow = true
+      mesh.userData.polygonId = b.id
       world.add(mesh)
     }
     for (const b of buildings) {
@@ -1304,6 +1311,52 @@ export function createScene(container: HTMLElement): SunScene {
     const found = polygonAt(e.clientX, e.clientY)
     if (found) menuClick(found.polygon.id, { x: e.clientX, y: e.clientY })
   })
+  // The height ruler's helpers: where it stands, and a cheap preview of a new height while its handle moves.
+  const MIN_RULER_PX_PER_M = 0.8
+  function rulerAnchor(b: Building): RulerAnchor | null {
+    if (walking || (selectedIds.has(b.id) && cutawayNow())) return null
+    const rect = renderer.domElement.getBoundingClientRect()
+    let corner = b.outer[0]
+    let best = Infinity
+    for (const p of b.outer) {
+      const d = Math.hypot(p.x - camera.position.x, p.z - camera.position.z)
+      if (d < best) [best, corner] = [d, p]
+    }
+    const toScreen = (y: number) => {
+      const v = new Vector3(corner.x, y, corner.z).project(camera)
+      return v.z < 1 ? { x: rect.left + (v.x * 0.5 + 0.5) * rect.width, y: rect.top + (-v.y * 0.5 + 0.5) * rect.height } : null
+    }
+    const base = toScreen(b.minHeight)
+    const top = toScreen(b.height)
+    if (!base || !top) return null
+    const pxPerM = (base.y - top.y) / (b.height - b.minHeight)
+    return pxPerM >= MIN_RULER_PX_PER_M ? { x: top.x, yBase: base.y, yTop: top.y, pxPerM } : null
+  }
+  let previewRing: LineLoop | undefined
+  function previewHeight(id: string, height: number | null) {
+    if (previewRing) {
+      scene.remove(previewRing)
+      previewRing.geometry.dispose()
+      ;(previewRing.material as LineBasicMaterial).dispose()
+      previewRing = undefined
+    }
+    const b = buildings.find((x) => x.id === id)
+    if (!b) return
+    const s = height === null ? 1 : (height - b.minHeight) / (b.height - b.minHeight)
+    let stretched = false
+    for (const child of world.children) {
+      if (child.userData.polygonId !== id) continue
+      child.scale.y = s
+      child.position.y = b.minHeight * (1 - s)
+      stretched = true
+    }
+    // The selected building with its apartment has no single mesh to stretch: its new roof is drawn as an outline.
+    if (height !== null && !stretched) {
+      const points = b.outer.map((p) => new Vector3(p.x, height, p.z))
+      previewRing = new LineLoop(new BufferGeometry().setFromPoints(points), new LineBasicMaterial({ color: OUTLINE_COLOR, toneMapped: false }))
+      scene.add(previewRing)
+    }
+  }
   renderer.domElement.addEventListener('pointerleave', clearHover)
   renderer.domElement.addEventListener('pointerdown', clearHover)
 
@@ -1432,6 +1485,8 @@ export function createScene(container: HTMLElement): SunScene {
     onBuildingMenu(handler) {
       menuClick = handler
     },
+    rulerAnchor,
+    previewHeight,
     sceneVersion: () => version,
     occluders: () => collectOccluders([world, treeGroup]),
     onSceneChange(handler) {
