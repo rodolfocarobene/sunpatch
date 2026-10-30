@@ -46,6 +46,8 @@ export interface MonthResult {
   month: number
   rating: Rating
   issues: Issue[]
+  /** A hardy perennial outdoors that is too cold to grow: it rests, which is not a failure. */
+  resting: boolean
   sunHours: number
   /** The temperatures the plant was judged against, degC. */
   tMean: number
@@ -80,7 +82,7 @@ export function rateMonth(plant: Plant, spot: Spot, climate: Temperatures, month
   else if (tMean > plant.temp.optHigh) add('hot', false)
 
   const rating: Rating = issues.some((i) => i.severe) ? 'poor' : issues.length > 0 ? 'ok' : 'good'
-  return { month, rating, issues, sunHours, tMean, tMax, tNight }
+  return { month, rating, issues, resting: dormant, sunHours, tMean, tMax, tNight }
 }
 
 export const rateYear = (plant: Plant, spot: Spot, climate: Temperatures): MonthResult[] =>
@@ -177,12 +179,21 @@ export const ratingOf = (score: number): Rating => (score >= 0.75 ? 'good' : sco
 
 /**
  * One number for a plant at a spot: good 1, ok 0.5, poor 0 for the chosen month. Without a month, an annual crop is
- * scored over the months of its best run (0 when the run is too short to reach harvest) and a perennial over all 12.
+ * scored over the months of its best run (0 when the run is too short to reach harvest). A perennial is scored over
+ * its months that are not resting: 0 when any month kills it (frost, wrong place). A poor month counts 0.5 instead of 0
+ * when the spot gets the plant's minimum sun in its sunniest month: the plant lives there and only grows little in
+ * the dull or hot months.
  */
 export function seasonScore(plant: Plant, year: MonthResult[], summary: PlantSummary, month?: number): number {
   if (month !== undefined) return SCORE[year[month].rating]
   const mean = (rs: MonthResult[]) => rs.reduce((a, r) => a + SCORE[r.rating], 0) / rs.length
-  if (plant.life === 'perennial' || summary.fits === undefined) return mean(year)
+  if (plant.life === 'perennial') {
+    if (year.some((r) => r.issues.some((i) => i.severe && (i.kind === 'frost' || i.kind === 'place')))) return 0
+    const active = year.filter((r) => !r.resting)
+    const lives = Math.max(...year.map((r) => r.sunHours)) >= plant.sun.min
+    return active.length === 0 ? 0 : active.reduce((a, r) => a + (r.rating === 'poor' && lives ? 0.5 : SCORE[r.rating]), 0) / active.length
+  }
+  if (summary.fits === undefined) return mean(year)
   if (!summary.fits) return 0
   const start = summary.sowMonth ?? 0
   const length = summary.allYear ? 12 : summary.runMonths

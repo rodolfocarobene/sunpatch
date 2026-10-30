@@ -88,6 +88,27 @@ describe('scoring in Milan', () => {
     expect(rateMonth(plant('chives'), southBalcony, milan, 1).issues.some((i) => i.kind === 'frost')).toBe(false)
   })
 
+  it('rates basil and tomato good in June to August on a balcony with 7 h of sun', () => {
+    for (const id of ['basil', 'tomato'])
+      for (const m of [5, 6, 7]) expect(rateMonth(plant(id), southBalcony, milan, m).rating).toBe('good')
+    for (const id of ['rosemary', 'thyme', 'lavender', 'sage', 'oregano']) expect(rateMonth(plant(id), southBalcony, milan, 6).rating).toBe('good')
+  })
+
+  it('scores rosemary good overall, resting in winter', () => {
+    const r = assess(plant('rosemary'), southBalcony, milan)
+    expect(r.rating).toBe('good')
+    expect(r.year[0].resting).toBe(true)
+    expect(r.year[0].rating).toBe('ok')
+    expect(explain(plant('rosemary'), r.year[0])).toMatch(/^Resting in January/)
+    expect(r.year.some((m) => m.resting && m.rating === 'poor')).toBe(false)
+  })
+
+  it('scores a perennial that a month kills as poor', () => {
+    expect(assess(plant('geranium'), southBalcony, milan).score).toBe(0)
+    expect(assess(plant('snake-plant'), southBalcony, milan).rating).toBe('poor')
+    expect(assess(plant('thyme'), northRoom, milan).rating).toBe('poor')
+  })
+
   it('lets a hardy perennial rest through a cold winter but not a tender one', () => {
     const jan = rateMonth(plant('chives'), southBalcony, milan, 0)
     expect(jan.rating).toBe('ok')
