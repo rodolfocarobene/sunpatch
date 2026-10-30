@@ -2,6 +2,8 @@
 // the air. Figures are rounded values from general horticultural guidance (RHS, extension services, seed companies), written
 // from general knowledge and not checked plant by plant; they describe a typical variety, not every cultivar.
 
+import { getLang } from './i18n'
+
 export type PlantKind = 'vegetable' | 'fruit' | 'herb' | 'flower' | 'houseplant'
 export type SunClass = 'full sun' | 'part sun' | 'part shade' | 'shade'
 
@@ -111,3 +113,14 @@ export const PLANTS: Plant[] = [
 ]
 
 export const plantById = (id: string): Plant | undefined => PLANTS.find((p) => p.id === id)
+
+/** The plant's name in the current language ("tomato" / "pomodoro"), lower case as catalogued. */
+export const plantName = (p: Pick<Plant, 'name' | 'nameIt'>): string => (getLang() === 'it' ? p.nameIt : p.name)
+
+const plain = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
+/** Whether a search text matches the plant's English or Italian name, ignoring case and accents ("pomodoro" and "tomato" both find the tomato). */
+export function plantMatches(p: Pick<Plant, 'name' | 'nameIt'>, query: string): boolean {
+  const q = plain(query).trim()
+  return q === '' || plain(p.name).includes(q) || plain(p.nameIt).includes(q)
+}
