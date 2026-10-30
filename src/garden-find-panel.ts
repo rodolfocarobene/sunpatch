@@ -70,7 +70,8 @@ export function createFindPanel(options: {
   /** The plant list: every plant, or those whose English or Italian name matches the search (a short list box while searching). */
   const fillPlants = (query: string) => {
     const matches = (p: Plant) => plantMatches(p, query)
-    plantSelect.replaceChildren(option('', t('garden.choosePlant')))
+    const searching = query.trim() !== ''
+    plantSelect.replaceChildren(...(searching ? [] : [option('', t('garden.choosePlant'))]))
     for (const g of GROUPS) {
       const group = document.createElement('optgroup')
       group.label = t(g.label)
@@ -78,13 +79,22 @@ export function createFindPanel(options: {
       for (const p of plants) group.append(option(p.id, upFirst(plantName(p))))
       if (group.children.length > 0) plantSelect.append(group)
     }
-    const found = plantSelect.querySelectorAll('option').length - 1
-    if (query.trim() !== '' && found === 0) plantSelect.append(Object.assign(option('', t('garden.noPlantMatch')), { disabled: true }))
-    plantSelect.size = query.trim() === '' ? 0 : Math.min(SEARCH_ROWS, found + plantSelect.querySelectorAll('optgroup').length + 1)
+    const found = plantSelect.querySelectorAll('option').length - (searching ? 0 : 1)
+    if (searching && found === 0) plantSelect.append(Object.assign(option('', t('garden.noPlantMatch')), { disabled: true }))
+    plantSelect.size = searching ? Math.min(SEARCH_ROWS, Math.max(1, found + plantSelect.querySelectorAll('optgroup').length)) : 0
     plantSelect.value = chosenId
   }
   fillPlants('')
   search.addEventListener('input', () => fillPlants(search.value))
+  // Enter in the search box picks the plant when exactly one matches.
+  search.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return
+    const only = plantSelect.querySelectorAll<HTMLOptionElement>('option:not([disabled])')
+    if (search.value.trim() === '' || only.length !== 1) return
+    e.preventDefault()
+    plantSelect.value = only[0].value
+    plantSelect.dispatchEvent(new Event('change'))
+  })
   plantSelect.addEventListener('change', () => {
     chosenId = plantSelect.value
     options.onPlant(chosenId === '' ? null : chosenId)
