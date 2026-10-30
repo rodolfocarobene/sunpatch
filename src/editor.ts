@@ -252,10 +252,9 @@ export function createPlanEditor(
   const floorFields = document.createElement('div')
   floorFields.className = 'editor-fields'
   const wholeFloorButton = button(t('editor.wholeFloor'), '', wholeFloor)
-  const wholeFloorNote = document.createElement('small')
   const wholeFloorRow = document.createElement('div')
   wholeFloorRow.className = 'editor-row editor-options'
-  wholeFloorRow.append(wholeFloorButton, wholeFloorNote)
+  wholeFloorRow.append(wholeFloorButton)
 
   const fileInput = document.createElement('input')
   fileInput.type = 'file'
@@ -292,7 +291,7 @@ export function createPlanEditor(
     const b = building
     const levels = levelCount(b)
     const lost = clearsNote(plan.windows.length)
-    wholeFloorNote.textContent = lost
+    wholeFloorButton.firstChild!.textContent = lost ? t('editor.wholeFloorLost', { lost: lost.toLowerCase() }) : t('editor.wholeFloor')
     wholeFloorButton.title = lost ? t('editor.wholeFloorTitleLost', { lost }) : t('editor.wholeFloorTitle')
     const hint = TOOL_HINT[tool]
     optionNote.textContent = tool === 'outline' ? (lost ? t('editor.replacesOutlineLost', { lost }) : t('editor.replacesOutline')) : (hint ? t(hint) : '')
