@@ -641,6 +641,7 @@ ui.onSuitability((on) => {
 })
 sunScene.onBuildingInView((inView) => ui.setSuitabilityFrame(!inView))
 ui.onSuitabilityFrame(() => sunScene.frameSelected())
+sunScene.setFrameInset(() => document.getElementById('panel')?.getBoundingClientRect().right ?? 0)
 sunScene.onSuitabilityClick((index) => {
   suitPicked = index
   if (index === null) closeSuitPick()
@@ -811,7 +812,7 @@ async function openExample() {
   loaded = { elements, center: near }
   show(buildings, selected, origin, false)
   sunScene.setTrees(scatterTrees(green, buildings))
-  setPlan(examplePlan, true)
+  setPlan(examplePlan)
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
   ui.setExample(true)
   setView('3d')
@@ -825,11 +826,12 @@ function walkInside() {
 /** The Panels and Garden views need a plan (panels to hold, a floor to stand on): the whole floor, as when the editor opens first. */
 function ensurePlan(keepView = false): boolean {
   if (!site) return false
-  if (!plan) setPlan(newPlan(), false, keepView)
+  if (!plan) setPlan(newPlan(), keepView)
   return true
 }
 
 function setView(next: View) {
+  const from = view
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   if (next === 'garden' && !ensurePlan(true)) return // the camera stays where it is
@@ -847,6 +849,8 @@ function setView(next: View) {
   editor.setVisible(next === 'plan')
   sunScene.setActive(scene3d)
   if (scene3d) sunScene.resize()
+  // Opening the scene from the Map or the Plan shows the answer: the apartment, unless the user has orbited since it was framed.
+  if (scene3d && (from === 'map' || from === 'plan')) sunScene.frameOnEntry()
   if (next !== 'panels') ui.setSuitability(false) // the map belongs to the Panels view
   ui.setView(next)
   renderTotals()
@@ -1048,13 +1052,13 @@ function setHeight(id: string, override: HeightOverride | null) {
   if (before.height !== now.height || before.minHeight !== now.minHeight || before.levels !== now.levels) {
     updated = { ...updated, floorHeight: defaultFloorHeight(now), floor: Math.min(updated.floor, levelCount(now) - 1) }
   }
-  setPlan(updated, false, true)
+  setPlan(updated, true)
   if (!exampleMode) savePlan(updated)
   chip.done(override ? 'Height set. Right-click the building to reset it.' : 'Height reset to the data.')
 }
 
-/** close: frame the apartment itself rather than the whole building; keepView leaves the camera where it is. */
-function setPlan(next: Plan | undefined, close = false, keepView = false) {
+/** keepView leaves the camera where it is; otherwise the first plan of a building is framed. */
+function setPlan(next: Plan | undefined, keepView = false) {
   // A plan imported with other heights brings them in.
   if (next && site && !sameHeights(next.heights, heights)) {
     heights = keepKnown(next.heights, site.raw) ?? {}
@@ -1064,7 +1068,7 @@ function setPlan(next: Plan | undefined, close = false, keepView = false) {
     ui.setBuildingInfo(site.selected)
   }
   plan = next
-  sunScene.setPlan(next ?? null, { close, keepView })
+  sunScene.setPlan(next ?? null, { keepView })
   ui.setPlanActive(next !== undefined)
   ui.setNextStep(nextStep(next, site?.selected))
 }

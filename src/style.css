@@ -171,7 +171,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel .legendNote { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
 .hatchKey {
   flex: none; width: 14px; height: 14px; margin-top: 1px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px;
-  background: repeating-linear-gradient(135deg, #c9c1b4 0 4px, #a39b8e 4px 6px);
+  background: repeating-linear-gradient(135deg, #d8d1c5 0 4px, #aea79a 4px 6px);
 }
 #building .heightNote { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; font-size: var(--text-xs); color: var(--muted); }
 #building .heightNote .guess { color: var(--warn); }
