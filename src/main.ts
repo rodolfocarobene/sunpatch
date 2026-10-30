@@ -37,8 +37,13 @@ import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-jo
 import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
-import { createGardenJob, type GardenState } from './garden-job'
-import { pointSpot } from './garden-spots'
+import { createGardenJob, type GardenResult, type GardenState } from './garden-job'
+import { gardenSpots, pointSpot } from './garden-spots'
+import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
+import { createFindPanel } from './garden-find-panel'
+import { MONTH_NAMES } from './garden-text'
+import { scoreSpots } from './garden'
+import { plantById, type Plant } from './plants'
 import { classifyHit, FACADE_HINT, type PickedKind } from './garden-pick'
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
@@ -74,15 +79,22 @@ let sunTimer: number | undefined
 // Garden: a click on the floor, the ground or a roof traces that one point over the year in a worker and the card says
 // what grows there. Outdoor spots also need the local temperatures (NASA POWER, cached by weather.ts).
 const gardenJob = createGardenJob()
+const setGardenMonth = (m: number | null) => {
+  gardenMonth = m
+  renderGarden()
+}
+const findJob = createGardenJob() // the plant map's whole-area trace; the clicked spot has the job above, so neither stops the other
+const findPanel = createFindPanel({
+  onPlant: (id) => setFindPlant(id ? plantById(id) : undefined),
+  onMonth: setGardenMonth,
+  onBest: () => showBestSpot(),
+  onRetryClimate: () => retryGardenClimate(),
+  onRetryTrace: () => requestFind(true),
+})
+ui.gardenFindSlot.appendChild(findPanel.el)
 const gardenCard = createGardenCard({
-  onMonth: (m) => {
-    gardenMonth = m
-    renderGarden()
-  },
-  onRetryClimate: () => {
-    gardenClimate = { key: '', status: 'idle' }
-    ensureGardenClimate()
-  },
+  onMonth: setGardenMonth,
+  onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
 })
@@ -102,9 +114,127 @@ function renderGarden() {
     climate: gardenClimate.climate,
     month: gardenMonth,
   })
+  renderFind()
+}
+
+function retryGardenClimate() {
+  gardenClimate = { key: '', status: 'idle' }
+  ensureGardenClimate()
 }
 
 renderGarden() // the hint, until a spot is picked
+
+// The plant map: one plant scored over every spot (indoor floor, ground, roof) and painted in the scene. The sun of the
+// spots is traced once per scene (cached by the job); changing plant or month only scores again.
+let findPlant: Plant | undefined
+let findTrace: GardenCardInput['trace'] = { status: 'idle' }
+let findResult: GardenResult | undefined
+let findResultId = 0
+let findScored: (Scored | undefined)[] = []
+let findPainted = ''
+
+function setFindPlant(plant: Plant | undefined) {
+  findPlant = plant
+  findPainted = ''
+  if (!plant) {
+    findJob.stop()
+    findResult = undefined
+    findTrace = { status: 'idle' }
+    sunScene.setGardenMap(null)
+  } else {
+    ensureGardenClimate()
+    if (!findResult) requestFind()
+  }
+  renderGarden()
+}
+
+function clearFind() {
+  if (!findPlant && !findResult) return
+  setFindPlant(undefined)
+}
+
+function requestFind(again = false) {
+  if (!findPlant || !site || !plan || !sunDay) return
+  const { selected, buildings } = site
+  const thePlan = plan
+  const { lat, lon, when } = sunDay
+  if (again) findTrace = { status: 'running', progress: 0 }
+  findJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan: thePlan,
+    lat,
+    lon,
+    year: when.getFullYear(),
+    spots: () => gardenSpots(selected, buildings, thePlan, lat),
+    occluders: () => sunScene.occluders(),
+  })
+  renderGarden()
+}
+
+findJob.onState((state: GardenState) => {
+  if (!findPlant) return
+  if (state.status === 'running') findTrace = { status: 'running', progress: state.progress }
+  else if (state.status === 'done') {
+    findTrace = { status: 'done', sunMinutes: [] }
+    findResult = state.result
+    findResultId++
+    console.debug(`garden map: ${state.result.spots.length} spots`)
+  } else if (state.status === 'error') findTrace = { status: 'error', message: state.message }
+  renderGarden()
+})
+
+/** Scores the plant over the spots it can stand on (outdoor ones need the climate) and repaints when something changed. */
+function renderFind() {
+  const plant = findPlant
+  const done = plant && findResult && findTrace.status === 'done'
+  const climate = gardenClimate.status === 'ready' ? gardenClimate.climate : undefined
+  let summary = ''
+  let stats: ReturnType<typeof kindStats> = []
+  if (plant && findResult && done) {
+    const { spots } = findResult
+    const key = `${plant.id}|${gardenMonth}|${findResultId}|${climate ? 'c' : 'n'}`
+    if (key !== findPainted) {
+      findPainted = key
+      const { kinds } = kindsFor(plant)
+      findScored = Array(spots.length).fill(undefined)
+      const month = gardenMonth ?? undefined
+      const indoorClimate = { tMean: [], tMin: [], tMax: [], tLow: [] } // indoor spots ignore the weather
+      const idx = (indoor: boolean) => spots.map((s, i) => (s.indoor === indoor && kinds.includes(s.kind as never) ? i : -1)).filter((i) => i >= 0)
+      for (const [indoor, c] of [[true, indoorClimate], [false, climate]] as const) {
+        if (!c) continue
+        const ids = idx(indoor)
+        scoreSpots(plant, ids.map((i) => spots[i]), c, month).forEach((r, n) => (findScored[ids[n]] = r))
+      }
+      sunScene.setGardenMap({
+        spots: spots.map((s) => ({ x: s.x, y: s.y, z: s.z, kind: s.kind as 'indoor' | 'ground' | 'roof' })),
+        steps: findScored.map((r) => (r ? stepOf(r.rating) : 0)),
+      })
+    }
+    const waiting = !climate && gardenClimate.status !== 'error' && kindsFor(plant).kinds.some((k) => k !== 'indoor') // outdoor spots are not rated yet
+    stats = waiting ? [] : kindStats(spots, findScored)
+    const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
+    if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
+  }
+  findPanel.set({
+    plantId: plant?.id ?? null,
+    month: gardenMonth,
+    trace: findTrace,
+    weather: gardenClimate.status,
+    needsClimate: plant?.outdoor ?? false,
+    summary,
+    note: plant ? kindsFor(plant).note : undefined,
+    stats,
+    canShowBest: done === true && findResult !== undefined && bestSpot(findResult.spots, findScored, gardenMonth) !== undefined,
+  })
+}
+
+function showBestSpot() {
+  if (!findResult) return
+  const i = bestSpot(findResult.spots, findScored, gardenMonth)
+  if (i === undefined) return
+  const s = findResult.spots[i]
+  selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z)
+}
 
 function clearGardenSpot() {
   gardenSpot = undefined
@@ -116,7 +246,8 @@ function clearGardenSpot() {
 }
 
 function ensureGardenClimate() {
-  if (!gardenSpot || gardenSpot.kind === 'indoor' || !sunDay) return
+  const needed = (gardenSpot !== undefined && gardenSpot.kind !== 'indoor') || findPlant?.outdoor === true
+  if (!needed || !sunDay) return
   const place = climateKey(sunDay.lat, sunDay.lon)
   if (gardenClimate.key === place.key && gardenClimate.status !== 'idle') return
   gardenClimate = { key: place.key, status: 'loading' }
@@ -169,13 +300,18 @@ sunScene.onGardenClick((hit) => {
     renderGarden()
     return
   }
+  selectGardenSpot(kind, hit.x, hit.y, hit.z)
+})
+
+/** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
+function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
   gardenHint = undefined
-  gardenSpot = { kind, x: hit.x, y: hit.y, z: hit.z }
+  gardenSpot = { kind, x, y, z }
   gardenTrace = { status: 'running', progress: 0 }
-  sunScene.setGardenMark({ x: hit.x, y: hit.y, z: hit.z })
+  sunScene.setGardenMark({ x, y, z })
   ensureGardenClimate()
   requestGarden()
-})
+}
 
 // Panel suitability: where on the facade, roof and ground a panel would make the most energy per kWp. Computed in a
 // worker when the switch goes on, painted as coloured quads, read by clicking one (and a panel placed from there).
@@ -520,6 +656,14 @@ ui.onSunMap((on) => {
 })
 sunScene.onSceneChange(() => {
   if (gardenSpot) clearGardenSpot() // the spot belongs to the scene it was picked in
+  if (findPlant) {
+    // The plant map belongs to the scene too: trace the area again (the job's cache answers when only the view changed).
+    findResult = undefined
+    findPainted = ''
+    findTrace = { status: 'running', progress: 0 }
+    sunScene.setGardenMap(null)
+    requestFind()
+  }
   requestShade()
   sunKey = ''
   sunResult = undefined
@@ -655,7 +799,10 @@ function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   if (next === 'garden' && !ensurePlan(true)) return // the camera stays where it is
-  if (view === 'garden' && next !== 'garden') clearGardenSpot()
+  if (view === 'garden' && next !== 'garden') {
+    clearGardenSpot()
+    clearFind()
+  }
   view = next
   heightPopover.hide()
   hoverTip.hide()

@@ -83,6 +83,8 @@ export interface UI {
   readonly cardSlot: HTMLElement
   /** Where the spot card is docked: the Garden view of the left panel. */
   readonly gardenSlot: HTMLElement
+  /** Where the "Find a place for" plant picker is docked. */
+  readonly gardenFindSlot: HTMLElement
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -181,6 +183,7 @@ export function createUI(
     </section>
     <section data-views="garden">
       <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
+      <div id="gardenFindSlot"></div>
       <div id="gardenSlot"></div>
     </section>`
   document.body.appendChild(panel)
@@ -469,7 +472,7 @@ export function createUI(
           ? 'Pick a building first'
           : b.dataset.view === 'plan' ? 'Draw your apartment on this building'
           : b.dataset.view === 'panels' ? 'Solar panels: where they would do best and what yours make'
-          : b.dataset.view === 'garden' ? 'Click a spot to see what grows there' : 'Sun and shadows in 3D'
+          : b.dataset.view === 'garden' ? 'Click a spot to see what grows there, or find a place for a plant' : 'Sun and shadows in 3D'
       }
     },
     setNextStep(step) {
@@ -565,6 +568,7 @@ export function createUI(
     },
     cardSlot: $('cardSlot'),
     gardenSlot: $('gardenSlot'),
+    gardenFindSlot: $('gardenFindSlot'),
     dock,
     setWalking(walking) {
       walk.disabled = walking
