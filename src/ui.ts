@@ -329,7 +329,7 @@ export function createUI(
     $('noteExample').textContent = 'Sample apartment in Milan. Pick your own building on the Map.'
     $('noteHint').hidden = !hint
     $('noteHint').textContent =
-      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift\u2011click to add or remove parts${parts ? ' of your building' : ''}. Right-click a building to set its height.`
+      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift\u2011click to add or remove parts${parts ? ' of your building' : ''}. Right\u2011click a building to set its height.`
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
