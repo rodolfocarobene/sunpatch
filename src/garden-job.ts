@@ -16,6 +16,8 @@ export interface GardenRequest {
   lat: number
   lon: number
   year: number
+  /** Tells apart requests on one scene that trace different spots (a clicked point); leave out for a whole-area analysis. */
+  tag?: string
   /** The spots to trace; only called when this scene, plan and place are not cached. */
   spots(): GardenSpot[]
   /** Triangles of every occluder; only called when the worker does not hold this scene yet. */
@@ -44,8 +46,8 @@ export interface GardenJob {
   dispose(): void
 }
 
-export const gardenKey = (r: Pick<GardenRequest, 'sceneVersion' | 'plan' | 'lat' | 'lon' | 'year'>): string =>
-  `${r.sceneVersion}|${r.plan ? `${r.plan.buildingId}/${r.plan.floor}` : '-'}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}|${r.year}`
+export const gardenKey = (r: Pick<GardenRequest, 'sceneVersion' | 'plan' | 'lat' | 'lon' | 'year' | 'tag'>): string =>
+  `${r.sceneVersion}|${r.plan ? `${r.plan.buildingId}/${r.plan.floor}` : '-'}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}|${r.year}|${r.tag ?? ''}`
 
 /**
  * Runs the garden analysis in a Web Worker (the sun map's, an instance of its own): the worker traces the spots in

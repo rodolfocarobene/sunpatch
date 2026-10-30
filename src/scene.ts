@@ -129,6 +129,15 @@ const NEIGHBORS: [number, number, number, number, number][] = [
   [2, -22, 16, 8, 12],
 ]
 
+/** What a Garden click found: the point on the surface, whether it is the apartment floor, and which way the surface faces. */
+export interface GardenHit {
+  x: number
+  y: number
+  z: number
+  apartmentFloor: boolean
+  normalY: number
+}
+
 export interface SunScene {
   update(sun: SunDirection): void
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
@@ -187,6 +196,12 @@ export interface SunScene {
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
   /** Called with the floor point of a plain click (not a drag) while the sun map shows or while walking, or null for a click anywhere else. */
   onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
+  /** Turns the Garden view's picking on or off: while on, a plain click (not a drag) reports the surface the camera sees there. */
+  setGardenPicking(on: boolean): void
+  /** Called with the surface under a plain click while picking (null for the sky); `normalY` is the surface normal's height component. */
+  onGardenClick(handler: (hit: GardenHit | null) => void): void
+  /** Marks a spot of the Garden view on the surface (`y` is the surface height); null removes the mark. */
+  setGardenMark(at: { x: number; y: number; z: number } | null): void
   dispose(): void
 }
 
@@ -398,7 +413,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' | 'garden' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -415,6 +430,11 @@ export function createScene(container: HTMLElement): SunScene {
   let probeMark: Group | undefined
   let probeHandler: ((at: { x: number; y: number; visible: boolean } | null) => void) | undefined
   let probeShown = ''
+  // Garden view: whether clicks pick a spot, and the marker on it.
+  let gardenPicking = false
+  let gardenAt: { x: number; y: number; z: number } | null = null
+  let gardenMark: Group | undefined
+  let gardenClick: ((hit: GardenHit | null) => void) | undefined
   // Panel suitability: the data (kept across rebuilds of the scene), its quads and the outline of the chosen one.
   let suitOn = false
   let suitData: { samples: SurfaceSample[]; colors: Float32Array } | null = null
@@ -621,6 +641,30 @@ export function createScene(container: HTMLElement): SunScene {
     for (const child of probeMark.children) aptLines.push({ line: child, kind: 'sunmap' })
   }
 
+  // The Garden view's spot: the probe's two rings, on the ground, a roof or the floor; scaled with the distance so it can be found from afar.
+  function paintGardenMark() {
+    if (gardenMark) {
+      world.remove(gardenMark)
+      aptLines = aptLines.filter((l) => l.line.parent !== gardenMark)
+      for (const child of gardenMark.children) {
+        const mesh = child as Mesh
+        mesh.geometry.dispose()
+        ;(mesh.material as MeshBasicMaterial).dispose()
+      }
+      gardenMark = undefined
+    }
+    if (!gardenAt) return
+    const flatRing = (inner: number, outer: number, color: number) => flat(color, new RingGeometry(inner, outer, 32).rotateX(-Math.PI / 2))
+    gardenMark = new Group()
+    gardenMark.add(flatRing(0.17, 0.25, PROBE_RING), flatRing(0.1, 0.17, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.045, 16).rotateX(-Math.PI / 2)))
+    gardenMark.position.set(gardenAt.x, gardenAt.y + 0.03, gardenAt.z)
+    for (const child of gardenMark.children) {
+      child.renderOrder = 1
+      aptLines.push({ line: child, kind: 'garden' })
+    }
+    world.add(gardenMark)
+  }
+
   // Where the marked point is on screen, so a popover can follow it while the camera moves.
   const probeScreen = new Vector3()
   function reportProbe() {
@@ -785,6 +829,8 @@ export function createScene(container: HTMLElement): SunScene {
     probe = null
     probeShown = ''
     probeHandler?.(null)
+    gardenMark = undefined // cleared with the world
+    gardenAt = null
   }
 
   function populate() {
@@ -1012,6 +1058,16 @@ export function createScene(container: HTMLElement): SunScene {
     floorClick(at)
   })
 
+  // The Garden view: a plain click names the surface the camera sees (not glass, not an overlay, not a hidden block).
+  renderer.domElement.addEventListener('click', (e) => {
+    if (walking || !gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    const hit = seenHit(e.clientX, e.clientY)
+    if (!hit) return gardenClick(null)
+    const normalY = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).y : 0
+    const { x, y, z } = hit.point
+    gardenClick({ x, y, z, normalY, apartmentFloor: hit.object === floorMesh && plan !== null && insideOutline(plan, { x, z }) })
+  })
+
   // A click on a quad of the suitability map names its sample (the nearer of the quad and whatever the camera sees
   // first, so a wall or a neighbour in front hides it); a click anywhere else reports null. A drag or double-click is
   // an orbit or a walk and does nothing here.
@@ -1192,6 +1248,7 @@ export function createScene(container: HTMLElement): SunScene {
     reportProbe()
     reportSuitMark()
     reportBuildingView()
+    if (gardenMark) gardenMark.scale.setScalar(Math.min(8, Math.max(1, camera.position.distanceTo(gardenMark.position) / 20)))
   }
   renderer.setAnimationLoop(render)
   // Lets the visual checks (scripts driving the dev server) project floor points to pixels.
@@ -1270,6 +1327,16 @@ export function createScene(container: HTMLElement): SunScene {
     },
     onFloorClick(handler) {
       floorClick = handler
+    },
+    setGardenPicking(on) {
+      gardenPicking = on
+    },
+    onGardenClick(handler) {
+      gardenClick = handler
+    },
+    setGardenMark(at) {
+      gardenAt = at
+      paintGardenMark()
     },
     startWalk,
     stopWalk,
