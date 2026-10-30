@@ -63,6 +63,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   const results = el('div', 'gardenResults')
   root.append(head, close, body)
   let poorOpen = false
+  let allOpen = false
 
   const svg = (height: number, label: string): SVGSVGElement => {
     const s = document.createElementNS(NS, 'svg')
@@ -139,7 +140,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return li
   }
 
-  /** The spot's plants in two parts: the short answer (shown first) and the full list with the poor ones (shown after the strips). */
+  /** The spot's plants in two parts: the answer (lead, best rows, "Show all") shown first, and the poor ones kept after the strips. */
   function plants(input: GardenCardInput, sunMinutes: number[]): { answer: HTMLElement; rest: HTMLElement } {
     const indoor = input.kind === 'indoor'
     const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
@@ -171,19 +172,22 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       }
     }
     if (fit.length > 0) {
-      const { shown, more } = topPlants(fit)
-      const chips = el('ul', 'plantChips')
-      for (const r of shown) {
-        const row = plantRow(r, input.month)
-        const li = el('li')
-        li.append(el('strong', '', row.name), el('span', `rate ${row.rating}`, RATING_LABEL[row.rating]))
-        chips.append(li)
-      }
-      if (more > 0) chips.append(el('li', 'plantMore', `and ${more} more`))
-      answer.append(chips)
+      const { shown, rest } = topPlants(fit)
       const list = el('ul', 'plantList')
-      list.append(...fit.map((r) => rowItem(plantRow(r, input.month), true)))
-      box.append(list)
+      list.append(...shown.map((r) => rowItem(plantRow(r, input.month), true)))
+      answer.append(list)
+      if (rest.length > 0) {
+        const all = el('details', 'plantsAll')
+        all.open = allOpen
+        all.addEventListener('toggle', () => {
+          allOpen = all.open
+        })
+        all.append(el('summary', '', `Show all ${fit.length}`))
+        const more = el('ul', 'plantList')
+        more.append(...rest.map((r) => rowItem(plantRow(r, input.month), true)))
+        all.append(more)
+        answer.append(all)
+      }
     }
     if (poor.length > 0) {
       const more = el('details', 'plantsPoor')

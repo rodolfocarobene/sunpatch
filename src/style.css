@@ -418,10 +418,6 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .gardenHead { display: flex; flex-direction: column; gap: 4px; }
 .gardenCard .gardenHead .cardNote { text-wrap: pretty; }
 .gardenCard .gardenPrompt { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--text); text-wrap: balance; }
-.gardenCard .plantChips { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
-.gardenCard .plantChips li { display: inline-flex; align-items: baseline; gap: 5px; }
-.gardenCard .plantChips strong { font-weight: 650; }
-.gardenCard .plantMore { color: var(--muted); font-size: var(--text-xs); }
 .gardenCard .gardenAnswer { margin-top: 6px; }
 .gardenCard .gardenHead .cardVerdict { font-size: var(--text-sm); }
 .gardenCard .gardenChart { display: flex; flex-direction: column; gap: 3px; }
@@ -453,7 +449,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .rate.ok { background: var(--bg-band); color: var(--text); }
 .gardenCard .plantGrowing { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .gardenCard .plantReason { color: var(--muted); font-size: var(--text-xs); line-height: 1.4; text-wrap: pretty; }
-.gardenCard .plantsPoor > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.gardenCard .plantsAll > summary, .gardenCard .plantsPoor > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 
 /* Garden view: "Find a place for" picker, the legend of the plant map and its summary. */
 .findPanel { display: flex; flex-direction: column; gap: 8px; }
@@ -462,7 +458,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #gardenSection .findGroup { padding-top: 10px; border-top: 1px solid var(--line); }
 #gardenSection .findGroup .groupHead { margin: 0; }
 #gardenSection > .field:last-child { padding-top: 10px; border-top: 1px solid var(--line); }
-#gardenSection.hasSpot #gardenMonthSlot { order: -1; }
+#gardenSection #gardenMonthSlot { order: -1; }
 #panel label.monthRow { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
 #panel label.monthRow select { flex: 1; min-width: 0; font-weight: 400; }
 #panel .findPanel label.findRow { color: var(--text); font-weight: 600; }
