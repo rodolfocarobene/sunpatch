@@ -39,7 +39,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
-| `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
+| `overpass.ts` | Overpass query (radius = neighbourhood + 100 m) with mirror fallback, per-endpoint timeout, in-memory cache; a bigger cached answer serves smaller sizes. |
+| `neighborhood.ts` | Neighbourhood sizes (150 / 300 / 500 m), the radius filter, data-coverage test, building count line and the scene extent (ground, shadow frustum, sun distance) for a radius. |
 | `block.ts` | The selection model: flood fill over touching, overlapping and related polygons into the selected `Building` with `members` and `sources`; shift-click trimming; restoring a saved selection. |
 | `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights and their `HeightSource` (`tag`, `levels`, `default`, `tile`, `parts`, `user`), picking helpers. |
 | `heights.ts`, `hatch.ts`, `height-popover.ts`, `height-ruler.ts` | Building heights: the user's overrides (`plan.heights`, applied to the parsed polygons, floors or metres), what counts as a guessed height, the striped material that marks those in 3D, the right-click Height box, the 3D height ruler and the hover note. |
@@ -93,7 +94,7 @@ touch). `selectBuilding` in `src/block.ts` turns the clicked polygon into one se
   the OSM polygons that lie mostly inside the previous footprint; otherwise the fill runs again from the click.
 - Switching buildings without the map: a plain click (not a drag, `isClick` in `click.ts`) on an unselected building in 3D,
   or a click on a grey neighbour in the Plan with the Select tool, calls `switchTo` in `main.ts`. It saves the current
-  plan, then, if the point is within 250 m of the loaded Overpass data (`loaded`), re-parses those elements around the
+  plan, then, if the point is within the loaded data's radius minus 100 m of its centre (`loaded`), re-parses those elements around the
   new building and floods again (no request); otherwise it is a map pick (tile preview, then Overpass). The new
   building's own saved plan opens, or none.
 - An outline is left out of `members` (and of the scene, `hiddenOutlines` in `osm.ts`) only when its parts cover at
@@ -313,3 +314,14 @@ The plant map ("Find a place for...", `garden-find-panel.ts`, state in main.ts):
 - `dev/editor.html` and `dev/apartment.html` exercise the editor and the apartment rendering in isolation.
 
 `garden-spots.ts` makes the spots a garden analysis traces: the apartment floor on a 0.5 m grid (`indoor`, at most 600), the ground ring around the building from `groundSamples` (2 m cells, at most 2400) and the roof of the selection from `roofSamples` (1 m cells, at most 900); longer lists are thinned to a regular coarser grid (every f-th row and column, f the smallest whole number that fits), and each spot records the `cell` it stands for so a map can draw it as a square. Each sits `POT_HEIGHT` (0.4 m, a pot on the floor or a sill) above its surface, and `pointSpot` makes one for a clicked point. `traceMonthly` (`garden-trace.ts`) sends a ray toward the sun from each spot on the 21st of every month in 15-minute slots for a clicked spot and 30-minute slots for the area map (`yearSlots`) and returns twelve mean daily direct-sun minutes per spot, the `sunMinutes` of a `Spot`. The sun map worker runs it as message `garden` (100 spots per turn with progress, so a newer request can stop it), and `garden-job.ts` debounces and caches it per (scene version, building and floor, place, year) like the suitability job, returning `SunnySpot`s ready for `rankPlants` and `scoreSpots`. The Garden tab creates it. The ray test stops at the first triangle in the way (`shapecast`, not `raycastFirst`), about 40% faster with identical results (tested against `seesSun`). The Milan example's 2947 spots take about 4 s in Chromium's worker (about 6 s with a full-size software-rendered viewport competing for the same cores; 20 s before this change).
+
+## Neighbourhood size
+
+Details in the 3D panel holds a Small / Medium / Large menu (150 / 300 / 500 m; kept in `localStorage`,
+`sunpatch.neighborhood`). The radius (`hoodRadius` in `main.ts`) is the only thing that decides which polygons the scene
+holds, so it is also what the shadow casters, the BVH and every sun-map, panel and garden trace see. `show` keeps all parsed
+polygons in `site.full` and gives the scene those within the radius of the origin (the selection always stays). A new size
+re-runs `show` on `site.full` when the loaded Overpass data still covers the circle (`covers`; shrinking always does),
+otherwise `refine` fetches the bigger circle with the selection kept. Either way `setBuildings` bumps the scene version, so
+the sun map, panels and garden recompute. `dataExtent(radius)` sizes the ground plane and the shadow frustum (about 1.12 x
+the radius) and the sun distance; there is no fog. Trees stay within 300 m (`TREE_RADIUS_M`) or the radius if smaller.

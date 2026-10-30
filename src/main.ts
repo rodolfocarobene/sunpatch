@@ -913,6 +913,8 @@ let edited = false
 let loaded: { elements: OverpassElement[]; center: { lat: number; lon: number }; radius: number } | undefined
 /** How far around the building the neighbours are loaded and simulated (the Details menu; kept in localStorage). */
 let hoodRadius = neighborhoodRadius('medium')
+/** The next refine keeps the building (and its trimmed or added parts) on screen instead of flooding from the click again: a size change. */
+let keepSelection = false
 /** Chip text to show instead of the usual one when the current load ends (set when switching buildings). */
 let note: string | undefined
 const SWITCHED = 'Switched building. Your previous plan is saved.'
@@ -935,6 +937,7 @@ function pick(lat: number, lon: number) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
   ui.setExample(false)
   edited = false
+  keepSelection = false
   loaded = undefined
   note = undefined
   noteAction = undefined
@@ -1017,6 +1020,7 @@ function setNeighborhood(id: NeighborhoodId) {
     placeTrees(data.elements, site.origin, site.buildings)
   } else if (last) {
     pending?.abort()
+    keepSelection = true
     void refine(last, ++current)
   }
 }
@@ -1211,7 +1215,9 @@ async function refine({ clicked, origin }: Pick, token: number) {
     const { buildings } = parseOverpass(elements, sceneOrigin)
     // Parts the user trimmed or added on the preview carry over to the OSM polygons that cover them.
     const at = project(clicked.lat, clicked.lon, sceneOrigin)
-    const selected = hasPreview && edited && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
+    const keep = keepSelection
+    keepSelection = false
+    const selected = hasPreview && (edited || keep) && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
     if (!selected) {
       // Nothing in OSM under the click: the preview stays.
       if (hasPreview) chip.done('Detailed OSM data loaded (no OSM building at this point)')

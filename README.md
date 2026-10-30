@@ -117,8 +117,9 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    Changing the date recomputes the map (a few seconds, in the background); moving the time slider does not.
    The map stays on while you walk.
    The left panel names the building on one line, for example *OpenStreetMap ↗ · 9 m · 3 levels* (the link opens
-   the building's page, and its tooltip gives the OSM id). **Details** is folded away: it holds *Mark guessed heights*
-   and the location and accuracy fields. One note covers the sample apartment and how to switch buildings.
+   the building's page, and its tooltip gives the OSM id). **Details** is folded away: it holds *Mark guessed heights*,
+   the *Neighbourhood* size (Small 150 m, Medium 300 m, Large 500 m, remembered in the browser, with a count such as
+   *76 buildings within 300 m*) and the location and accuracy fields. One note covers the sample apartment and how to switch buildings.
    Panels are drawn and cast shadows here too, but the solar controls live in the Panels tab.
 4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
    time do not matter here: everything is a year).
@@ -202,7 +203,8 @@ building data.
 
 1. **Picking**: MapLibre GL JS shows OpenFreeMap vector tiles. On a click, the buildings already loaded in the
    tiles are turned into an instant 3D preview. The app then asks the Overpass API for the OpenStreetMap
-   buildings within 350 m, trying several mirrors in turn, and swaps them in without moving the camera.
+   buildings within the chosen Neighbourhood radius (300 m by default, plus a 100 m margin so a nearby click reuses the answer),
+   trying several mirrors in turn, and swaps them in without moving the camera.
 2. **Scene**: footprints are projected to local metres around the selected building (x east, y up, z south)
    and extruded with three.js. Buildings with separately mapped parts (`building:part`) are drawn from their
    parts.
