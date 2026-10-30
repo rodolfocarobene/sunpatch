@@ -450,7 +450,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #gardenSlot .gardenCard { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
 #gardenSlot .gardenCard .gardenHead { grid-column: 1; grid-row: 1; }
 #gardenSlot .gardenCard .gardenHead h4 { padding-right: 0; text-wrap: balance; }
-#gardenSlot .gardenCard .cardClose { position: static; grid-column: 2; grid-row: 1; margin: -2px -4px 0 0; }
+#gardenSlot .gardenCard .cardClose { position: static; grid-column: 2; grid-row: 1; margin: -2px 0 0 0; }
 #gardenSlot .gardenCard .cardBody { grid-column: 1 / -1; }
 .gardenCard .cardToggle { align-self: flex-start; }
 #gardenSlot .gardenCard:has(.gardenPrompt) { padding-top: 0; border-top: 0; }
