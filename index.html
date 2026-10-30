@@ -30,6 +30,7 @@
       </a>
       <nav aria-label="Main">
         <a href="#how">How it works</a>
+        <a href="#more">Solar and garden</a>
         <a href="#model">What it models</a>
         <a href="https://github.com/rodolfocarobene/sunpatch">GitHub</a>
       </nav>
@@ -92,12 +93,38 @@
         <h2>What you get</h2>
         <ul class="grid">
           <li><h3>Any date, any hour</h3><p>Real sun positions for your location, from the winter solstice to midsummer.</p></li>
-          <li><h3>Real neighbours</h3><p>Surrounding buildings come from OpenStreetMap with their heights and cast shadows on yours.</p></li>
+          <li><h3>Real neighbours</h3><p>Surrounding buildings and trees come from OpenStreetMap and cast shadows on yours. Where a height is missing it is drawn striped, and you can set it yourself.</p></li>
           <li><h3>Your own plan</h3><p>Draw the outline, windows and walls to scale. Fix a missing balcony on the building if the map lacks it.</p></li>
           <li><h3>Cutaway and walk mode</h3><p>See the apartment from above, or stand in it and look at the window you care about.</p></li>
-          <li><h3>Export and import</h3><p>Download a plan as JSON and load it again later or on another device.</p></li>
-          <li><h3>No sign-up</h3><p>Open the page and start. There is no account, no install and no cost.</p></li>
+          <li><h3>Sun map</h3><p>Colour the floor by its hours of direct sun on the chosen day, and click any spot for the times.</p></li>
+          <li><h3>Solar panels</h3><p>Place balcony or roof panels and read their yearly energy, with shading and local weather.</p></li>
+          <li><h3>Garden</h3><p>Click a spot to see which plants would grow there, month by month, or find the best spot for one plant.</p></li>
+          <li><h3>Free, no sign-up</h3><p>Open the page and start. Plans stay in your browser and export as JSON.</p></li>
         </ul>
+      </section>
+
+      <section id="more" class="more">
+        <h2>For balconies and gardens, too</h2>
+        <p class="lead">The same sun model, outside your windows.</p>
+        <div class="pair">
+          <figure>
+            <img src="/media/screenshot-panels.png" alt="The Panels tab with the building coloured by yearly solar energy and a card for one panel" width="1280" height="720" loading="lazy" />
+            <figcaption>
+              <h3>Will a balcony panel pay off?</h3>
+              Colour the facade, roof and ground by the energy a panel would make there, then place one and read its
+              year in kWh, with shading and local weather.
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="/media/screenshot-garden.png" alt="The Garden tab with a spot picked on the apartment floor and the plants that grow there" width="1280" height="720" loading="lazy" />
+            <figcaption>
+              <h3>What grows on my balcony?</h3>
+              Click a spot to see its sun through the year and the plants that suit it, each with a reason. Or pick a
+              plant and see the best spots.
+            </figcaption>
+          </figure>
+        </div>
+        <p class="note">Plant figures are typical values, not checked plant by plant. Indoors it assumes a heated home.</p>
       </section>
 
       <section id="model" class="band">
@@ -107,8 +134,10 @@
             <h3>Models</h3>
             <ul class="plain">
               <li>Direct sun only: the beam through each window, with shadows from your building and the neighbours.</li>
-              <li>Building heights from OpenStreetMap (height tag, else levels, else a default).</li>
+              <li>Building heights from OpenStreetMap (height tag, else levels, else a 9 m guess), which you can correct.</li>
+              <li>Trees: mapped ones exactly, and parks and woods with a scatter of trees.</li>
               <li>Windows with their own width, sill and height.</li>
+              <li>Solar energy and plant ratings from the direct sun plus local weather averages (NASA POWER).</li>
             </ul>
           </div>
           <div>
@@ -117,7 +146,8 @@
               <li>Diffuse or reflected light, so shaded rooms look dark.</li>
               <li>Roof shapes: roofs are flat.</li>
               <li>Terrain and distant hills: the ground is flat for now.</li>
-              <li>Trees, awnings and window frames.</li>
+              <li>Awnings, most balconies and window frames. Draw the ones that matter with a building fix.</li>
+              <li>Leaves: a tree casts the same shadow all year.</li>
             </ul>
           </div>
         </div>
