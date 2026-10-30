@@ -5,10 +5,10 @@ export const ENDPOINTS = [
   'https://overpass.private.coffee/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
-export const RADIUS_M = 250
-// Larger than RADIUS_M so a cached result still covers RADIUS_M around a click up to REUSE_M away.
-const QUERY_RADIUS_M = 350
-const REUSE_M = 100
+/** Neighbour radius when the caller does not say (see `NEIGHBORHOODS` in neighborhood.ts). */
+export const RADIUS_M = 350
+// The query reaches REUSE_M beyond the radius asked for, so a cached result still covers that radius around a click up to REUSE_M away.
+export const REUSE_M = 100
 const ENDPOINT_TIMEOUT_MS = 15000
 
 export interface FetchOptions {
@@ -16,20 +16,30 @@ export interface FetchOptions {
   fetchFn?: typeof fetch
   endpoints?: string[]
   timeoutMs?: number
+  /** Radius of neighbours to cover around the point (default RADIUS_M). */
+  radiusM?: number
 }
 
-const cache = new Map<string, { lat: number; lon: number; elements: OverpassElement[] }>()
+const cache = new Map<string, { lat: number; lon: number; queryRadius: number; elements: OverpassElement[] }>()
 
 export function clearOverpassCache() {
   cache.clear()
 }
 
-function cached(lat: number, lon: number): OverpassElement[] | undefined {
+/** A kept answer whose circle holds the whole `radiusM` circle around the point: a bigger answer serves smaller sizes too. */
+function cached(lat: number, lon: number, radiusM: number): BuildingData | undefined {
   for (const c of cache.values()) {
     const p = project(c.lat, c.lon, { lat, lon })
-    if (Math.hypot(p.x, p.z) <= REUSE_M) return c.elements
+    if (Math.hypot(p.x, p.z) + radiusM <= c.queryRadius) return { elements: c.elements, center: { lat: c.lat, lon: c.lon }, radius: c.queryRadius }
   }
   return undefined
+}
+
+/** An answer, and the circle it is complete for: everything within `radius` metres of `center` is in `elements`. */
+export interface BuildingData {
+  elements: OverpassElement[]
+  center: { lat: number; lon: number }
+  radius: number
 }
 
 async function queryEndpoint(
@@ -61,15 +71,17 @@ async function queryEndpoint(
   return elements
 }
 
+export async function fetchBuildingElements(lat: number, lon: number, options: FetchOptions = {}): Promise<OverpassElement[]> {
+  return (await fetchBuildingData(lat, lon, options)).elements
+}
+
 /** Tries the endpoints one after the other; a caller abort rejects with its AbortError. */
-export async function fetchBuildingElements(
-  lat: number,
-  lon: number,
-  options: FetchOptions = {},
-): Promise<OverpassElement[]> {
-  const hit = cached(lat, lon)
+export async function fetchBuildingData(lat: number, lon: number, options: FetchOptions = {}): Promise<BuildingData> {
+  const radiusM = options.radiusM ?? RADIUS_M
+  const hit = cached(lat, lon, radiusM)
   if (hit) return hit
-  const around = `(around:${QUERY_RADIUS_M},${lat},${lon})`
+  const queryRadius = radiusM + REUSE_M
+  const around = `(around:${queryRadius},${lat},${lon})`
   const query =
     `[out:json][timeout:20];(way["building"]${around};relation["building"]${around};` +
     `way["building:part"]${around};relation["building:part"]${around};` +
@@ -82,8 +94,8 @@ export async function fetchBuildingElements(
   for (const url of options.endpoints ?? ENDPOINTS) {
     try {
       const elements = await queryEndpoint(url, query, options)
-      cache.set(`${lat.toFixed(4)},${lon.toFixed(4)}`, { lat, lon, elements })
-      return elements
+      cache.set(`${lat.toFixed(4)},${lon.toFixed(4)}`, { lat, lon, queryRadius, elements })
+      return { elements, center: { lat, lon }, radius: queryRadius }
     } catch (err) {
       options.signal?.throwIfAborted()
       last = (err as Error).message

@@ -4,7 +4,7 @@ import { createStatusChip, type ChipAction } from './chip'
 import { buildingClickAction, createUndoSlot, NEIGHBOUR_NOTE } from './switch-undo'
 import { buildingLine } from './building-line'
 import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
-import { EXAMPLE_WHEN, loadExample } from './example'
+import { EXAMPLE_RADIUS_M, EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
   buildingContains,
@@ -19,7 +19,8 @@ import {
   type Point,
 } from './osm'
 import { carrySelection, restoreSelection, selectBuilding, togglePart } from './block'
-import { fetchBuildingElements, RADIUS_M } from './overpass'
+import { fetchBuildingData, REUSE_M } from './overpass'
+import { countBuildings, covers, neighborhoodLine, neighborhoodRadius, withinRadius, type NeighborhoodId } from './neighborhood'
 import { nextStep } from './next-step'
 import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
@@ -29,7 +30,7 @@ import { createHeightRuler } from './height-ruler'
 import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
-import { parseGreen, scatterTrees } from './trees'
+import { parseGreen, scatterTrees, TREE_RADIUS_M } from './trees'
 import { minutesOfDay } from './daylight'
 import { createPanelCard, formatKwh, type CardState, type EnergyView } from './panel-card'
 import { createPanelTotals } from './panel-totals'
@@ -842,11 +843,11 @@ if (exampleMode) void openExample()
 else mapView.focusSearch() // the search is the first thing to do on the map
 
 async function openExample() {
-  const { buildings, selected, origin, plan: examplePlan, green, elements, near } = await loadExample()
-  loaded = { elements, center: near }
+  const { buildings, selected, origin, plan: examplePlan, elements, near } = await loadExample()
+  loaded = { elements, center: near, radius: EXAMPLE_RADIUS_M }
   last = { clicked: near, origin } // a point inside the example building: Undo after switching away comes back to it
   show(buildings, selected, origin, false)
-  sunScene.setTrees(scatterTrees(green, buildings))
+  placeTrees(elements, origin, site!.buildings)
   setPlan(examplePlan)
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
   ui.setExample(true)
@@ -909,7 +910,11 @@ let last: Pick | undefined
 /** The user added or removed parts of the selection (shift-click) since the last pick. */
 let edited = false
 /** The Overpass answer behind the scene, and where it is centred: the data to switch buildings from without a request. */
-let loaded: { elements: OverpassElement[]; center: { lat: number; lon: number } } | undefined
+let loaded: { elements: OverpassElement[]; center: { lat: number; lon: number }; radius: number } | undefined
+/** How far around the building the neighbours are loaded and simulated (the Details menu; kept in localStorage). */
+let hoodRadius = neighborhoodRadius('medium')
+/** The next refine keeps the building (and its trimmed or added parts) on screen instead of flooding from the click again: a size change. */
+let keepSelection = false
 /** Chip text to show instead of the usual one when the current load ends (set when switching buildings). */
 let note: string | undefined
 const SWITCHED = 'Switched building. Your previous plan is saved.'
@@ -932,6 +937,7 @@ function pick(lat: number, lon: number) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
   ui.setExample(false)
   edited = false
+  keepSelection = false
   loaded = undefined
   note = undefined
   noteAction = undefined
@@ -942,11 +948,11 @@ function pick(lat: number, lon: number) {
   const clicked = { lat, lon }
   // Instant preview from the vector tiles already on the map.
   const features = mapView.getTileBuildings()
-  const hit = selectBuilding(tileBuildings(features, clicked, RADIUS_M), project(lat, lon, clicked))
+  const hit = selectBuilding(tileBuildings(features, clicked, hoodRadius), project(lat, lon, clicked))
   last = { clicked }
   if (hit) {
     const origin = unproject(ringCentroid(hit.outer), clicked)
-    const buildings = tileBuildings(features, origin, RADIUS_M)
+    const buildings = tileBuildings(features, origin, hoodRadius)
     const selected = choose(buildings, origin, clicked)!
     last.origin = origin
     sunScene.setTrees([]) // the old trees belong to the old origin
@@ -959,7 +965,7 @@ function pick(lat: number, lon: number) {
 }
 
 /** The building being worked on, with the scene data the plan editor needs. */
-let site: { /** The polygons as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
+let site: { /** Every polygon the data has around the origin, however far. */ full: Building[]; /** `full` within the neighbourhood radius, as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
 siteDeclared = true
 ui.onCutaway((hidden) => {
   floorsHidden = hidden
@@ -969,15 +975,22 @@ ui.onCutaway((hidden) => {
 let heights: HeightOverrides = {}
 const sameHeights = (a: HeightOverrides | undefined, b: HeightOverrides | undefined) => JSON.stringify(a ?? {}) === JSON.stringify(b ?? {})
 
-function show(raw: Building[], picked: Building, origin: Origin, keepCamera: boolean) {
+/** The trees of the loaded green areas, within the neighbourhood (and no farther than the tree scatter goes). */
+function placeTrees(elements: OverpassElement[], origin: Origin, buildings: Building[]) {
+  sunScene.setTrees(scatterTrees(parseGreen(elements, origin), buildings, { radius: Math.min(TREE_RADIUS_M, hoodRadius) }))
+}
+
+function show(full: Building[], picked: Building, origin: Origin, keepCamera: boolean) {
+  const raw = withinRadius(full, hoodRadius, picked.sources ?? [picked.id])
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
   const saved = carried || exampleMode ? null : savedPlanFor(picked)
   heights = keepKnown({ ...heights, ...(carried ? plan!.heights : saved?.heights) }, raw) ?? {}
   const buildings = applyHeights(raw, heights)
   const selected = reselect(buildings, picked)
-  site = { raw, buildings, selected, origin }
-  sunScene.setBuildings(buildings, selected, { keepCamera })
+  site = { full, raw, buildings, selected, origin }
+  sunScene.setBuildings(buildings, selected, { keepCamera, radiusM: hoodRadius })
+  ui.setNeighborhoodLine(neighborhoodLine(countBuildings(buildings), hoodRadius))
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
   else setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
   ui.setLocation(origin.lat, origin.lon)
@@ -989,6 +1002,29 @@ function show(raw: Building[], picked: Building, origin: Origin, keepCamera: boo
 }
 
 const NEIGHBOR_RADIUS_M = 60
+
+/**
+ * The Neighbourhood menu: a new size re-filters the buildings already loaded when they reach far enough (shrinking
+ * always does), otherwise it asks Overpass for the bigger circle (a cached bigger answer is reused). Either way the scene
+ * version moves, so the sun map, panels and garden recompute.
+ */
+function setNeighborhood(id: NeighborhoodId) {
+  const radius = neighborhoodRadius(id)
+  if (radius === hoodRadius) return
+  hoodRadius = radius
+  if (!site) return
+  const data = loaded
+  const away = data ? project(site.origin.lat, site.origin.lon, data.center) : undefined
+  if (data && away && covers(data.radius, Math.hypot(away.x, away.z), radius)) {
+    show(site.full, site.selected, site.origin, true)
+    placeTrees(data.elements, site.origin, site.buildings)
+  } else if (last) {
+    pending?.abort()
+    keepSelection = true
+    void refine(last, ++current)
+  }
+}
+ui.onNeighborhood(setNeighborhood)
 
 /** The building at the click: the flood fill, or the parts a saved plan recorded (older plans have none). */
 function choose(buildings: Building[], origin: Origin, clicked: { lat: number; lon: number }): Building | undefined {
@@ -1012,7 +1048,8 @@ function switchTo(polygonId: string, at: Point, undoable = false) {
   const ll = unproject(at, site.origin)
   const data = loaded
   const [dx, dz] = data ? [project(ll.lat, ll.lon, data.center).x, project(ll.lat, ll.lon, data.center).z] : [Infinity, 0]
-  if (!data || Math.hypot(dx, dz) > RADIUS_M) {
+  // The data holds the new building's whole neighbourhood only near its centre; as before, switch from it within REUSE_M short of its edge.
+  if (!data || Math.hypot(dx, dz) > data.radius - REUSE_M) {
     pick(ll.lat, ll.lon)
     note = SWITCHED
     if (before) {
@@ -1035,7 +1072,7 @@ function switchTo(polygonId: string, at: Point, undoable = false) {
   if (!selected) return
   last = { clicked: ll, origin }
   show(buildings, selected, origin, false)
-  sunScene.setTrees(scatterTrees(parseGreen(data.elements, origin), buildings))
+  placeTrees(data.elements, origin, site!.buildings)
   switchUndo.clear()
   if (before) {
     switchUndo.set(before)
@@ -1162,7 +1199,8 @@ async function refine({ clicked, origin }: Pick, token: number) {
   pending = new AbortController()
   if (hasPreview) chip.loading()
   try {
-    const elements = await fetchBuildingElements(clicked.lat, clicked.lon, { signal: pending.signal })
+    const data = await fetchBuildingData(clicked.lat, clicked.lon, { signal: pending.signal, radiusM: hoodRadius })
+    const { elements } = data
     if (token !== current) return
     let sceneOrigin = origin
     if (!sceneOrigin) {
@@ -1177,16 +1215,18 @@ async function refine({ clicked, origin }: Pick, token: number) {
     const { buildings } = parseOverpass(elements, sceneOrigin)
     // Parts the user trimmed or added on the preview carry over to the OSM polygons that cover them.
     const at = project(clicked.lat, clicked.lon, sceneOrigin)
-    const selected = hasPreview && edited && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
+    const keep = keepSelection
+    keepSelection = false
+    const selected = hasPreview && (edited || keep) && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
     if (!selected) {
       // Nothing in OSM under the click: the preview stays.
       if (hasPreview) chip.done('Detailed OSM data loaded (no OSM building at this point)')
       else mapView.setStatus('No building here, click on a building', 'error')
       return
     }
-    loaded = { elements, center: clicked }
+    loaded = { elements, center: data.center, radius: data.radius }
     show(buildings, selected, sceneOrigin, hasPreview)
-    sunScene.setTrees(scatterTrees(parseGreen(elements, sceneOrigin), buildings))
+    placeTrees(elements, sceneOrigin, site!.buildings)
     if (hasPreview) chip.done(note ?? 'Detailed OSM data loaded', noteAction)
   } catch (err) {
     if (token !== current) return

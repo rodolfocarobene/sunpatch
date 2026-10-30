@@ -8,10 +8,12 @@ import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 import { rangeText } from './suitability'
 import { buildingLine } from './building-line'
+import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
 
 const GUIDE_KEY = 'sunpatch.guide'
 const SWITCH_HINT_KEY = 'sunpatch.switchHint'
 const DETAILS_KEY = 'sunpatch.details'
+const NEIGHBORHOOD_KEY = 'sunpatch.neighborhood'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
 
@@ -58,6 +60,10 @@ export interface UI {
   onCutaway(listener: (hidden: boolean) => void): void
   /** The "Mark guessed heights" switch (on by default): hear about it now and on every change. */
   onMarkGuessed(listener: (on: boolean) => void): void
+  /** The neighbourhood size (kept in localStorage): hear about it now and on every change. */
+  onNeighborhood(listener: (size: NeighborhoodId) => void): void
+  /** The line under the size menu ("214 buildings within 350 m"); null clears it. */
+  setNeighborhoodLine(text: string | null): void
   /** The selected building's Edit height button: hears where the button is on screen. */
   onEditHeight(listener: (at: { x: number; y: number }) => void): void
   /** The "Sun map" switch (off by default): hear about changes. */
@@ -165,6 +171,11 @@ export function createUI(
           <label class="row" title="Stripe the buildings whose height OpenStreetMap does not have (a 9 m default is used)"><input id="guessed" type="checkbox" checked> Mark guessed heights</label>
           <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>Hatched: height guessed (no data in OpenStreetMap)</p>
         </div>
+        <div id="hoodBox">
+          <label class="hoodRow" title="How far around the building the neighbours are loaded and cast shadows">Neighbourhood
+            <select id="hood">${NEIGHBORHOODS.map((n) => `<option value="${n.id}">${n.label} (${n.radiusM} m)</option>`).join('')}</select></label>
+          <p id="hoodLine" class="legendNote" role="status"></p>
+        </div>
         <div class="coords">
           <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
           <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
@@ -247,6 +258,18 @@ export function createUI(
   })
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
+  const hood = $<HTMLSelectElement>('hood')
+  let hoodListener: ((size: NeighborhoodId) => void) | undefined
+  try {
+    hood.value = parseNeighborhood(localStorage.getItem(NEIGHBORHOOD_KEY))
+  } catch { /* storage blocked: the default */ }
+  hood.addEventListener('change', () => {
+    const size = parseNeighborhood(hood.value)
+    try {
+      localStorage.setItem(NEIGHBORHOOD_KEY, size)
+    } catch { /* not remembered */ }
+    hoodListener?.(size)
+  })
   const guessed = $<HTMLInputElement>('guessed')
   let guessedListener: ((on: boolean) => void) | undefined
   guessed.addEventListener('change', () => {
@@ -553,6 +576,13 @@ export function createUI(
     onMarkGuessed(fn) {
       guessedListener = fn
       fn(guessed.checked)
+    },
+    onNeighborhood(fn) {
+      hoodListener = fn
+      fn(parseNeighborhood(hood.value))
+    },
+    setNeighborhoodLine(text) {
+      $('hoodLine').textContent = text ?? ''
     },
     onEditHeight(fn) {
       editHeightListener = fn

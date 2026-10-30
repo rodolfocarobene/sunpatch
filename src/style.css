@@ -173,7 +173,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #suitPopover .suitPlace:hover { background: #e89a14; border-color: var(--accent-strong); }
 #suitPopover .suitPlace:active { background: #d98d0c; }
 /* Building heights: the guessed-height legend, the Edit height line, the right-click box and the hover note. */
-#aptShow, #guessedBox { display: flex; flex-direction: column; gap: 4px; }
+#aptShow, #guessedBox, #hoodBox { display: flex; flex-direction: column; gap: 4px; }
+#panel label.hoodRow { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); }
+#hood { font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
+#hoodLine:empty { display: none; }
 #panel .legendNote { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
 .hatchKey {
   flex: none; width: 14px; height: 14px; margin-top: 1px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px;
@@ -183,7 +186,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #building .heightNote { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; font-size: var(--text-xs); color: var(--muted); }
 #building .heightNote .guess { color: var(--warn); }
 #panel:is([data-view='map'], [data-view='plan']) #building .editHeight { display: none; }
-#panel.walking #guessedBox { display: none; }
+#panel.walking :is(#guessedBox, #hoodBox) { display: none; }
 #heightPopover {
   position: fixed; z-index: 12; width: 272px; box-sizing: border-box; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; font-size: var(--text-sm); line-height: 1.4;
