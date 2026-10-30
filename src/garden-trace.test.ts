@@ -1,4 +1,4 @@
-import { Group, Mesh, MeshBasicMaterial } from 'three'
+import { Group, Mesh, MeshBasicMaterial, Ray } from 'three'
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/overpass-milan-duomo.json'
 import { apartmentGeometry } from './apartment'
@@ -9,7 +9,7 @@ import { gardenSpots, pointSpot, spotPoints } from './garden-spots'
 import { hiddenOutlines, type Building, type OverpassElement, type Point } from './osm'
 import { yearSlots } from './panel-shade'
 import type { Plan } from './plan'
-import { buildBvh, collectOccluders } from './sunmap-trace'
+import { buildBvh, collectOccluders, seesSun } from './sunmap-trace'
 
 const casting = (geometries: Mesh['geometry'][], group = new Group()) => {
   for (const geometry of geometries) {
@@ -78,5 +78,16 @@ describe('the Milan example garden', () => {
     console.info(`garden Milan example: ${spots.length} spots, BVH ${(built - start).toFixed(0)} ms, trace ${(performance.now() - built).toFixed(0)} ms`)
     expect(out.length).toBe(spots.length * 12)
     expect(Math.max(...out)).toBeGreaterThan(0)
+    // The first-hit shortcut agrees with the nearest-hit test `seesSun` on a sample of the spots.
+    const slots = yearSlots(origin.lat, origin.lon, 2026)
+    const points = spotPoints(spots)
+    const ray = new Ray()
+    for (let s = 0; s < spots.length; s += 97) {
+      const expected = Array(12).fill(0)
+      for (let i = 0; i < slots.start.length; i++) {
+        if (seesSun(bvh, ray, points[s * 3], points[s * 3 + 1], points[s * 3 + 2], slots.dirs, i * 3)) expected[slots.month[i]] += 15
+      }
+      expect(Array.from(out.subarray(s * 12, s * 12 + 12))).toEqual(expected)
+    }
   })
 })

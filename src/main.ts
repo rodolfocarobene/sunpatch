@@ -37,7 +37,7 @@ import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-jo
 import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
-import { createGardenJob, type GardenResult, type GardenState } from './garden-job'
+import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
 import { gardenSpots, pointSpot } from './garden-spots'
 import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
@@ -163,6 +163,7 @@ function requestFind(again = false) {
     lat,
     lon,
     year: when.getFullYear(),
+    slotMinutes: GARDEN_AREA_SLOT_MINUTES,
     spots: () => gardenSpots(selected, buildings, thePlan, lat),
     occluders: () => sunScene.occluders(),
   })

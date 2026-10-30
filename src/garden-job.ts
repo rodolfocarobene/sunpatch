@@ -5,8 +5,9 @@ import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
 const DEBOUNCE_MS = 250
 const CACHE_SIZE = 4
-/** Minutes between slots when tracing the spots. */
+/** Minutes between slots when tracing a clicked spot, and the coarser step of the whole-area map (twice the spots at half the cost each). */
 export const GARDEN_SLOT_MINUTES = 15
+export const GARDEN_AREA_SLOT_MINUTES = 30
 
 export interface GardenRequest {
   /** Bumped by the scene whenever anything that can shade a spot changes (buildings, plan, edits, trees). */
@@ -18,6 +19,8 @@ export interface GardenRequest {
   year: number
   /** Tells apart requests on one scene that trace different spots (a clicked point); leave out for a whole-area analysis. */
   tag?: string
+  /** Minutes between sun slots; defaults to `GARDEN_SLOT_MINUTES`. */
+  slotMinutes?: number
   /** The spots to trace; only called when this scene, plan and place are not cached. */
   spots(): GardenSpot[]
   /** Triangles of every occluder; only called when the worker does not hold this scene yet. */
@@ -46,8 +49,8 @@ export interface GardenJob {
   dispose(): void
 }
 
-export const gardenKey = (r: Pick<GardenRequest, 'sceneVersion' | 'plan' | 'lat' | 'lon' | 'year' | 'tag'>): string =>
-  `${r.sceneVersion}|${r.plan ? `${r.plan.buildingId}/${r.plan.floor}` : '-'}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}|${r.year}|${r.tag ?? ''}`
+export const gardenKey = (r: Pick<GardenRequest, 'sceneVersion' | 'plan' | 'lat' | 'lon' | 'year' | 'tag' | 'slotMinutes'>): string =>
+  `${r.sceneVersion}|${r.plan ? `${r.plan.buildingId}/${r.plan.floor}` : '-'}|${r.lat.toFixed(4)}|${r.lon.toFixed(4)}|${r.year}|${r.tag ?? ''}|${r.slotMinutes ?? GARDEN_SLOT_MINUTES}`
 
 /**
  * Runs the garden analysis in a Web Worker (the sun map's, an instance of its own): the worker traces the spots in
@@ -89,7 +92,7 @@ export function createGardenJob(): GardenJob {
       workerScene = -1 // the next request sends the scene again
       if (m.message !== 'scene changed') emit({ status: 'error', message: m.message })
     } else {
-      console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms`)
+      console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms)`)
       const result = { spots: withSun(job.spots, m.minutes), ms: m.ms, bvhMs: m.bvhMs }
       cache.set(job.key, result)
       if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
@@ -120,11 +123,12 @@ export function createGardenJob(): GardenJob {
         workerScene = req.sceneVersion
       }
       const spots = req.spots()
+      const step = req.slotMinutes ?? GARDEN_SLOT_MINUTES
       const id = ++nextId
       running = { id, key, spots }
       w.postMessage({
         kind: 'garden', id, key: req.sceneVersion, points: spotPoints(spots),
-        slots: yearSlots(req.lat, req.lon, req.year, GARDEN_SLOT_MINUTES), step: GARDEN_SLOT_MINUTES,
+        slots: yearSlots(req.lat, req.lon, req.year, step), step,
       } satisfies WorkerIn)
     } catch (err) {
       running = undefined
