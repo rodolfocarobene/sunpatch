@@ -85,6 +85,10 @@ describe('findSummary', () => {
     const text = findSummary('basil', null, [{ ...stat('indoor', 0, 0), why: 'dark' }, stat('ground', 20, 0, { x: 0, z: 12 })], centre)
     expect(text).toBe('Best spots for basil: the ground south of the building. Nowhere suitable indoors (not enough direct sun).')
   })
+  it('keeps a reason with its own kind when the others have none', () => {
+    const text = findSummary('basil', 'April', [stat('indoor', 5, 0, { x: 0, z: -5 }), stat('ground', 0, 0), { ...stat('roof', 0, 0), why: 'frost' }], centre)
+    expect(text).toBe('Best spots for basil in April: indoors, in the north of the apartment. Nowhere suitable on the ground. Nowhere suitable on the roof (frost).')
+  })
   it('mentions the month', () => {
     expect(findSummary('basil', 'December', [stat('roof', 3, 0)], centre)).toBe('Best spots for basil in December: the roof.')
   })

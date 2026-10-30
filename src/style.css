@@ -412,6 +412,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .planSummary button { align-self: flex-start; }
 
 /* Garden view: the spot card, docked under the Hide floors above switch. */
+#panel #gardenRoofHint { margin: -4px 0 0 25px; color: var(--muted); font-size: var(--text-xs); text-wrap: pretty; }
 #gardenSlot { display: flex; flex-direction: column; }
 #gardenSlot .gardenCard { position: relative; padding-top: 10px; border-top: 1px solid var(--line); }
 #gardenSlot .gardenCard .cardClose { top: 6px; right: 0; }

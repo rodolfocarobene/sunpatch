@@ -133,7 +133,11 @@ export function findSummary(plantName: string, month: string | null, stats: Kind
     parts.push(`${cap(plantName)} finds no suitable spot${when}.`)
     return parts.join(' ')
   }
-  if (none.length > 0) parts.push(`Nowhere suitable ${list(none.map((s) => `${NOWHERE[s.kind]}${s.why && WHY[s.why] ? ` (${WHY[s.why]})` : ''}`))}.`)
+  // A kind with a clear reason gets its own sentence, so the reason cannot be read as belonging to the others.
+  const why = (s: KindStats) => (s.why ? WHY[s.why] : undefined)
+  const plain = none.filter((s) => !why(s))
+  if (plain.length > 0) parts.push(`Nowhere suitable ${list(plain.map((s) => NOWHERE[s.kind]))}.`)
+  for (const s of none.filter(why)) parts.push(`Nowhere suitable ${NOWHERE[s.kind]} (${why(s)}).`)
   return parts.join(' ')
 }
 
