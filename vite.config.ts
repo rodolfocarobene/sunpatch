@@ -1,13 +1,14 @@
 import { resolve } from 'node:path'
 import { configDefaults, defineConfig } from 'vitest/config'
 
-// Two pages: the landing page at / and the app at /app/ (dev/ pages are not built).
+// Three pages: the landing page at /, its Italian twin at /it/ and the app at /app/ (dev/ pages are not built).
 export default defineConfig({
   build: {
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         app: resolve(import.meta.dirname, 'app/index.html'),
+        it: resolve(import.meta.dirname, 'it/index.html'),
       },
     },
   },
