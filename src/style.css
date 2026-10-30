@@ -263,6 +263,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   border: 2px solid var(--line); border-top-color: var(--accent-strong); animation: chipSpin 0.8s linear infinite;
 }
 #statusChip[data-kind='failed'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+#statusChip { max-width: min(420px, 60vw); }
 #statusChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
