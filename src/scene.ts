@@ -68,7 +68,9 @@ import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 // Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
 const DATA_EXTENT = { ground: 700, shadow: 280, sunDistance: 500 }
-// Warm plaster and stone; amber is kept for the apartment outline and the sun patches.
+// One scene palette for 3D, Panels and Garden (they share this scene): warm plaster and stone on a light, warm sage ground;
+// amber is kept for the apartment outline and the sun patches, which stay the brightest thing indoors. The fill light
+// below is set so a shadow on this ground is clearly darker than lit ground without going near black.
 const SELECTED_COLOR = 0xe3d3b3
 // Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
 const ADDED_COLOR = 0xecd6aa
@@ -80,7 +82,7 @@ const EDGE_COLOR = 0x2b2b30
 const EDGE_OPACITY = 0.75
 const EDGE_ANGLE_DEG = 25
 const GLASS_COLOR = 0x9ecfe8
-const GROUND_COLOR = 0xa3b197
+const GROUND_COLOR = 0xb9bc9b
 // The app's --accent and --accent-strong: the apartment outline along its wall tops, and its ghost when the floors above are shown.
 const OUTLINE_COLOR = 0xf5a623
 const OUTLINE_GHOST_COLOR = 0xb45f06
@@ -106,7 +108,7 @@ const SUIT_OPACITY = 0.92
 // Plant map (Garden view): flat quads just above the surface under each spot, a little see-through so the ground still reads.
 const GARDEN_MAP_LIFT = 0.06
 const GARDEN_MAP_GAP = 0.06
-const GARDEN_MAP_OPACITY = 0.78
+const GARDEN_MAP_OPACITY = 0.9
 /** How long the camera takes to slide a spot into view, milliseconds. */
 const SLIDE_MS = 600
 /** The spot's pulse: how long one spreading ring takes, and how many are sent. */
@@ -349,7 +351,7 @@ export function createScene(container: HTMLElement): SunScene {
   let treeGroup = new Group()
   scene.add(treeGroup)
 
-  const hemi = new HemisphereLight(0xdfe9f5, 0x7d8a6c, 0.35)
+  const hemi = new HemisphereLight(0xe6edf5, 0x9a9879, 0.35)
   const ambient = new AmbientLight(0xfff3e0, 0.12)
   scene.add(hemi, ambient)
 
@@ -393,7 +395,7 @@ export function createScene(container: HTMLElement): SunScene {
     sunDisc.material.color.copy(SUN_LOW).lerp(SUN_WHITE, Math.min(1, Math.max(0, (sun.altitudeDeg - 2) / 10)))
     daylight = t
     applyGlow()
-    hemi.intensity = 0.07 + 0.55 * t
+    hemi.intensity = 0.07 + 0.62 * t
     sunLight.intensity = aptLight.intensity = 3 * Math.min(1, sun.altitudeDeg / 5)
   }
 

@@ -1,6 +1,8 @@
 import './style.css'
 import { createMapView } from './map'
-import { createStatusChip } from './chip'
+import { createStatusChip, type ChipAction } from './chip'
+import { buildingClickAction, createUndoSlot, NEIGHBOUR_NOTE } from './switch-undo'
+import { buildingLine } from './building-line'
 import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
 import { EXAMPLE_WHEN, loadExample } from './example'
 import {
@@ -82,8 +84,11 @@ let sunTimer: number | undefined
 // Garden: a click on the floor, the ground or a roof traces that one point over the year in a worker and the card says
 // what grows there. Outdoor spots also need the local temperatures (NASA POWER, cached by weather.ts).
 const gardenJob = createGardenJob()
+/** With a plant picked the plant map answers first, so the spot card folds to its header until the user opens it or picks another spot. */
+let gardenCardOpen = true
 const setGardenMonth = (m: number | null) => {
   gardenMonth = m
+  if (findPlant) gardenCardOpen = false
   renderGarden()
 }
 const findJob = createGardenJob() // the plant map's whole-area trace; the clicked spot has the job above, so neither stops the other
@@ -101,6 +106,10 @@ const gardenCard = createGardenCard({
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
   onMonth: setGardenMonth,
+  onToggle: () => {
+    gardenCardOpen = !gardenCardOpen
+    renderGarden()
+  },
 })
 ui.gardenSlot.appendChild(gardenCard.el)
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
@@ -120,6 +129,7 @@ function renderGarden() {
     weather: gardenClimate.status,
     climate: gardenClimate.climate,
     month: gardenMonth,
+    collapsed: findPlant ? !gardenCardOpen : null,
   })
   renderFind()
   renderRoofHint()
@@ -151,6 +161,7 @@ let findPainted = ''
 function setFindPlant(plant: Plant | undefined) {
   findPlant = plant
   findPainted = ''
+  gardenCardOpen = plant === undefined
   if (!plant) {
     findJob.stop()
     findResult = undefined
@@ -263,7 +274,7 @@ function showBestSpot() {
   const i = bestSpot(findResult.spots, shownScores(), gardenMonth)
   if (i === undefined) return
   const s = findResult.spots[i]
-  selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z)
+  selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z, false)
 }
 
 renderGarden() // the hint, until a spot is picked
@@ -337,8 +348,9 @@ sunScene.onGardenClick((hit) => {
 })
 
 /** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
-function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
+function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number, openCard = true) {
   gardenHint = undefined
+  if (openCard) gardenCardOpen = true
   // A roof outside the picked building's footprints belongs to a neighbour.
   const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
   gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }
@@ -798,7 +810,10 @@ ui.onEditHeight((at) => {
 })
 ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
 sunScene.onBuildingClick((id, at) => {
-  if (view !== 'garden') switchTo(id, at) // in Garden a click is a spot, not a wish to change building
+  // In Garden a click is a spot, not a wish to change building; in Panels with the suitability map a stray click must not drop the pick.
+  const action = buildingClickAction(view, suitOn)
+  if (action === 'switch') switchTo(id, at, true)
+  else if (action === 'explain') chip.done(NEIGHBOUR_NOTE)
 })
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
@@ -811,6 +826,7 @@ else mapView.focusSearch() // the search is the first thing to do on the map
 async function openExample() {
   const { buildings, selected, origin, plan: examplePlan, green, elements, near } = await loadExample()
   loaded = { elements, center: near }
+  last = { clicked: near, origin } // a point inside the example building: Undo after switching away comes back to it
   show(buildings, selected, origin, false)
   sunScene.setTrees(scatterTrees(green, buildings))
   setPlan(examplePlan)
@@ -878,6 +894,20 @@ let loaded: { elements: OverpassElement[]; center: { lat: number; lon: number } 
 /** Chip text to show instead of the usual one when the current load ends (set when switching buildings). */
 let note: string | undefined
 const SWITCHED = 'Switched building. Your previous plan is saved.'
+/** What "Undo" after a scene-click switch goes back to: a point inside the old building, its plan and the view. */
+interface SwitchUndo {
+  at: { lat: number; lon: number }
+  plan: Plan | undefined
+  exampleMode: boolean
+  view: View
+}
+const switchUndo = createUndoSlot<SwitchUndo>()
+/** The Undo button of the chip for a beyond-the-data switch, shown when the new building's load ends. */
+let noteAction: ChipAction | undefined
+const switchedTo = (b: Building) => {
+  const name = buildingLine(b).title
+  return name ? `Switched to ${name}.` : 'Switched building.'
+}
 
 function pick(lat: number, lon: number) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
@@ -885,6 +915,8 @@ function pick(lat: number, lon: number) {
   edited = false
   loaded = undefined
   note = undefined
+  noteAction = undefined
+  switchUndo.clear()
   pending?.abort()
   chip.hide()
   const token = ++current
@@ -953,8 +985,9 @@ function choose(buildings: Building[], origin: Origin, clicked: { lat: number; l
  * Inside the loaded data that is instant and needs no request; beyond it, it is a map pick at that spot (tile
  * preview, then Overpass). The plan being left is saved first, and the new building's own plan, if any, opens.
  */
-function switchTo(polygonId: string, at: Point) {
+function switchTo(polygonId: string, at: Point, undoable = false) {
   if (!site) return
+  const before: SwitchUndo | undefined = undoable && last ? { at: last.clicked, plan, exampleMode, view } : undefined
   // Plans autosave on every edit; this also covers one carried over from the tile preview.
   if (plan && !exampleMode) savePlan(plan)
   const ll = unproject(at, site.origin)
@@ -963,6 +996,10 @@ function switchTo(polygonId: string, at: Point) {
   if (!data || Math.hypot(dx, dz) > RADIUS_M) {
     pick(ll.lat, ll.lon)
     note = SWITCHED
+    if (before) {
+      switchUndo.set(before)
+      noteAction = { label: 'Undo', run: undoSwitch }
+    }
     return
   }
   const flooded = selectBuilding(site.buildings, at)
@@ -980,8 +1017,29 @@ function switchTo(polygonId: string, at: Point) {
   last = { clicked: ll, origin }
   show(buildings, selected, origin, false)
   sunScene.setTrees(scatterTrees(parseGreen(data.elements, origin), buildings))
-  chip.done(SWITCHED)
+  switchUndo.clear()
+  if (before) {
+    switchUndo.set(before)
+    chip.done(switchedTo(selected), { label: 'Undo', run: undoSwitch })
+  } else chip.done(SWITCHED)
   if (view === 'plan') editor.notify(SWITCHED) // the chip lives in the 3D view
+}
+
+/** "Undo" on the switch toast: back to the previous building with its plan and view. */
+function undoSwitch() {
+  const back = switchUndo.take()
+  if (!back || !site) return
+  const at = project(back.at.lat, back.at.lon, site.origin)
+  const old = selectBuilding(site.buildings, at)
+  if (!old) return pick(back.at.lat, back.at.lon)
+  switchTo(old.id, at)
+  if (back.exampleMode && back.plan && site) {
+    exampleMode = true
+    ui.setExample(true)
+    setPlan(rebasePlan(back.plan, site.origin), true)
+  }
+  if (back.view !== view) setView(back.view)
+  chip.done('Back to the previous building.')
 }
 
 /** Shift-click in 3D: add the polygon to the selection or take it out; the plan carries over and is saved. */
@@ -1109,7 +1167,7 @@ async function refine({ clicked, origin }: Pick, token: number) {
     loaded = { elements, center: clicked }
     show(buildings, selected, sceneOrigin, hasPreview)
     sunScene.setTrees(scatterTrees(parseGreen(elements, sceneOrigin), buildings))
-    if (hasPreview) chip.done(note ?? 'Detailed OSM data loaded')
+    if (hasPreview) chip.done(note ?? 'Detailed OSM data loaded', noteAction)
   } catch (err) {
     if (token !== current) return
     if (hasPreview) chip.failed('Showing map-tile buildings (OpenStreetMap server unavailable)')

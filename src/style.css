@@ -14,11 +14,16 @@
   --danger: #8a1c1c;
   --warn-bg: #fff4e0;
   --warn: #7a4a00;
-  /* One Good/OK scale (pills, legend, plant map). Differ in lightness so they stay apart for colour-blind users; the map adds a size cue. */
-  --rate-good: #9c5004;
-  --on-rate-good: #fffdf8;
-  --rate-ok: #f0b84a;
+  /* One Good/OK scale (pills, legend, plant map), brighter = better like the sun map and the suitability map:
+     Good is the full-size saturated amber, OK a smaller, duller sand (the map draws OK cells smaller, so size says it
+     even in grayscale). Text on both is --on-rate-* (#1f2a37): 8.8:1 on Good, 6.5:1 on OK. The edges give the swatches and
+     pills a 3:1+ outline on the cream panel. */
+  --rate-good: #ffbf1f;
+  --on-rate-good: #1f2a37;
+  --rate-good-edge: #a86b00;
+  --rate-ok: #c8a96e;
   --on-rate-ok: #1f2a37;
+  --rate-ok-edge: #7d6535;
   --strip-night: #3b4457;
   --strip-twilight: #8a7f9a;
   --strip-golden: #f2b24a;
@@ -263,6 +268,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   border: 2px solid var(--line); border-top-color: var(--accent-strong); animation: chipSpin 0.8s linear infinite;
 }
 #statusChip[data-kind='failed'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+#statusChip { max-width: min(420px, 60vw); }
 #statusChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
@@ -430,7 +436,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #gardenRoofHint { margin: -4px 0 0 25px; color: var(--muted); font-size: var(--text-xs); text-wrap: pretty; }
 #gardenSlot { display: flex; flex-direction: column; }
 #gardenSlot .gardenCard { position: relative; padding-top: 10px; border-top: 1px solid var(--line); }
-#gardenSlot .gardenCard .cardClose { top: 6px; right: 0; }
+/* The header and the close button are two columns, so a long place name wraps instead of running under the button. */
+#gardenSlot .gardenCard { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+#gardenSlot .gardenCard .gardenHead { grid-column: 1; grid-row: 1; }
+#gardenSlot .gardenCard .gardenHead h4 { padding-right: 0; text-wrap: balance; }
+#gardenSlot .gardenCard .cardClose { position: static; grid-column: 2; grid-row: 1; margin: -2px -4px 0 0; }
+#gardenSlot .gardenCard .cardBody { grid-column: 1 / -1; }
+.gardenCard .cardToggle { align-self: flex-start; }
 #gardenSlot .gardenCard:has(.gardenPrompt) { padding-top: 0; border-top: 0; }
 .gardenCard .gardenHead { display: flex; flex-direction: column; gap: 4px; }
 .gardenCard .gardenHead .cardNote { text-wrap: pretty; }
@@ -464,8 +476,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .plantTop strong { font-weight: 650; }
 .gardenCard .plantKind { flex: 1; color: var(--muted); font-size: var(--text-xs); }
 .gardenCard .rate { padding: 0 6px; font-size: var(--text-xs); font-weight: 650; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-.gardenCard .rate.good { background: var(--rate-good); border-color: var(--rate-good); color: var(--on-rate-good); }
-.gardenCard .rate.ok { background: var(--rate-ok); border-color: var(--rate-ok); color: var(--on-rate-ok); }
+.gardenCard .rate.good { background: var(--rate-good); border-color: var(--rate-good-edge); color: var(--on-rate-good); }
+.gardenCard .rate.ok { background: var(--rate-ok); border-color: var(--rate-ok-edge); color: var(--on-rate-ok); }
 .gardenCard .plantGrowing { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .gardenCard .plantReason { color: var(--muted); font-size: var(--text-xs); line-height: 1.4; text-wrap: pretty; }
 .gardenCard .plantsAll > summary, .gardenCard .plantsPoor > summary, .gardenCard .gardenCharts > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
@@ -490,12 +502,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .findPanel .findLegend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--text-xs); }
 .findPanel .legendItem { display: inline-flex; align-items: center; gap: 5px; }
 .findPanel .legendSwatch { width: 12px; height: 12px; border-radius: 2px; box-sizing: border-box; }
-.findPanel .legendSwatch.good { background: var(--rate-good); }
+.findPanel .legendSwatch.good { background: var(--rate-good); box-shadow: inset 0 0 0 1px var(--rate-good-edge); }
 /* OK cells are drawn smaller on the map: the swatch is inset the same way. */
-.findPanel .legendSwatch.ok { background: var(--rate-ok); background-clip: content-box; padding: 2px; border-radius: 0; }
+.findPanel .legendSwatch.ok { width: 8px; height: 8px; margin: 2px; background: var(--rate-ok); border: 1px solid var(--rate-ok-edge); border-radius: 0; }
 .findPanel .legendSwatch.none { border: 1px dashed var(--muted); }
-.findPanel .findSummary { margin: 0; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
-.findPanel .findNext { margin: 0; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findSummary { margin: 0; font-size: var(--text-sm); font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findNext { margin: 0; font-size: var(--text-sm); line-height: 1.4; text-wrap: pretty; }
+.findPanel .cardNote { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; text-wrap: pretty; }
 .findPanel .findCounts { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .findPanel .findCounts strong { color: var(--text); font-weight: 650; }
 .findPanel .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }

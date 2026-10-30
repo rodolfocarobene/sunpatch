@@ -30,6 +30,8 @@ export interface GardenCardInput {
   climate?: Climate
   /** 0 = January; null = the whole year. */
   month: number | null
+  /** Only the header shows (a plant is picked and its map answers first); null when there is nothing to fold. */
+  collapsed: boolean | null
 }
 
 export interface GardenCard {
@@ -50,7 +52,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** Indoor spots ignore the weather; this only satisfies the signature. */
 const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: Array(12).fill(0), tMin: Array(12).fill(0), tMax: Array(12).fill(0), tLow: Array(12).fill(0) }
 
-export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void }): GardenCard {
+export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void; onToggle: () => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', 'What grows at the selected spot')
@@ -252,7 +254,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   function caveat(): HTMLElement {
     const p = el('p', 'cardNote small')
     p.append(
-      'An estimate: direct sun is traced in 3D on the 21st of each month, outdoor temperatures are NASA POWER averages, and plant needs are typical values for a common variety. ',
+      'An estimate. ',
       Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: 'Accuracy and limits' }),
     )
     return p
@@ -269,8 +271,15 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       }
       close.hidden = false
       const where = el('h4', '', input.place ?? whereText(input.kind, input.neighbourRoof))
-      head.replaceChildren(where, ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
+      const toggle = Object.assign(el('button', 'link cardToggle', input.collapsed ? 'Show what grows here' : 'Hide details'), { type: 'button' })
+      toggle.setAttribute('aria-expanded', String(!input.collapsed))
+      toggle.addEventListener('click', options.onToggle)
+      head.replaceChildren(where, ...(input.collapsed !== null ? [toggle] : []), ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
       const { trace } = input
+      if (input.collapsed) {
+        body.replaceChildren()
+        return
+      }
       if (trace.status === 'idle' || trace.status === 'running') {
         body.replaceChildren(busy('Measuring the sun at this spot…', trace.status === 'running' ? trace.progress : 0))
         return
