@@ -18,6 +18,9 @@
     <meta property="og:image" content="https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png" />
     <meta property="og:url" content="https://rodolfocarobene.github.io/sunpatch/" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
+    <link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
+    <link rel="alternate" hreflang="x-default" href="https://rodolfocarobene.github.io/sunpatch/" />
     <meta name="color-scheme" content="light dark" />
     <link rel="stylesheet" href="/src/landing.css" />
   </head>
@@ -33,8 +36,15 @@
         <a href="#more">Solar and garden</a>
         <a href="#model">What it models</a>
         <a href="https://github.com/rodolfocarobene/sunpatch">GitHub</a>
+        <span class="langs" aria-label="Language">
+          <a href="./" data-lang="en" aria-current="true">EN</a> &middot;
+          <a href="it/" data-lang="it" hreflang="it" lang="it">IT</a>
+        </span>
       </nav>
     </header>
+    <p class="hint" id="lang-hint" hidden>
+      <a href="it/" data-lang="it" hreflang="it" lang="it">Disponibile in italiano</a>
+    </p>
 
     <main id="main">
       <section class="hero">
@@ -44,8 +54,8 @@
           sunlight move across your floor, for any day of the year.
         </p>
         <p class="actions">
-          <a class="btn primary" href="app/">Open the app</a>
-          <a class="btn" href="app/?example=milan">Try the Milan example</a>
+          <a class="btn primary" href="app/" data-lang="en">Open the app</a>
+          <a class="btn" href="app/?example=milan" data-lang="en">Try the Milan example</a>
         </p>
         <figure class="demo">
           <video
@@ -179,8 +189,8 @@
       <section class="cta">
         <h2>Is your living room sunny at 5 pm in January?</h2>
         <p class="actions">
-          <a class="btn primary" href="app/">Open the app</a>
-          <a class="btn" href="app/?example=milan">Try the Milan example</a>
+          <a class="btn primary" href="app/" data-lang="en">Open the app</a>
+          <a class="btn" href="app/?example=milan" data-lang="en">Try the Milan example</a>
         </p>
       </section>
     </main>
@@ -196,5 +206,6 @@
       </p>
       <p>Sunpatch is MIT licensed. Made by Rodolfo Carobene.</p>
     </footer>
+    <script type="module" src="/src/landing.ts"></script>
   </body>
 </html>
