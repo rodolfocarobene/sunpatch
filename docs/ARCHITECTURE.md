@@ -42,7 +42,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `overpass.ts` | Overpass query with mirror fallback, per-endpoint timeout, in-memory cache. |
 | `block.ts` | The selection model: flood fill over touching, overlapping and related polygons into the selected `Building` with `members` and `sources`; shift-click trimming; restoring a saved selection. |
 | `osm.ts` | Projection, Overpass parsing (ways, multipolygon relations, ring stitching), heights and their `HeightSource` (`tag`, `levels`, `default`, `tile`, `parts`, `user`), picking helpers. |
-| `heights.ts`, `hatch.ts`, `height-popover.ts` | Building heights: the user's overrides (`plan.heights`, applied to the parsed polygons, floors or metres), what counts as a guessed height, the striped material that marks those in 3D, the right-click Height box and the hover note. |
+| `heights.ts`, `hatch.ts`, `height-popover.ts`, `height-ruler.ts` | Building heights: the user's overrides (`plan.heights`, applied to the parsed polygons, floors or metres), what counts as a guessed height, the striped material that marks those in 3D, the right-click Height box, the 3D height ruler and the hover note. |
 | `trees.ts` | Trees: green areas and mapped trees from Overpass, seeded Poisson-ish scatter (clear of buildings, capped at 1500 within 300 m), two `InstancedMesh`es that cast shadows. |
 | `footprint.ts` | Extrudes footprints into three.js geometry. |
 | `sun.ts` | Sun direction vector from SunCalc, compass names. |
@@ -139,6 +139,17 @@ deal with it:
 - **Gesture**: right-click a building (without dragging, which pans) opens the Height box; the selected building also has
   an Edit height button on its info line. Plain click, shift-click, floor click and double-click are taken; Alt-click is
   often grabbed by window managers.
+
+- **Height ruler** (`height-ruler.ts`, 3D tab only: Panels and Garden use clicks on roofs for their own picks): a DOM
+  overlay (`#heightRuler`) with a tick per 3 m and a handle. `scene.rulerAnchor(polygon, pointer)` gives its screen place:
+  the on-screen roof corner nearest the pointer, or, when no corner is in view (close camera), a spot beside the pointer
+  with the metre scale taken at the surface under it. Hidden for the selected building while its floors above are cut
+  away, while walking, and on any press elsewhere or wheel. It stays put once shown (a grace delay lets the pointer reach
+  it). Dragging uses pure helpers (`snapHeight`, `heightFromDrag`, `rulerLabel`, `overrideFromRuler`): whole floors from
+  `minHeight`, Shift 0.5 m, a 3 px dead zone. While dragging, `scene.previewHeight` only stretches that polygon's mesh
+  (`userData.polygonId`; an outline is drawn for the selected building with its apartment): no rebuild, no scene version
+  bump, no re-trace. On release `onCommit` calls `setHeight` (the same override path as the Height box, so `plan.heights`,
+  the version bump and the selected building's floor count follow); Esc puts it back.
 
 ## The plan model
 
