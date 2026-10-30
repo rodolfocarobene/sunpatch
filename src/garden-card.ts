@@ -1,7 +1,7 @@
 import { rankPlants, type PlantResult } from './garden'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, WHERE, hoursText, plantRow, splitPlants, sunStrip, tempStrip, type PlantRow,
+  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, splitPlants, sunStrip, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
@@ -18,6 +18,8 @@ export type GardenTrace =
 export interface GardenCardInput {
   /** Null before a spot is picked. */
   kind: PickedKind | null
+  /** A roof spot on another building than the picked one. */
+  neighbourRoof?: boolean
   /** A one-line note for a click that made no spot (a facade), shown with the hint. */
   hint?: string
   trace: GardenTrace
@@ -221,7 +223,7 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
         return
       }
       close.hidden = false
-      const where = el('h4', '', WHERE[input.kind])
+      const where = el('h4', '', whereText(input.kind, input.neighbourRoof))
       head.replaceChildren(where, ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
       const { trace } = input
       if (trace.status === 'idle' || trace.status === 'running') {

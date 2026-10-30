@@ -11,8 +11,11 @@ const SHORT = MONTH_NAMES.map((m) => m.slice(0, 3))
 export const WHERE: Record<PickedKind, string> = {
   indoor: 'Indoors, on the floor',
   ground: 'Outdoors, on the ground',
-  roof: 'On a roof or terrace',
+  roof: "On this building's roof or terrace",
 }
+
+/** Where the spot is: a roof spot says whether it is on the picked building or on a neighbour. */
+export const whereText = (kind: PickedKind, neighbourRoof = false): string => (kind === 'roof' && neighbourRoof ? "On a neighbour's roof" : WHERE[kind])
 
 /** The quiet line under an indoor spot: the temperature the ratings assume. */
 export const INDOOR_NOTE = `Assumes a heated home, ${INDOOR_TEMP.min}-${INDOOR_TEMP.max} °C.`

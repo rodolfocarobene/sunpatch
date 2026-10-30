@@ -5,6 +5,7 @@ import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
 import { EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
+  buildingContains,
   hiddenOutlines,
   parseOverpass,
   project,
@@ -100,7 +101,7 @@ const gardenCard = createGardenCard({
   onClose: () => clearGardenSpot(),
 })
 ui.gardenSlot.appendChild(gardenCard.el)
-let gardenSpot: { kind: PickedKind; x: number; y: number; z: number } | undefined
+let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
 let gardenTrace: GardenCardInput['trace'] = { status: 'idle' }
 let gardenMonth: number | null = null
 let gardenHint: string | undefined
@@ -109,6 +110,7 @@ let gardenClimate: { key: string; status: GardenCardInput['weather']; climate?: 
 function renderGarden() {
   gardenCard.set({
     kind: gardenSpot?.kind ?? null,
+    neighbourRoof: gardenSpot?.neighbourRoof,
     hint: gardenHint,
     trace: gardenTrace,
     weather: gardenClimate.status,
@@ -309,7 +311,9 @@ sunScene.onGardenClick((hit) => {
 /** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
 function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
   gardenHint = undefined
-  gardenSpot = { kind, x, y, z }
+  // A roof outside the picked building's footprints belongs to a neighbour.
+  const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
+  gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }
   gardenTrace = { status: 'running', progress: 0 }
   sunScene.setGardenMark({ x, y, z })
   ensureGardenClimate()

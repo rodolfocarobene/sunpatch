@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
 import { assess } from './garden'
-import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE } from './garden-text'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -12,6 +12,9 @@ describe('spot card text', () => {
   it('says where the spot is and what indoors assumes', () => {
     expect(WHERE.indoor).toBe('Indoors, on the floor')
     expect(WHERE.ground).toBe('Outdoors, on the ground')
+    expect(whereText('roof')).toBe("On this building's roof or terrace")
+    expect(whereText('roof', true)).toBe("On a neighbour's roof")
+    expect(whereText('ground', true)).toBe('Outdoors, on the ground')
     expect(INDOOR_NOTE).toBe('Assumes a heated home, 18-24 °C.')
   })
 
