@@ -103,7 +103,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const most = sunMinutes.indexOf(Math.max(...sunMinutes))
     const least = sunMinutes.indexOf(Math.min(...sunMinutes))
     const range = sunMinutes[most] === sunMinutes[least] ? `${hoursText(sunMinutes[most])} a day all year` : `From ${hoursText(sunMinutes[least])} in ${MONTH_NAMES[least]} to ${hoursText(sunMinutes[most])} in ${MONTH_NAMES[most]}`
-    wrap.append(el('span', 'chartLabel', 'Direct sun around this spot, hours a day'), s, el('span', 'chartCaption', range))
+    wrap.append(el('span', 'chartLabel', 'Direct sun around this spot, a day'), s, el('span', 'chartCaption', range))
     return wrap
   }
 
