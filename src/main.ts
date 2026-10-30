@@ -394,8 +394,9 @@ ui.cardSlot.appendChild(card.el)
 const planSummary = document.createElement('div')
 planSummary.className = 'editor-cluster planSummary'
 planSummary.hidden = true
-planSummary.innerHTML = '<p></p><button type="button">Open in Panels</button>'
+planSummary.innerHTML = '<p></p><button type="button"></button>'
 const planSummaryText = planSummary.querySelector('p')!
+planSummary.querySelector('button')!.textContent = t('editor.openInPanels')
 planSummary.querySelector('button')!.addEventListener('click', () => setView('panels'))
 let selectedPanel: string | null = null
 /** Key of the request last sent, so repeated asks for the same scene and panel do not restart the card. */

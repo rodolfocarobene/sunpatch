@@ -22,12 +22,13 @@ import {
 } from './editor-geom'
 import type { Segment, Snap } from './editor-geom'
 import { isClick } from './click'
+import { fmt1Fixed, t, type Key } from './i18n'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
 import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
-import { effectiveViewpoint, drawScene, viewTip, windowSegment } from './editor-draw'
+import { effectiveViewpoint, drawScene, metres2, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
 
 export interface PlanEditor {
@@ -51,22 +52,29 @@ const MAX_HISTORY = 100
 const FREE_AREA = { top: 40, bottom: 80 }
 const storageKey = (buildingId: string): string => `sun-in-house:plan:${buildingId}`
 
-const HELP: Record<Tool, string> = {
-  select: 'Click a window, wall or panel to select it; drag a window along its edge, a panel to move it. Drag empty space to pan.',
-  outline: 'Click the corners of your apartment; click the first point or double-click to close. Esc cancels.',
-  wall: 'Click where the wall starts, then where it ends; each next click continues from there. Click the first point to close, double-click or Esc to stop. Shift snaps to 0 or 90 degrees.',
-  window: 'Click near an outline edge to add a window, or click a window to select it.',
-  fix: 'Click the corners of a balcony or wall part; click the first point or double-click to close. Shift snaps to 90 degrees. To change a building\'s height, right-click it in 3D (or press Edit height).',
-  panel: 'Click to place a solar panel, inside or outside the outline. Near a wall it snaps and faces outward; hold Shift to place it freely.',
+const HELP: Record<Tool, Key> = {
+  select: 'editor.helpSelect',
+  outline: 'editor.helpOutline',
+  wall: 'editor.helpWall',
+  window: 'editor.helpWindow',
+  fix: 'editor.helpFix',
+  panel: 'editor.helpPanel',
 }
 // One short line under the tools for the tools without options, so that row is never an empty gap.
-const TOOL_HINT: Partial<Record<Tool, string>> = {
-  select: 'Drag a window along its edge.',
-  wall: 'Click to chain walls. Esc to stop.',
-  window: 'Click an outline edge to add one.',
-  panel: 'Click to place. Near a wall it snaps.',
+const TOOL_HINT: Partial<Record<Tool, Key>> = {
+  select: 'editor.hintSelect',
+  wall: 'editor.hintWall',
+  window: 'editor.hintWindow',
+  panel: 'editor.hintPanel',
 }
-const VIEWPOINT_HELP = 'Walk start: this is where Walk inside puts you. Drag the camera to move it, the white dot to turn it.'
+const TOOL_NAME: Record<Tool, Key> = {
+  select: 'editor.toolSelect',
+  outline: 'editor.toolOutline',
+  wall: 'editor.toolWall',
+  window: 'editor.toolWindow',
+  fix: 'editor.toolFix',
+  panel: 'editor.toolPanel',
+}
 const VIEWPOINT_CLEARANCE = 0.25
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
@@ -199,10 +207,11 @@ export function createPlanEditor(
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
-  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Fix building'], ['panel', 'Panel']] as const) {
-    const b = button(label, `${label} tool (${TOOL_KEYS[t]})`, () => setTool(t))
-    b.append(keyHint(TOOL_KEYS[t]))
-    toolButtons.set(t, b)
+  for (const name of ['select', 'outline', 'wall', 'window', 'fix', 'panel'] as const) {
+    const label = t(TOOL_NAME[name])
+    const b = button(label, t('editor.toolTitle', { name: label, key: TOOL_KEYS[name] }), () => setTool(name))
+    b.append(keyHint(TOOL_KEYS[name]))
+    toolButtons.set(name, b)
     toolRow.appendChild(b)
   }
   // One reserved row under the tools: the Add/Cut choice for fixes, what the Outline tool replaces, else a short hint.
@@ -215,8 +224,8 @@ export function createPlanEditor(
   kindGroup.className = 'editor-row'
   kindGroup.hidden = true
   for (const [k, label, tip] of [
-    ['add', 'Add', 'New fixes add volume (balcony, bay)'],
-    ['cut', 'Cut', 'New fixes remove volume (recess, loggia)'],
+    ['add', t('editor.kindAdd'), t('editor.kindAddTip')],
+    ['cut', t('editor.kindCut'), t('editor.kindCutTip')],
   ] as const) {
     const b = button(label, tip, () => {
       newKind = k
@@ -225,7 +234,7 @@ export function createPlanEditor(
     kindButtons.set(k, b)
     kindGroup.appendChild(b)
   }
-  kindGroup.prepend(Object.assign(document.createElement('small'), { textContent: 'New fix is a:' }))
+  kindGroup.prepend(Object.assign(document.createElement('small'), { textContent: t('editor.newFixIs') }))
   const updateKindRow = (): void => {
     for (const [k, b] of kindButtons) b.setAttribute('aria-pressed', String(k === newKind))
   }
@@ -234,15 +243,15 @@ export function createPlanEditor(
   const editRow = document.createElement('div')
   editRow.className = 'editor-row'
   editRow.append(
-    button('Undo', 'Undo (Ctrl+Z)', undo),
-    button('Delete', 'Delete selected (Del)', deleteSelected),
-    button('Fit', `Zoom to the apartment (${FIT_KEY})`, fitView),
+    button(t('editor.undo'), t('editor.undoTitle'), undo),
+    button(t('editor.delete'), t('editor.deleteTitle'), deleteSelected),
+    button(t('editor.fit'), t('editor.fitTitle', { key: FIT_KEY }), fitView),
   )
   editRow.lastElementChild!.append(keyHint(FIT_KEY))
 
   const floorFields = document.createElement('div')
   floorFields.className = 'editor-fields'
-  const wholeFloorButton = button('Whole floor', '', wholeFloor)
+  const wholeFloorButton = button(t('editor.wholeFloor'), '', wholeFloor)
   const wholeFloorNote = document.createElement('small')
   const wholeFloorRow = document.createElement('div')
   wholeFloorRow.className = 'editor-row editor-options'
@@ -256,14 +265,14 @@ export function createPlanEditor(
   const fileRow = document.createElement('div')
   fileRow.className = 'editor-row'
   fileRow.append(
-    button('Export JSON', 'Download the plan as a JSON file', exportJson),
-    button('Import JSON', 'Load a plan from a JSON file', () => fileInput.click()),
+    button(t('editor.exportJson'), t('editor.exportJsonTitle'), exportJson),
+    button(t('editor.importJson'), t('editor.importJsonTitle'), () => fileInput.click()),
     fileInput,
   )
   toolbar.append(
-    cluster('Tools', toolRow, editRow, optionsRow),
-    cluster('Floor', floorFields, wholeFloorRow),
-    cluster('File', fileRow),
+    cluster(t('editor.clusterTools'), toolRow, editRow, optionsRow),
+    cluster(t('editor.clusterFloor'), floorFields, wholeFloorRow),
+    cluster(t('editor.clusterFile'), fileRow),
   )
 
   function setTool(t: Tool): void {
@@ -284,18 +293,19 @@ export function createPlanEditor(
     const levels = levelCount(b)
     const lost = clearsNote(plan.windows.length)
     wholeFloorNote.textContent = lost
-    wholeFloorButton.title = `Reset the outline to the building footprint${lost ? `. ${lost}; Ctrl+Z undoes it` : ''}`
-    optionNote.textContent = tool === 'outline' ? `Replaces the outline${lost ? `. ${lost}` : ''}` : (TOOL_HINT[tool] ?? '')
+    wholeFloorButton.title = lost ? t('editor.wholeFloorTitleLost', { lost }) : t('editor.wholeFloorTitle')
+    const hint = TOOL_HINT[tool]
+    optionNote.textContent = tool === 'outline' ? (lost ? t('editor.replacesOutlineLost', { lost }) : t('editor.replacesOutline')) : (hint ? t(hint) : '')
     kindGroup.hidden = tool !== 'fix'
     // Rebuilt only when it changes, so a focused field keeps its focus while the drawing redraws.
     const key = `${plan.floor} ${plan.floorHeight} ${levels} ${b.height} ${b.minHeight}`
     if (key === floorKey) return
     floorKey = key
     const info = document.createElement('small')
-    info.textContent = `Building: ${levels} levels, ${(b.height - b.minHeight).toFixed(1)} m`
+    info.textContent = t('editor.buildingInfo', { levels, h: fmt1Fixed(b.height - b.minHeight) })
     floorFields.replaceChildren(
-      field('Floor (0 = ground)', numberInput(plan.floor, 1, 0, (v) => commit({ ...clone(plan!), floor: Math.round(v) }), levels - 1)),
-      field('Floor height (m)', numberInput(plan.floorHeight, 0.1, 0.1, (v) => commit({ ...clone(plan!), floorHeight: v }))),
+      field(t('editor.floorField'), numberInput(plan.floor, 1, 0, (v) => commit({ ...clone(plan!), floor: Math.round(v) }), levels - 1)),
+      field(t('editor.floorHeightField'), numberInput(plan.floorHeight, 0.1, 0.1, (v) => commit({ ...clone(plan!), floorHeight: v }))),
       info,
     )
   }
@@ -317,15 +327,15 @@ export function createPlanEditor(
       const vp = effectiveViewpoint(p)
       const heading = Math.round((((-vp.yaw * 180) / Math.PI) % 360 + 360) % 360)
       const hint = document.createElement('small')
-      hint.textContent = 'This is where Walk inside puts you. Drag the camera to move it (only on clear floor), drag the white dot to turn it.'
+      hint.textContent = t('editor.walkStartHint')
       const state = document.createElement('output')
-      state.textContent = vp.auto ? 'Automatic' : 'Fixed'
-      const reset = button('Reset to automatic', 'Forget the fixed position; Walk inside picks it from the plan', resetViewpoint)
+      state.textContent = t(vp.auto ? 'editor.automatic' : 'editor.fixed')
+      const reset = button(t('editor.resetAuto'), t('editor.resetAutoTitle'), resetViewpoint)
       reset.disabled = vp.auto
       props.replaceChildren(
-        Object.assign(document.createElement('h4'), { textContent: 'Walk start' }),
-        field('Position', state),
-        field('Heading (0 = N, 90 = E)', Object.assign(document.createElement('output'), { textContent: String(heading) })),
+        Object.assign(document.createElement('h4'), { textContent: t('editor.walkStart') }),
+        field(t('editor.position'), state),
+        field(t('editor.heading'), Object.assign(document.createElement('output'), { textContent: String(heading) })),
         hint,
         reset,
       )
@@ -346,15 +356,15 @@ export function createPlanEditor(
         updateProps(true)
       }
       props.replaceChildren(
-        Object.assign(document.createElement('h4'), { textContent: 'Window' }),
-        field('Width (m)', numberInput(w.width, 0.1, 0.1, (v) => {
-          const t = placeWindowT(w.t, v, len, otherWindows(p, sel.index))
-          if (t === null) return setMessage('No room for that width on this edge', 'error')
-          edit({ width: v, t })
+        Object.assign(document.createElement('h4'), { textContent: t('editor.window') }),
+        field(t('editor.width'), numberInput(w.width, 0.1, 0.1, (v) => {
+          const at = placeWindowT(w.t, v, len, otherWindows(p, sel.index))
+          if (at === null) return setMessage(t('editor.noRoomWidth'), 'error')
+          edit({ width: v, t: at })
         })),
-        field('Sill (m)', numberInput(w.sill, 0.1, 0, (v) => edit(clampWindowVertical(v, w.height, wallHeight(p))))),
-        field('Height (m)', numberInput(w.height, 0.1, 0.1, (v) => edit(clampWindowVertical(w.sill, v, wallHeight(p))))),
-        field('From edge start (m)', numberInput(w.t * len, 0.1, 0, (v) => {
+        field(t('editor.sill'), numberInput(w.sill, 0.1, 0, (v) => edit(clampWindowVertical(v, w.height, wallHeight(p))))),
+        field(t('editor.height'), numberInput(w.height, 0.1, 0.1, (v) => edit(clampWindowVertical(w.sill, v, wallHeight(p))))),
+        field(t('editor.fromEdgeStart'), numberInput(w.t * len, 0.1, 0, (v) => {
           const t = placeWindowT(v / len, w.width, len, otherWindows(p, sel.index))
           if (t !== null) edit({ t })
         })),
@@ -362,16 +372,16 @@ export function createPlanEditor(
     } else {
       const w = p.walls[sel.index]
       const len = document.createElement('output')
-      len.textContent = `${Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z).toFixed(2)} m`
+      len.textContent = `${metres2(Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z))} m`
       props.replaceChildren(
-        Object.assign(document.createElement('h4'), { textContent: 'Wall' }),
-        field('Thickness (m)', numberInput(w.thickness, 0.01, 0.02, (v) => {
+        Object.assign(document.createElement('h4'), { textContent: t('editor.wall') }),
+        field(t('editor.thickness'), numberInput(w.thickness, 0.01, 0.02, (v) => {
           const next = clone(p)
           next.walls[sel.index].thickness = v
           commit(next)
           updateProps(true)
         })),
-        field('Length', len),
+        field(t('editor.length'), len),
       )
     }
   }
@@ -410,7 +420,7 @@ export function createPlanEditor(
       draft = { outline: [], wallChain: chain, wallStart: chain[chain.length - 1] }
     }
     const prev = history.pop()
-    if (!prev) return setMessage('Nothing to undo')
+    if (!prev) return setMessage(t('editor.nothingToUndo'))
     plan = prev
     if (selection && selection.kind !== 'viewpoint' && !selectionList(plan, selection.kind)[selection.index]) selection = null
     persist()
@@ -427,7 +437,7 @@ export function createPlanEditor(
     delete next.viewpoint
     commit(next)
     updateProps(true)
-    setMessage('Walk start is automatic again')
+    setMessage(t('editor.walkStartAuto'))
   }
 
   /** Drops a fixed viewpoint that no longer stands on clear floor; true when it did. */
@@ -440,9 +450,9 @@ export function createPlanEditor(
   /** "Outline replaced, 3 windows removed. Ctrl+Z to undo." */
   function replacedMessage(what: string, removedWindows: number, droppedViewpoint: boolean): string {
     const parts = [what]
-    if (removedWindows) parts.push(`${windowCount(removedWindows)} removed`)
-    if (droppedViewpoint) parts.push('walk start is automatic again')
-    return `${parts.join(', ')}. Ctrl+Z to undo.`
+    if (removedWindows) parts.push(t('editor.removed', { windows: windowCount(removedWindows) }))
+    if (droppedViewpoint) parts.push(t('editor.walkStartAutoShort'))
+    return t('editor.undoHint', { what: parts.join(', ') })
   }
 
   function wholeFloor(): void {
@@ -454,7 +464,7 @@ export function createPlanEditor(
     const dropped = dropStaleViewpoint(next)
     selection = null
     commit(next)
-    setMessage(replacedMessage('Outline reset to the building footprint', removed, dropped))
+    setMessage(replacedMessage(t('editor.outlineReset'), removed, dropped))
   }
 
   function deleteSelected(): void {
@@ -484,15 +494,15 @@ export function createPlanEditor(
     try {
       parsed = JSON.parse(await file.text())
     } catch {
-      return setMessage('Import failed: not valid JSON', 'error')
+      return setMessage(t('editor.importBadJson'), 'error')
     }
     const result = validatePlan(parsed)
-    if ('error' in result) return setMessage(`Import failed: ${result.error}`, 'error')
+    if ('error' in result) return setMessage(t('editor.importFailed', { error: result.error }), 'error')
     if (result.plan.buildingId !== plan.buildingId &&
-        !confirm(`This plan was drawn for ${result.plan.buildingId}, not ${plan.buildingId}. Use it anyway?`)) return
+        !confirm(t('editor.importConfirm', { from: result.plan.buildingId, to: plan.buildingId }))) return
     selection = null
     commit({ ...result.plan, buildingId: plan.buildingId })
-    setMessage('Plan imported')
+    setMessage(t('editor.imported'))
   }
 
   // --- geometry in the current view ---
@@ -629,8 +639,8 @@ export function createPlanEditor(
   function finishFix(): void {
     if (!plan || !building) return
     const pts = draft.outline
-    if (pts.length < 3) return setMessage('A fix needs at least 3 points', 'error')
-    if (selfIntersects(pts)) return setMessage('Shape crosses itself; adjust the points', 'error')
+    if (pts.length < 3) return setMessage(t('editor.fixNeeds3'), 'error')
+    if (selfIntersects(pts)) return setMessage(t('editor.crossesFix'), 'error')
     const next = clone(plan)
     const bottom = floorBase(building, plan)
     const edit: BuildingEdit = { kind: newKind, outline: clone(pts), bottom, top: bottom + plan.floorHeight }
@@ -639,7 +649,7 @@ export function createPlanEditor(
     draft = { outline: [] }
     message = undefined
     commit(next)
-    setMessage('Fix added; set its heights in the box on the right (presets for balconies)')
+    setMessage(t('editor.fixAdded'))
   }
 
   function fixClick(e: MouseEvent): void {
@@ -664,43 +674,43 @@ export function createPlanEditor(
       updateProps(true)
     }
     const kind = document.createElement('select')
-    for (const [v, label] of [['add', 'Add (solid volume)'], ['cut', 'Cut (remove volume)']]) kind.add(new Option(label, v, false, v === e.kind))
+    for (const [v, label] of [['add', t('editor.fixAddSolid')], ['cut', t('editor.fixCutVolume')]]) kind.add(new Option(label, v, false, v === e.kind))
     kind.addEventListener('change', () => patch({ kind: kind.value as BuildingEdit['kind'] }))
     const heights = (bottom: number, top: number): void => {
-      if (top <= bottom) return setMessage('Top must be above bottom', 'error')
+      if (top <= bottom) return setMessage(t('editor.topAboveBottom'), 'error')
       patch({ bottom, top })
     }
     const copy = (sign: 1 | -1): void => {
       const shift = sign * p.floorHeight
-      if (e.top + shift <= b.minHeight) return setMessage('That would be below the ground', 'error')
+      if (e.top + shift <= b.minHeight) return setMessage(t('editor.belowGround'), 'error')
       const next = clone(p)
       next.edits!.push({ ...clone(e), bottom: e.bottom + shift, top: e.top + shift })
       selection = { kind: 'edit', index: next.edits!.length - 1 }
       commit(next)
       updateProps(true)
-      setMessage(`Copied one floor ${sign > 0 ? 'up' : 'down'}`)
+      setMessage(t(sign > 0 ? 'editor.copiedUp' : 'editor.copiedDown'))
     }
     const hint = document.createElement('small')
-    hint.textContent = 'Heights are metres above the ground. The parapet preset shows the slab as a solid block up to parapet height.'
+    hint.textContent = t('editor.fixHeightsHint')
     const presets = document.createElement('div')
     presets.className = 'editor-row'
     presets.style.flexDirection = 'column'
     presets.append(
-      button('Balcony slab on this floor', `Bottom ${(base - 0.2).toFixed(1)}, top ${base.toFixed(1)}: a floor you can stand on`, () => heights(base - 0.2, base)),
-      button('Balcony with parapet', `Bottom ${(base - 0.2).toFixed(1)}, top ${(base + 1).toFixed(1)}`, () => heights(base - 0.2, base + 1)),
-      button('Full height', 'From the building bottom to its top', () => heights(b.minHeight, b.height)),
+      button(t('editor.presetSlab'), t('editor.presetSlabTip', { bottom: fmt1Fixed(base - 0.2), top: fmt1Fixed(base) }), () => heights(base - 0.2, base)),
+      button(t('editor.presetParapet'), t('editor.presetParapetTip', { bottom: fmt1Fixed(base - 0.2), top: fmt1Fixed(base + 1) }), () => heights(base - 0.2, base + 1)),
+      button(t('editor.presetFull'), t('editor.presetFullTip'), () => heights(b.minHeight, b.height)),
     )
     const copies = document.createElement('div')
     copies.className = 'editor-row'
     copies.append(
-      button('Copy to floor above', 'Duplicate shifted up by one floor height', () => copy(1)),
-      button('Copy to floor below', 'Duplicate shifted down by one floor height', () => copy(-1)),
+      button(t('editor.copyUp'), t('editor.copyUpTip'), () => copy(1)),
+      button(t('editor.copyDown'), t('editor.copyDownTip'), () => copy(-1)),
     )
     return [
-      Object.assign(document.createElement('h4'), { textContent: 'Fix building' }),
-      field('Kind', kind),
-      field('Bottom (m)', numberInput(e.bottom, 0.1, -50, (v) => heights(v, e.top))),
-      field('Top (m)', numberInput(e.top, 0.1, -50, (v) => heights(e.bottom, v))),
+      Object.assign(document.createElement('h4'), { textContent: t('editor.fixTitle') }),
+      field(t('editor.kind'), kind),
+      field(t('editor.bottom'), numberInput(e.bottom, 0.1, -50, (v) => heights(v, e.top))),
+      field(t('editor.top'), numberInput(e.top, 0.1, -50, (v) => heights(e.bottom, v))),
       presets,
       copies,
       hint,
@@ -738,8 +748,8 @@ export function createPlanEditor(
     commit(next)
     setMessage(
       panel.tilt === 90
-        ? 'Panel on the facade, facing out. Set tilt, facing and height in the box; drag the white dot to turn it.'
-        : 'Panel placed facing south at 30 degrees. Set tilt, facing and height in the box; drag the white dot to turn it.',
+        ? t('editor.panelFacade')
+        : t('editor.panelSouth'),
     )
   }
 
@@ -756,20 +766,20 @@ export function createPlanEditor(
     presets.className = 'editor-row'
     const base = floorBase(building!, p)
     presets.append(
-      button('Balcony railing', `Vertical, lowest edge ${(base + 1).toFixed(1)} m: a metre above this floor`, () => preset('railing')),
-      button('Roof stand', `Tilted 30 degrees, lowest edge at the roof (${building!.height.toFixed(1)} m)`, () => preset('roof')),
-      button('Ground', 'Tilted 30 degrees, lowest edge 0.5 m above the ground', () => preset('ground')),
+      button(t('editor.railing'), t('editor.railingTip', { h: fmt1Fixed(base + 1) }), () => preset('railing')),
+      button(t('editor.roofStand'), t('editor.roofStandTip', { h: fmt1Fixed(building!.height) }), () => preset('roof')),
+      button(t('editor.ground'), t('editor.groundTip'), () => preset('ground')),
     )
     const hint = document.createElement('small')
-    hint.textContent = 'Facing: 0 = N, 90 = E, 180 = S. Tilt: 90 is vertical, 0 flat.'
+    hint.textContent = t('editor.panelHint')
     return [
-      Object.assign(document.createElement('h4'), { textContent: 'Solar panel' }),
-      field('Module width (m)', numberInput(q.width, 0.01, 0.1, (v) => patch({ width: v }))),
-      field('Module height (m)', numberInput(q.height, 0.01, 0.1, (v) => patch({ height: v }))),
-      field('Modules in a row', numberInput(q.count ?? 1, 1, 1, (v) => patch({ count: Math.round(v) }), 50)),
-      field('Tilt (deg)', numberInput(q.tilt, 1, 0, (v) => patch({ tilt: v }), 90)),
-      field('Facing (deg)', numberInput(q.azimuth, 1, 0, (v) => patch({ azimuth: v % 360 }), 360)),
-      field('Lowest edge (m)', numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
+      Object.assign(document.createElement('h4'), { textContent: t('editor.solarPanel') }),
+      field(t('editor.moduleWidth'), numberInput(q.width, 0.01, 0.1, (v) => patch({ width: v }))),
+      field(t('editor.moduleHeight'), numberInput(q.height, 0.01, 0.1, (v) => patch({ height: v }))),
+      field(t('editor.moduleCount'), numberInput(q.count ?? 1, 1, 1, (v) => patch({ count: Math.round(v) }), 50)),
+      field(t('editor.tilt'), numberInput(q.tilt, 1, 0, (v) => patch({ tilt: v }), 90)),
+      field(t('editor.facing'), numberInput(q.azimuth, 1, 0, (v) => patch({ azimuth: v % 360 }), 360)),
+      field(t('editor.lowestEdge'), numberInput(q.elevation, 0.1, -10, (v) => patch({ elevation: v }))),
       presets,
       hint,
       ...(panelSummary ? [panelSummary] : []),
@@ -779,8 +789,8 @@ export function createPlanEditor(
   function finishOutline(): void {
     if (!plan) return
     const pts = draft.outline
-    if (pts.length < 3) return setMessage('An outline needs at least 3 points', 'error')
-    if (selfIntersects(pts)) return setMessage('Outline crosses itself; adjust the points', 'error')
+    if (pts.length < 3) return setMessage(t('editor.outlineNeeds3'), 'error')
+    if (selfIntersects(pts)) return setMessage(t('editor.crossesOutline'), 'error')
     const next = clone(plan)
     const removed = next.windows.length
     next.outline = { outer: clone(pts), holes: [] }
@@ -789,7 +799,7 @@ export function createPlanEditor(
     selection = null
     draft = { outline: [] }
     commit(next)
-    setMessage(replacedMessage('Outline replaced', removed, dropped))
+    setMessage(replacedMessage(t('editor.outlineReplaced'), removed, dropped))
   }
 
   function outlineClick(e: MouseEvent): void {
@@ -815,7 +825,7 @@ export function createPlanEditor(
     const step = chainStep(chain, snap.point)
     if (step.tooShort) {
       // The second click of a double-click lands here; only a lone first wall needs the warning.
-      if (chain.length === 1) setMessage('Wall is too short', 'error')
+      if (chain.length === 1) setMessage(t('editor.wallTooShort'), 'error')
       return
     }
     if (!step.wall) {
@@ -849,14 +859,14 @@ export function createPlanEditor(
     }
     const rings = [plan.outline.outer, ...plan.outline.holes]
     const edge = nearestEdge(rings, p, tol(SNAP_PX * 1.5))
-    if (!edge) return setMessage('Click closer to an outline edge', 'error')
+    if (!edge) return setMessage(t('editor.closerToEdge'), 'error')
     const ring = rings[edge.ring]
     const a = ring[edge.edge]
     const b = ring[(edge.edge + 1) % ring.length]
-    const t = placeWindowT(edge.t, DEFAULT_WINDOW.width, Math.hypot(b.x - a.x, b.z - a.z), otherWindows(plan, -1, edge))
-    if (t === null) return setMessage('No room for a window there', 'error')
+    const at = placeWindowT(edge.t, DEFAULT_WINDOW.width, Math.hypot(b.x - a.x, b.z - a.z), otherWindows(plan, -1, edge))
+    if (at === null) return setMessage(t('editor.noRoomWindow'), 'error')
     const next = clone(plan)
-    next.windows.push({ ring: edge.ring, edge: edge.edge, t, ...DEFAULT_WINDOW, ...clampWindowVertical(DEFAULT_WINDOW.sill, DEFAULT_WINDOW.height, wallHeight(plan)) })
+    next.windows.push({ ring: edge.ring, edge: edge.edge, t: at, ...DEFAULT_WINDOW, ...clampWindowVertical(DEFAULT_WINDOW.sill, DEFAULT_WINDOW.height, wallHeight(plan)) })
     selection = { kind: 'window', index: next.windows.length - 1 }
     message = undefined
     commit(next)
@@ -871,7 +881,7 @@ export function createPlanEditor(
     if (near(tip, 9) || near(vp, 13)) {
       const mode = near(tip, 9) ? 'rotate' : 'move'
       selection = { kind: 'viewpoint', index: 0 }
-      message = { text: VIEWPOINT_HELP, kind: 'info' }
+      message = { text: t('editor.viewpointHelp'), kind: 'info' }
       drag = { kind: 'viewpoint', mode, dx: vp.x - p.x, dz: vp.z - p.z, before: clone(plan) }
       return render()
     }
@@ -1129,7 +1139,7 @@ export function createPlanEditor(
     if (!measure()) return
     if (needsFit) fit()
     drawScene(svg, { building, neighbors, plan, view, selection, draft, hover: hoverId })
-    statusText.textContent = hoverId ? 'Click to switch to this building' : (message?.text ?? HELP[tool])
+    statusText.textContent = hoverId ? t('editor.hoverSwitch') : (message?.text ?? t(HELP[tool]))
     statusLine.dataset.kind = message?.kind ?? 'info'
     updateFloorBox()
     updateProps()
