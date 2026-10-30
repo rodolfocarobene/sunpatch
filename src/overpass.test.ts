@@ -70,4 +70,22 @@ describe('fetchBuildingElements', () => {
     await fetchBuildingElements(45.002, 9, opts(f)) // ~222 m
     expect(f).toHaveBeenCalledTimes(2)
   })
+
+  it('queries the radius asked for plus the reuse margin', async () => {
+    const f = vi.fn().mockImplementation(async () => ok({ elements: [el] }))
+    await fetchBuildingElements(45, 9, opts(f, { radiusM: 150 }))
+    expect(String(f.mock.calls[0][1].body)).toContain('around%3A250%2C')
+  })
+
+  it('serves a smaller size from a bigger answer, and fetches again for a bigger size', async () => {
+    const f = vi.fn().mockImplementation(async () => ok({ elements: [el] }))
+    await fetchBuildingElements(45, 9, opts(f, { radiusM: 500 }))
+    await fetchBuildingElements(45, 9, opts(f, { radiusM: 150 }))
+    await fetchBuildingElements(45.002, 9, opts(f, { radiusM: 350 })) // ~222 m away: 222 + 350 <= 600
+    expect(f).toHaveBeenCalledTimes(1)
+    clearOverpassCache()
+    await fetchBuildingElements(45, 9, opts(f, { radiusM: 150 }))
+    await fetchBuildingElements(45, 9, opts(f, { radiusM: 350 }))
+    expect(f).toHaveBeenCalledTimes(3)
+  })
 })
