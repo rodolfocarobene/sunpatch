@@ -32,12 +32,11 @@ export interface FindPanel {
   set(input: FindInput): void
 }
 
-const GROUPS: { kind: PlantKind; label: string }[] = [
-  { kind: 'vegetable', label: 'Vegetables' },
-  { kind: 'fruit', label: 'Fruit' },
-  { kind: 'herb', label: 'Herbs' },
-  { kind: 'flower', label: 'Flowers' },
-  { kind: 'houseplant', label: 'Houseplants' },
+const GROUPS: { kinds: PlantKind[]; label: string }[] = [
+  { kinds: ['vegetable', 'fruit'], label: 'Vegetables and fruit' },
+  { kinds: ['herb'], label: 'Herbs' },
+  { kinds: ['flower'], label: 'Flowers' },
+  { kinds: ['houseplant'], label: 'Houseplants' },
 ]
 const KIND_WORD: Record<FindKind, string> = { indoor: 'Indoors', ground: 'Ground', roof: 'Roof' }
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
@@ -63,7 +62,7 @@ export function createFindPanel(options: {
   for (const g of GROUPS) {
     const group = document.createElement('optgroup')
     group.label = g.label
-    for (const p of PLANTS.filter((x) => x.kind === g.kind)) group.append(option(p.id, cap(p.name)))
+    for (const p of PLANTS.filter((x) => g.kinds.includes(x.kind))) group.append(option(p.id, cap(p.name)))
     if (group.children.length > 0) plantSelect.append(group)
   }
   plantSelect.addEventListener('change', () => options.onPlant(plantSelect.value === '' ? null : plantSelect.value))
