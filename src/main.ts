@@ -122,8 +122,6 @@ function retryGardenClimate() {
   ensureGardenClimate()
 }
 
-renderGarden() // the hint, until a spot is picked
-
 // The plant map: one plant scored over every spot (indoor floor, ground, roof) and painted in the scene. The sun of the
 // spots is traced once per scene (cached by the job); changing plant or month only scores again.
 let findPlant: Plant | undefined
@@ -206,7 +204,7 @@ function renderFind() {
         scoreSpots(plant, ids.map((i) => spots[i]), c, month).forEach((r, n) => (findScored[ids[n]] = r))
       }
       sunScene.setGardenMap({
-        spots: spots.map((s) => ({ x: s.x, y: s.y, z: s.z, kind: s.kind as 'indoor' | 'ground' | 'roof' })),
+        spots: spots.map((s) => ({ x: s.x, y: s.y, z: s.z, kind: s.kind as 'indoor' | 'ground' | 'roof', cell: s.cell })),
         steps: findScored.map((r) => (r ? stepOf(r.rating) : 0)),
       })
     }
@@ -235,6 +233,8 @@ function showBestSpot() {
   const s = findResult.spots[i]
   selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z)
 }
+
+renderGarden() // the hint, until a spot is picked
 
 function clearGardenSpot() {
   gardenSpot = undefined

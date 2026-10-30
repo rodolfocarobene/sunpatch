@@ -209,7 +209,7 @@ export interface SunScene {
   /** Marks a spot of the Garden view on the surface (`y` is the surface height); null removes the mark. */
   setGardenMark(at: { x: number; y: number; z: number } | null): void
   /** Paints the plant map: one flat quad per spot of step good or ok (`y` is the pot's height; quads lie on the surface below it); null removes it. */
-  setGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind }[]; steps: Step[] } | null): void
+  setGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind; cell?: number }[]; steps: Step[] } | null): void
   dispose(): void
 }
 
@@ -658,19 +658,19 @@ export function createScene(container: HTMLElement): SunScene {
   }
 
   // One mesh per kind of spot (the roof's hides with the floors above it hidden, or it would hang in the air).
-  function paintGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind }[]; steps: Step[] } | null) {
+  function paintGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind; cell?: number }[]; steps: Step[] } | null) {
     removeGardenMap()
     if (!map) return
     for (const kind of ['indoor', 'ground', 'roof'] as const) {
       const idx = map.spots.map((s, i) => (s.kind === kind && map.steps[i] > 0 ? i : -1)).filter((i) => i >= 0)
       if (idx.length === 0) continue
-      const h = CELL_SIZE[kind] / 2 - GARDEN_MAP_GAP / 2
       const positions = new Float32Array(idx.length * 12)
       const colors = new Float32Array(idx.length * 12)
       const index = new Uint32Array(idx.length * 6)
       const c = new Color()
       idx.forEach((si, n) => {
-        const { x, y, z } = map.spots[si]
+        const { x, y, z, cell } = map.spots[si]
+        const h = (cell ?? CELL_SIZE[kind]) / 2 - GARDEN_MAP_GAP / 2
         const top = y - POT_HEIGHT + GARDEN_MAP_LIFT
         positions.set([[-1, -1], [1, -1], [1, 1], [-1, 1]].flatMap(([u, v]) => [x + h * u, top, z + h * v]), n * 12)
         c.setHex(STEP_COLORS[map.steps[si] as 1 | 2], SRGBColorSpace)
