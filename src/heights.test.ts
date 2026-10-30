@@ -168,3 +168,10 @@ describe('hover note', () => {
     expect(hoverLines({ ...b, heightSource: 'tag' })[1]).toBe('9 m')
   })
 })
+
+describe('hoverLines title', () => {
+  it('says Neighbour building for an unnamed building instead of its OSM id', () => {
+    const b = { id: 'way/416169919', tags: {}, height: 9, minHeight: 0, heightSource: 'tag' } as unknown as Building
+    expect(hoverLines(b)[0]).toBe('Neighbour building')
+  })
+})

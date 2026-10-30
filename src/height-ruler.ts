@@ -1,5 +1,6 @@
 import { FLOOR_M, MAX_FLOORS, MAX_HEIGHT_M, overrideFor, type HeightOverride } from './heights'
 import type { Building } from './osm'
+import { buildingName } from './building-line'
 import { fmt1, t } from './i18n'
 
 /** The finer step with Shift held, in metres. */
@@ -25,6 +26,14 @@ export function snapHeight(raw: number, minHeight: number, fine: boolean): numbe
 export function heightFromDrag(startHeight: number, minHeight: number, dyPx: number, pxPerM: number, fine: boolean): number {
   if (!(pxPerM > 0)) return startHeight
   return snapHeight(startHeight + dyPx / pxPerM, minHeight, fine)
+}
+
+/** The height an arrow key makes from `height`: the next whole floor up or down (counted from where the building starts), or 0.5 m with `fine`. */
+export function keyHeight(height: number, minHeight: number, dir: 1 | -1, fine: boolean): number {
+  if (fine) return snapHeight(height + dir * FINE_M, minHeight, true)
+  const floors = (height - minHeight) / FLOOR_M
+  const next = dir > 0 ? Math.floor(floors + 1e-6) + 1 : Math.ceil(floors - 1e-6) - 1
+  return snapHeight(minHeight + next * FLOOR_M, minHeight, false)
 }
 
 /** "8 floors · 24 m": the floors above where the building starts, then the top above the ground. */
@@ -82,7 +91,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   box.innerHTML = `
     <div class="hrTrack"></div>
     <div class="hrTicks" aria-hidden="true"></div>
-    <div class="hrHandle" title="${t('hr.handle')}"><span class="hrGrip" aria-hidden="true"></span></div>
+    <div class="hrHandle" role="slider" tabindex="0" aria-orientation="vertical" title="${t('hr.handle')}"><span class="hrGrip" aria-hidden="true"></span></div>
     <output class="hrLabel"></output>`
   container.appendChild(box)
   const track = box.querySelector<HTMLElement>('.hrTrack')!
@@ -97,6 +106,8 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   let last = { x: 0, y: 0 }
   let inside = false
   let pointer = { x: 0, y: 0 }
+  /** A height typed with the arrow keys, previewed until Enter or blur commits it. */
+  let keyed: number | undefined
 
   const yFor = (height: number) => target!.anchor.yBase - (height - target!.building.minHeight) * target!.anchor.pxPerM
 
@@ -129,6 +140,12 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     label.style.top = `${y}px`
     label.textContent = rulerLabel(height, target.building.minHeight)
     box.classList.toggle('active', drag?.moved === true)
+    const floors = round1((height - target.building.minHeight) / FLOOR_M)
+    handle.setAttribute('aria-valuemin', String(round1(target.building.minHeight + FINE_M)))
+    handle.setAttribute('aria-valuemax', String(MAX_HEIGHT_M))
+    handle.setAttribute('aria-valuenow', String(round1(height)))
+    handle.setAttribute('aria-valuetext', t('hr.label', { n: floors, h: fmt1(height) }).replace(' · ', ', '))
+    handle.setAttribute('aria-label', t('hr.handleAria', { name: buildingName(target.building) }))
   }
 
   function show(id: string): boolean {
@@ -143,6 +160,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     return true
   }
   function hide() {
+    commitKeyed()
     clearTimeout(timer)
     clearTimeout(switchTimer)
     if (drag && target) handlers.onPreview(target.id, null)
@@ -152,6 +170,46 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     target = undefined
     inside = false
   }
+
+  /** Enter or blur: the keyed height goes in as a mouse release would. */
+  function commitKeyed() {
+    if (keyed === undefined || !target) return void (keyed = undefined)
+    const { id, building } = target
+    const height = keyed
+    keyed = undefined
+    handlers.onPreview(id, null)
+    if (height === building.height) return layout(building.height)
+    handlers.onCommit(id, overrideFromRuler(building, height))
+    show(id)
+  }
+  function cancelKeyed() {
+    if (keyed === undefined || !target) return
+    keyed = undefined
+    handlers.onPreview(target.id, null)
+    layout(target.building.height)
+  }
+  handle.addEventListener('keydown', (e) => {
+    if (!target || drag) return
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      keyed = keyHeight(keyed ?? target.building.height, target.building.minHeight, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey)
+      place(keyed)
+      handlers.onPreview(target.id, keyed)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      commitKeyed()
+    } else if (e.key === 'Escape' && keyed !== undefined) {
+      e.preventDefault()
+      e.stopPropagation()
+      cancelKeyed()
+    }
+  })
+  handle.addEventListener('blur', () => {
+    commitKeyed()
+    if (!inside && !drag && !box.hidden) timer = window.setTimeout(hide, GRACE_MS)
+  })
+  const focused = () => handle.matches(':focus')
 
   handle.addEventListener('pointerdown', (e) => {
     if (!target || e.button !== 0) return
@@ -183,7 +241,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
       if (!show(id)) return
     } else layout(building.height)
     clearTimeout(timer) // the commit rebuilt the scene, which reported the pointer off the building
-    if (!handle.matches(':hover')) timer = window.setTimeout(hide, GRACE_MS)
+    if (!handle.matches(':hover') && !focused()) timer = window.setTimeout(hide, GRACE_MS)
   }
   handle.addEventListener('pointerup', () => finish(true))
   handle.addEventListener('pointercancel', () => finish(false))
@@ -205,7 +263,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   })
   box.addEventListener('pointerleave', () => {
     inside = false
-    if (!drag) timer = window.setTimeout(hide, GRACE_MS)
+    if (!drag && !focused()) timer = window.setTimeout(hide, GRACE_MS)
   })
   // The scene is under the ruler: its own clicks and menus are not for the scene.
   for (const type of ['click', 'dblclick', 'contextmenu'] as const) box.addEventListener(type, (e) => e.stopPropagation())
@@ -233,7 +291,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     },
     release() {
       clearTimeout(switchTimer)
-      if (drag || inside || box.hidden) return
+      if (drag || inside || box.hidden || focused()) return
       clearTimeout(timer)
       timer = window.setTimeout(hide, GRACE_MS)
     },
