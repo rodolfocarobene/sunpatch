@@ -30,7 +30,7 @@
     color-scheme: dark;
   }
   /* Grey reads washed out over the warm glow; a warm off-white keeps the lead quiet but legible. */
-  .hero .lead { color: #e6dccb; }
+  .hero .lead, .hero figcaption { color: #e6dccb; }
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
