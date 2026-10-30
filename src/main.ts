@@ -94,6 +94,7 @@ const findPanel = createFindPanel({
   onRetryTrace: () => requestFind(true),
 })
 ui.gardenFindSlot.appendChild(findPanel.el)
+ui.gardenMonthSlot.appendChild(findPanel.monthEl)
 const gardenCard = createGardenCard({
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
@@ -108,6 +109,7 @@ let gardenHint: string | undefined
 let gardenClimate: { key: string; status: GardenCardInput['weather']; climate?: Climate } = { key: '', status: 'idle' }
 
 function renderGarden() {
+  ui.gardenSection.classList.toggle('hasSpot', gardenSpot !== undefined)
   gardenCard.set({
     kind: gardenSpot?.kind ?? null,
     neighbourRoof: gardenSpot?.neighbourRoof,
