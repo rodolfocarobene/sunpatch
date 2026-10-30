@@ -49,7 +49,7 @@ export const buildings = defineStrings({
     'hp.errMetres': 'Enter a height in metres, above 0.',
     'hr.label': { one: '{n} floor · {h} m', other: '{n} floors · {h} m' },
     'hr.aria': 'Height ruler: drag to change the height. The Height box (right-click) does it by typing.',
-    'hr.handleAria': 'Height of {name}: arrow keys change it by a floor, Shift by 0.5 m, Enter applies, Esc cancels',
+    'hr.handleAria': 'Height of {name}',
     'hr.handle': 'Drag to change the height (Shift: 0.5 m steps)',
   },
   it: {
@@ -99,7 +99,7 @@ export const buildings = defineStrings({
     'hp.errMetres': "Inserisci un'altezza in metri, maggiore di 0.",
     'hr.label': { one: '{n} piano · {h} m', other: '{n} piani · {h} m' },
     'hr.aria': "Righello dell'altezza: trascina per cambiarla. La finestra Altezza (clic destro) lo fa scrivendo.",
-    'hr.handleAria': "Altezza di {name}: le frecce la cambiano di un piano, Maiusc di 0,5 m, Invio applica, Esc annulla",
+    'hr.handleAria': 'Altezza di {name}',
     'hr.handle': 'Trascina per cambiare l’altezza (Maiusc: passi da 0,5 m)',
   },
 })
