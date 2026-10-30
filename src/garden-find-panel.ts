@@ -1,6 +1,6 @@
 import { cssColor, STEP_COLORS, type FindKind, type KindStats } from './garden-find'
 import type { GardenTrace } from './garden-card'
-import { MONTH_NAMES } from './garden-text'
+import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { PLANTS, type PlantKind } from './plants'
 
 // "Find a place for ...": the plant picker of the Garden view, the colour legend of the plant map and its summary.
@@ -15,6 +15,8 @@ export interface FindInput {
   /** Whether the plant can stand outdoors, so the local climate matters. */
   needsClimate: boolean
   summary: string
+  /** The way on when the summary says no spot suits: the months that work, with a switch to the best one. */
+  deadEnd?: DeadEnd
   /** Why some kinds of spots are skipped. */
   note?: string
   stats: KindStats[]
@@ -124,6 +126,12 @@ export function createFindPanel(options: {
         legend.append(swatch(cssColor(STEP_COLORS[2]), 'Good'), swatch(cssColor(STEP_COLORS[1]), 'OK'), swatch(null, 'Poor: not coloured'))
         parts.push(legend)
         if (input.summary) parts.push(withRole(el('p', 'findSummary', input.summary), 'status'))
+        if (input.deadEnd) {
+          const line = el('p', 'findNext', input.deadEnd.text)
+          const m = input.deadEnd.switchMonth
+          if (m !== undefined) line.append(' ', button(`Show ${MONTH_NAMES[m]}`, () => options.onMonth(m)))
+          parts.push(line)
+        }
         if (input.stats.length > 0) {
           const list = el('ul', 'findCounts')
           for (const s of input.stats) {

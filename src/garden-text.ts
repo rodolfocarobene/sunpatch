@@ -149,3 +149,39 @@ export function plantRow(result: PlantResult, month: number | null): PlantRow {
 export function splitPlants(ranked: PlantResult[]): { fit: PlantResult[]; poor: PlantResult[] } {
   return { fit: ranked.filter((r) => r.rating !== 'poor'), poor: ranked.filter((r) => r.rating === 'poor') }
 }
+
+/** A way out of a "no": one short line, and optionally the month the Month control can switch to. */
+export interface DeadEnd {
+  text: string
+  switchMonth?: number
+}
+
+/** The ratings of the months a plant is not poor in, in a word: "Good", "OK", or "OK or good" when mixed. */
+function ratingWord(result: PlantResult, months: boolean[]): string {
+  const ratings = new Set(result.year.filter((_, i) => months[i]).map((r) => r.rating))
+  return ratings.has('ok') ? (ratings.has('good') ? 'OK or good' : 'OK') : 'Good'
+}
+
+/**
+ * Where a spot card with nothing suitable can go next. `byYear` holds every plant rated over the whole year (any order).
+ * When another month suits some plants, name the month with the most and offer to switch to it ("In May, 6 plants do
+ * well here."). Otherwise name the closest plant and its months ("Closest: snake plant, OK Mar to Oct."). Undefined when
+ * there are no plants.
+ */
+export function spotDeadEnd(byYear: PlantResult[], month: number | null): DeadEnd | undefined {
+  if (byYear.length === 0) return undefined
+  // A hardy perennial resting through the cold is not a plant that does well there, so it does not point to a month.
+  const fitIn = (m: number) => byYear.filter((r) => r.year[m].rating !== 'poor' && !r.year[m].resting).length
+  const goodIn = (m: number) => byYear.filter((r) => r.year[m].rating === 'good' && !r.year[m].resting).length
+  const months = MONTH_NAMES.map((_, m) => m).filter((m) => m !== month && fitIn(m) > 0)
+  const closest = [...byYear].sort((a, b) => b.score - a.score || a.plant.name.localeCompare(b.plant.name))[0]
+  const closestMonths = closest.summary.months
+  if (month !== null && months.length > 0) {
+    const best = months.reduce((b, m) => (fitIn(m) > fitIn(b) || (fitIn(m) === fitIn(b) && goodIn(m) > goodIn(b)) ? m : b))
+    const n = fitIn(best)
+    return { text: `In ${MONTH_NAMES[best]}, ${n} ${n === 1 ? 'plant does' : 'plants do'} well here.`, switchMonth: best }
+  }
+  if (closestMonths.some(Boolean)) return { text: `Closest: ${closest.plant.name}, ${ratingWord(closest, closestMonths)} ${monthsText(closestMonths)}.` }
+  // Nothing is better than poor in any month, so name the plant that comes nearest and what stops it.
+  return { text: `Closest: ${closest.plant.name}, but it is poor in every month. ${reasonText(closest, null)}` }
+}

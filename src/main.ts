@@ -41,9 +41,9 @@ import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
 import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
-import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
+import { bestSpot, findDeadEnd, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
-import { MONTH_NAMES } from './garden-text'
+import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { scoreSpots } from './garden'
 import { plantById, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
@@ -98,6 +98,7 @@ const gardenCard = createGardenCard({
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
+  onMonth: setGardenMonth,
 })
 ui.gardenSlot.appendChild(gardenCard.el)
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
@@ -201,6 +202,7 @@ function renderFind() {
   const climate = gardenClimate.status === 'ready' ? gardenClimate.climate : undefined
   let summary = ''
   let roofHidden = false
+  let deadEnd: DeadEnd | undefined
   let stats: ReturnType<typeof kindStats> = []
   if (plant && findResult && done) {
     const { spots } = findResult
@@ -225,6 +227,10 @@ function renderFind() {
     const waiting = !climate && gardenClimate.status !== 'error' && kindsFor(plant).kinds.some((k) => k !== 'indoor') // outdoor spots are not rated yet
     // The roof is not drawn while the floors above are hidden, so it is not counted or named either.
     stats = waiting ? [] : kindStats(spots, shownScores())
+    if (!waiting && stats.length > 0 && stats.every((s) => s.good === 0 && s.ok === 0)) {
+      const scoredSpots = shownScores().flatMap((r, i) => (r ? [spots[i]] : []))
+      deadEnd = findDeadEnd(plant, gardenMonth, monthCounts(plant, scoredSpots, climate ?? { tMean: [], tMin: [], tMax: [], tLow: [] }), scoredSpots, stats.find((s) => s.why)?.why)
+    }
     roofHidden = floorsHidden && findScored.some((r, i) => r && spots[i].kind === 'roof')
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
     if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
@@ -236,6 +242,7 @@ function renderFind() {
     weather: gardenClimate.status,
     needsClimate: plant?.outdoor ?? false,
     summary,
+    deadEnd,
     note: plant ? kindsFor(plant).note : undefined,
     stats,
     roofHidden,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
-import { assess } from './garden'
-import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
+import { assess, rankPlants } from './garden'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, spotDeadEnd, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -92,5 +92,36 @@ describe('spot card text', () => {
     expect(poor.every((r) => r.rating === 'poor')).toBe(true)
     expect(fit.length + poor.length).toBe(3)
     expect(poor.length).toBeGreaterThan(0)
+  })
+})
+
+describe('spotDeadEnd', () => {
+  const outdoors = (sunMinutes: number[]) => rankPlants({ indoor: false, sunMinutes }, milan)
+
+  it('points to the month that suits most plants, with the month to switch to', () => {
+    const sun = [0, 0, 0, 0, 480, 0, 0, 0, 0, 0, 0, 0]
+    const byYear = outdoors(sun)
+    const out = spotDeadEnd(byYear, 11)!
+    expect(out.switchMonth).toBe(4)
+    const n = byYear.filter((r) => r.year[4].rating !== 'poor').length
+    expect(out.text).toBe(`In May, ${n} ${n === 1 ? 'plant does' : 'plants do'} well here.`)
+  })
+
+  it('names the closest plant and its months when no month is picked', () => {
+    const byYear = rankPlants({ indoor: true, sunMinutes: Array(12).fill(120) }, milan)
+    const out = spotDeadEnd(byYear, null)!
+    expect(out.switchMonth).toBeUndefined()
+    expect(out.text).toMatch(/^Closest: .+, (Good|OK|OK or good) .+\.$/)
+  })
+
+  it('keeps to the closest plant when no other month works', () => {
+    const byYear = rankPlants({ indoor: false, sunMinutes: Array(12).fill(0) }, milan)
+    const out = spotDeadEnd(byYear, 5)!
+    expect(out.switchMonth).toBeUndefined()
+    expect(out.text).toMatch(/^Closest: /)
+  })
+
+  it('says nothing without plants', () => {
+    expect(spotDeadEnd([], null)).toBeUndefined()
   })
 })
