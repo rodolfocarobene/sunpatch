@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
 import { assess, rankPlants } from './garden'
-import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, spotDeadEnd, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, spotDeadEnd, topPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -124,5 +124,17 @@ describe('spotDeadEnd', () => {
 
   it('says nothing without plants', () => {
     expect(spotDeadEnd([], null)).toBeUndefined()
+  })
+})
+
+describe('topPlants', () => {
+  const plants = (n: number) => Array.from({ length: n }, (_, i) => ({ i }) as never)
+  it('shows the first three and counts the rest', () => {
+    expect(topPlants(plants(7))).toMatchObject({ more: 4 })
+    expect(topPlants(plants(7)).shown).toHaveLength(3)
+  })
+  it('has no rest for a short list', () => {
+    expect(topPlants(plants(2))).toMatchObject({ more: 0 })
+    expect(topPlants([])).toEqual({ shown: [], more: 0 })
   })
 })

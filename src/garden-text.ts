@@ -20,7 +20,7 @@ export const whereText = (kind: PickedKind, neighbourRoof = false): string => (k
 /** The quiet line under an indoor spot: the temperature the ratings assume. */
 export const INDOOR_NOTE = `Assumes a heated home, ${INDOOR_TEMP.min}-${INDOOR_TEMP.max} °C.`
 
-export const NO_SPOT_HINT = 'Click the floor, a balcony, the ground or a roof to see what grows there.'
+export const NO_SPOT_HINT = 'Click the floor, a balcony, the ground or a roof to see what grows there'
 
 export const hoursText = (minutes: number): string => {
   const h = minutes / 60
@@ -148,6 +148,11 @@ export function plantRow(result: PlantResult, month: number | null): PlantRow {
 /** Ranked results split for the card: the ones worth growing, and the poor ones kept behind "Why not others?". */
 export function splitPlants(ranked: PlantResult[]): { fit: PlantResult[]; poor: PlantResult[] } {
   return { fit: ranked.filter((r) => r.rating !== 'poor'), poor: ranked.filter((r) => r.rating === 'poor') }
+}
+
+/** The short answer of the spot card: the best few plants and how many more are listed below. */
+export function topPlants(fit: PlantResult[], n = 3): { shown: PlantResult[]; more: number } {
+  return { shown: fit.slice(0, n), more: Math.max(0, fit.length - n) }
 }
 
 /** A way out of a "no": one short line, and optionally the month the Month control can switch to. */
