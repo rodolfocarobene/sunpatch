@@ -42,7 +42,7 @@ import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
 import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
-import { bestSpot, findDeadEnd, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
+import { bestSpot, findDeadEnd, roofNoteVisible, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
 import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { scoreSpots } from './garden'
@@ -234,7 +234,7 @@ function renderFind() {
       const scoredSpots = shownScores().flatMap((r, i) => (r ? [spots[i]] : []))
       deadEnd = findDeadEnd(plant, gardenMonth, monthCounts(plant, scoredSpots, climate ?? { tMean: [], tMin: [], tMax: [], tLow: [] }), scoredSpots, stats.find((s) => s.why)?.why)
     }
-    roofHidden = floorsHidden && findScored.some((r, i) => r && spots[i].kind === 'roof')
+    roofHidden = roofNoteVisible(plant, spots, floorsHidden)
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
     if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
   }
