@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CELL_SIZE, bestSpot, compass, findDeadEnd, findSummary, monthCounts, kindStats, kindsFor, stepOf, surfaceY, type KindStats, type Scored } from './garden-find'
+import { CELL_SIZE, bestSpot, compass, findDeadEnd, findSummary, monthCounts, roofNoteVisible, spotPlace, kindStats, kindsFor, stepOf, surfaceY, type KindStats, type Scored } from './garden-find'
 import { POT_HEIGHT, type GardenSpot, type SunnySpot } from './garden-spots'
 import { plantById } from './plants'
 
@@ -152,5 +152,33 @@ describe('findDeadEnd', () => {
     const spots = [sunny(Array(12).fill(600))]
     const cold = { ...climate, tMean: Array(12).fill(-5), tMin: Array(12).fill(-9), tMax: Array(12).fill(-1), tLow: Array(12).fill(-12) }
     expect(findDeadEnd(basil, null, monthCounts(basil, spots, cold), spots, 'frost')!.text).toBe('Nowhere suitable all year (frost).')
+  })
+})
+
+describe('spotPlace', () => {
+  const c = { x: 0, z: 0 }
+  it('names the ground by compass, measured from the building centre (z is south)', () => {
+    expect(spotPlace('ground', { x: -10, z: 10 }, c)).toBe('Outdoors, on the ground, south-west of the building')
+    expect(spotPlace('ground', { x: 0, z: -9 }, c)).toBe('Outdoors, on the ground, north of the building')
+  })
+  it('says "next to" a spot too close for a direction', () => {
+    expect(spotPlace('ground', { x: 1, z: 1 }, c)).toBe('Outdoors, on the ground, next to the building')
+  })
+  it('names the part of the roof and of the apartment, and leaves a neighbour roof alone', () => {
+    expect(spotPlace('roof', { x: 6, z: 0 }, c)).toBe("On this building's roof or terrace, in the east part")
+    expect(spotPlace('indoor', { x: 0, z: 3 }, c)).toBe('Indoors, on the floor, in the south of the apartment')
+    expect(spotPlace('indoor', { x: 0.5, z: 0 }, c)).toBe('Indoors, on the floor')
+    expect(spotPlace('roof', { x: 30, z: 0 }, c, true)).toBe("On a neighbour's roof")
+  })
+})
+
+describe('roofNoteVisible', () => {
+  const spots = [{ kind: 'ground' as const }, { kind: 'roof' as const }]
+  it('shows only with a roof plant, roof spots and the floors hidden', () => {
+    expect(roofNoteVisible(plant('basil'), spots, true)).toBe(true)
+    expect(roofNoteVisible(plant('basil'), spots, false)).toBe(false)
+    expect(roofNoteVisible(undefined, spots, true)).toBe(false)
+    expect(roofNoteVisible(plant('snake-plant'), spots, true)).toBe(false)
+    expect(roofNoteVisible(plant('basil'), [{ kind: 'ground' }], true)).toBe(false)
   })
 })

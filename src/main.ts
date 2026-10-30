@@ -24,7 +24,7 @@ import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, typ
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
 import { hoverLines } from './building-line'
-import { createScene } from './scene'
+import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees } from './trees'
 import { minutesOfDay } from './daylight'
@@ -42,7 +42,7 @@ import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
 import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
-import { bestSpot, findDeadEnd, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
+import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
 import { MONTH_NAMES, type DeadEnd } from './garden-text'
 import { scoreSpots } from './garden'
@@ -114,6 +114,7 @@ function renderGarden() {
   gardenCard.set({
     kind: gardenSpot?.kind ?? null,
     neighbourRoof: gardenSpot?.neighbourRoof,
+    place: gardenSpot && site ? spotPlace(gardenSpot.kind, gardenSpot, gardenSpot.kind === 'indoor' && plan ? ringCentroid(plan.outline.outer) : ringCentroid(site.selected.outer), gardenSpot.neighbourRoof) : undefined,
     hint: gardenHint,
     trace: gardenTrace,
     weather: gardenClimate.status,
@@ -234,7 +235,7 @@ function renderFind() {
       const scoredSpots = shownScores().flatMap((r, i) => (r ? [spots[i]] : []))
       deadEnd = findDeadEnd(plant, gardenMonth, monthCounts(plant, scoredSpots, climate ?? { tMean: [], tMin: [], tMax: [], tLow: [] }), scoredSpots, stats.find((s) => s.why)?.why)
     }
-    roofHidden = floorsHidden && findScored.some((r, i) => r && spots[i].kind === 'roof')
+    roofHidden = roofNoteVisible(plant, spots, floorsHidden)
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
     if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
   }
@@ -343,6 +344,7 @@ function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
   gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }
   gardenTrace = { status: 'running', progress: 0 }
   sunScene.setGardenMark({ x, y, z })
+  sunScene.revealPoint({ x, y, z })
   ensureGardenClimate()
   requestGarden()
 }
@@ -639,8 +641,7 @@ ui.onSuitability((on) => {
     sunScene.setSuitability(null)
   }
 })
-sunScene.onBuildingInView((inView) => ui.setSuitabilityFrame(!inView))
-ui.onSuitabilityFrame(() => sunScene.frameSelected())
+ui.onReframe(() => sunScene.frameView(frameTargetFor(view)))
 sunScene.setFrameInset(() => document.getElementById('panel')?.getBoundingClientRect().right ?? 0)
 sunScene.onSuitabilityClick((index) => {
   suitPicked = index
@@ -830,6 +831,9 @@ function ensurePlan(keepView = false): boolean {
   return true
 }
 
+/** What each scene view frames: the apartment (3D), the whole building (Panels), the apartment and the ground round it (Garden). */
+const frameTargetFor = (v: View): FrameTarget => (v === 'panels' ? 'building' : v === 'garden' ? 'garden' : 'apartment')
+
 function setView(next: View) {
   const from = view
   if (next === 'plan' && !openEditor()) return
@@ -851,7 +855,7 @@ function setView(next: View) {
   if (scene3d) sunScene.resize()
   // Opening a scene view shows its answer, unless the user has orbited since the camera was framed: the apartment
   // in 3D and Garden, the whole building in Panels (its map covers the facades and the roof).
-  if (scene3d && from !== next) sunScene.frameOnEntry(next === 'panels' ? 'building' : 'apartment')
+  if (scene3d && from !== next) sunScene.frameOnEntry(frameTargetFor(next))
   if (next !== 'panels') ui.setSuitability(false) // the map belongs to the Panels view
   ui.setView(next)
   renderTotals()

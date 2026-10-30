@@ -1,7 +1,8 @@
 import { POT_HEIGHT, type GardenSpot, type SpotKind, type SunnySpot } from './garden-spots'
 import { assess, type IssueKind, type Rating, type Temperatures } from './garden'
 import type { Plant } from './plants'
-import { MONTH_NAMES, hoursText, monthsText, type DeadEnd } from './garden-text'
+import { MONTH_NAMES, hoursText, monthsText, whereText, type DeadEnd } from './garden-text'
+import type { PickedKind } from './garden-pick'
 
 // "Find a place for ...": one plant scored over every spot of the garden analysis. The words, the three colour steps and
 // the kind filtering live here, apart from the DOM and the scene, so they can be tested.
@@ -35,6 +36,11 @@ export function kindsFor(plant: Plant): Kinds {
   if (plant.indoor && !plant.outdoor) return { kinds: ['indoor'], note: `${cap(plant.name)} is grown indoors, so ground and roof spots are not scored.` }
   if (plant.outdoor && !plant.indoor) return { kinds: ['ground', 'roof'], note: `${cap(plant.name)} is grown outdoors, so indoor spots are not scored.` }
   return { kinds: [...FIND_KINDS] }
+}
+
+/** The "roof spots are not counted" note matters only when a plant that stands on roofs is picked, the building has roof spots and the floors above are hidden. */
+export function roofNoteVisible(plant: Plant | undefined, spots: Pick<GardenSpot, 'kind'>[], floorsHidden: boolean): boolean {
+  return floorsHidden && plant !== undefined && kindsFor(plant).kinds.includes('roof') && spots.some((s) => s.kind === 'roof')
 }
 
 export interface Scored {
@@ -92,6 +98,19 @@ const WINDS = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west'
 export function compass(dx: number, dz: number, near: number): string {
   if (Math.hypot(dx, dz) < near) return ''
   return WINDS[(Math.round(Math.atan2(-dz, dx) / (Math.PI / 4)) + 8) % 8]
+}
+
+/**
+ * Where a picked spot is, in plain words: "Outdoors, on the ground, south-west of the building". `centre` is what the
+ * direction is measured from (the building's centre outdoors, the apartment's indoors), in scene metres.
+ */
+export function spotPlace(kind: PickedKind, at: { x: number; z: number }, centre: { x: number; z: number }, neighbourRoof = false): string {
+  const base = whereText(kind, neighbourRoof)
+  const dir = compass(at.x - centre.x, at.z - centre.z, kind === 'ground' ? 4 : 2)
+  if (kind === 'ground') return dir ? `${base}, ${dir} of the building` : `${base}, next to the building`
+  if (kind === 'indoor') return dir ? `${base}, in the ${dir} of the apartment` : base
+  if (neighbourRoof) return base
+  return dir ? `${base}, in the ${dir} part` : base
 }
 
 /** The place words for the good (or ok) spots of one kind, relative to the building's centre. */

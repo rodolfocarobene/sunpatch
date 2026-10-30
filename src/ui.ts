@@ -71,9 +71,8 @@ export interface UI {
   onSuitability(listener: (on: boolean) => void): void
   setSuitability(on: boolean): void
   setSuitabilityStatus(status: SuitabilityStatus): void
-  /** Shows the legend's "Frame the building" button (the building is out of view) and hears its press. */
-  setSuitabilityFrame(visible: boolean): void
-  onSuitabilityFrame(listener: () => void): void
+  /** The "Frame the view" button over the scene (3D, Panels, Garden): hear its press. */
+  onReframe(listener: () => void): void
   /** The Panels view's list: one row per panel and the total line (null while the panels are still analysed). */
   setPanelList(list: PanelList): void
   /** A click on a row of the list. */
@@ -178,7 +177,6 @@ export function createUI(
       <div class="field">
         <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
         <div id="suitLegend" hidden></div>
-        <button id="suitFrame" class="link" type="button" hidden>Frame the building</button>
       </div>
       <div id="panelList">
         <p id="panelTotals" class="hint" hidden></p>
@@ -221,6 +219,16 @@ export function createUI(
       </div>
     </div>`
   document.body.appendChild(dock)
+  // One way back to a good view in every scene view, in the same corner: it frames what the view is about.
+  const reframe = document.createElement('button')
+  reframe.id = 'reframe'
+  reframe.type = 'button'
+  reframe.hidden = true
+  reframe.textContent = 'Frame the view'
+  reframe.title = 'Back to a good view of this tab (the camera keeps where you put it until you press this)'
+  let reframeListener: (() => void) | undefined
+  reframe.addEventListener('click', () => reframeListener?.())
+  document.body.appendChild(reframe)
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
   const lat = $<HTMLInputElement>('lat')
@@ -269,13 +277,9 @@ export function createUI(
   sunMap.addEventListener('change', applySunMap)
   const suit = $<HTMLInputElement>('suit')
   const suitLegend = $('suitLegend')
-  const suitFrame = $('suitFrame')
-  let suitFrameListener: (() => void) | undefined
-  suitFrame.addEventListener('click', () => suitFrameListener?.())
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
     suitLegend.hidden = !suit.checked
-    if (!suit.checked) suitFrame.hidden = true
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
@@ -491,6 +495,7 @@ export function createUI(
       }
       panel.dataset.view = view
       dock.hidden = view !== '3d'
+      reframe.hidden = view !== '3d' && view !== 'panels' && view !== 'garden'
       if (view === 'map') updateMapHint()
       updateNote()
     },
@@ -575,11 +580,8 @@ export function createUI(
     setSuitabilityStatus(status) {
       suitLegend.innerHTML = suitabilityLegendHtml(status)
     },
-    setSuitabilityFrame(visible) {
-      suitFrame.hidden = !visible || !suit.checked
-    },
-    onSuitabilityFrame(fn) {
-      suitFrameListener = fn
+    onReframe(fn) {
+      reframeListener = fn
     },
     setPanelList({ items, selected, total }) {
       const totalEl = $('panelTotals')
