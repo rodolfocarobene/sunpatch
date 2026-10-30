@@ -8,6 +8,8 @@ import { yawOf } from './walk-geom'
 const EXAMPLE_BUILDING = 'relation/36488'
 const EXAMPLE_NEAR: Origin = { lat: 45.46278, lon: 9.19104 }
 /** 21 December, 12:30: the low winter sun reaches deep into the rooms. */
+/** The bundled Overpass answer holds everything within this many metres of EXAMPLE_NEAR. */
+export const EXAMPLE_RADIUS_M = 350
 export const EXAMPLE_WHEN = { date: '2026-12-21', minutes: 12 * 60 + 30 }
 
 export interface Example {

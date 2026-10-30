@@ -48,6 +48,7 @@ import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel } from './frame'
 import { apartmentGeometry } from './apartment'
+import { dataExtent } from './neighborhood'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
 import { panelMeshes } from './panel-mesh'
@@ -67,9 +68,8 @@ import { isGuessed } from './heights'
 import type { RulerAnchor } from './height-ruler'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
-// Test scene: 200 m ground. Real data (250 m radius): ground ~700 m, shadows cover the radius.
+// Test scene: 200 m ground. Real data: the extent follows the neighbourhood radius (dataExtent in neighborhood.ts).
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
-const DATA_EXTENT = { ground: 700, shadow: 280, sunDistance: 500 }
 // One scene palette for 3D, Panels and Garden (they share this scene): warm plaster and stone on a light, warm sage ground;
 // amber is kept for the apartment outline and the sun patches, which stay the brightest thing indoors. The fill light
 // below is set so a shadow on this ground is clearly darker than lit ground without going near black.
@@ -159,7 +159,8 @@ export interface GardenHit {
 export interface SunScene {
   update(sun: SunDirection): void
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
-  setBuildings(buildings: Building[], selected: Building | string, options?: { keepCamera?: boolean }): void
+  /** `radiusM` is how far the neighbours reach; it sizes the ground and the shadow frustum. */
+  setBuildings(buildings: Building[], selected: Building | string, options?: { keepCamera?: boolean; radiusM?: number }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
   setPlan(plan: Plan | null, options?: { keepView?: boolean }): void
   /** Replaces the trees (local metres, same origin as the buildings); an empty list removes them. */
@@ -1054,8 +1055,8 @@ export function createScene(container: HTMLElement): SunScene {
   }
   controls.addEventListener('start', () => (slideTo = undefined))
 
-  function setBuildings(next: Building[], choice: Building | string, { keepCamera = false } = {}) {
-    setExtent(DATA_EXTENT)
+  function setBuildings(next: Building[], choice: Building | string, { keepCamera = false, radiusM = 350 } = {}) {
+    setExtent(dataExtent(radiusM))
     buildings = next
     selectedBuilding = typeof choice === 'string' ? next.find((b) => b.id === choice) : choice
     selectedId = selectedBuilding?.id ?? ''
