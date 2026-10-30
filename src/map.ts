@@ -3,10 +3,24 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { mapIdleHint, type SelectionCollection } from './map-selection'
 import { buildingAt, highlightFeature, hitLabel, isBuildingLike, isStreetLevel, rankHits, searchUrl, viewFor, type GeoHit, type TileBuilding } from './geocode'
+import { getLang, t, type Lang } from './i18n'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
 // elsewhere (dev deps cache, build chunks), so the worker 404s and the map stays blank.
 setWorkerUrl(workerUrl)
+
+/** MapLibre's own control labels (zoom buttons, attribution) in Italian; English is its default. */
+const MAP_LOCALE: Record<Lang, Record<string, string>> = {
+  en: {},
+  it: {
+    'NavigationControl.ResetBearing': 'Reimposta il nord',
+    'NavigationControl.ZoomIn': 'Ingrandisci',
+    'NavigationControl.ZoomOut': 'Riduci',
+    'AttributionControl.ToggleAttribution': 'Mostra o nascondi le attribuzioni',
+    'AttributionControl.MapFeedback': 'Segnala un errore nella mappa',
+    'Popup.Close': 'Chiudi',
+  },
+}
 
 const FOUND = 'found'
 const PICKED = 'picked'
@@ -44,6 +58,7 @@ export function createMapView(
     center: [start.lon, start.lat],
     zoom: 16,
     pitch: 45,
+    locale: MAP_LOCALE[getLang()],
   })
   map.addControl(new NavigationControl(), 'bottom-right')
   map.on('click', (e) => {
@@ -55,8 +70,8 @@ export function createMapView(
   const form = document.createElement('form')
   form.id = 'search'
   form.innerHTML = `
-    <input name="q" type="search" placeholder="Address or place" aria-label="Search a place or address">
-    <button type="submit">Search</button>
+    <input name="q" type="search" placeholder="${t('map.placeholder')}" aria-label="${t('map.searchAria')}">
+    <button type="submit">${t('map.search')}</button>
     <ul id="results" hidden></ul>`
   searchHost.appendChild(form)
   const input = form.querySelector<HTMLInputElement>('input')!
@@ -128,12 +143,12 @@ export function createMapView(
     if (isStreetLevel(hit)) {
       // The point is the middle of a street piece, not a house: do not offer it as the building.
       const note = document.createElement('p')
-      note.textContent = 'This is the street, not a house. Click the building on the map.'
+      note.textContent = t('map.street')
       note.style.cssText = 'margin: 0; padding-right: 18px; max-width: 200px' // keeps the text clear of the close button
       return new Popup({ closeOnClick: false, offset: 24 }).setDOMContent(note)
     }
     const button = document.createElement('button')
-    button.textContent = 'Use this building'
+    button.textContent = t('map.use')
     button.addEventListener('click', (ev) => {
       ev.stopPropagation()
       clearFound()
@@ -200,7 +215,7 @@ export function createMapView(
     const animate = !matchMedia('(prefers-reduced-motion: reduce)').matches
     if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18, animate })
     else map.flyTo({ center: lngLat, zoom: view.zoom, animate })
-    setStatus('Click on a building to pick it.')
+    setStatus(t('map.pick'))
   }
 
   input.addEventListener('input', closeResults)
@@ -212,21 +227,21 @@ export function createMapView(
     if (!q) return
     closeResults()
     clearFound()
-    setStatus('Searching...')
+    setStatus(t('map.searching'))
     try {
       const b = map.getBounds()
-      const url = searchUrl(q, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], navigator.language)
+      const url = searchUrl(q, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], getLang())
       const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const hits = (await res.json()) as GeoHit[]
       if (!hits.length) {
-        setStatus(`No place found for "${q}".`, 'error')
+        setStatus(t('map.noPlace', { q }), 'error')
         return
       }
       showResults(rankHits(hits, q), q)
-      setStatus('Choose a result to go there.')
+      setStatus(t('map.choose'))
     } catch (err) {
-      setStatus(`Place search failed (${(err as Error).message}).`, 'error')
+      setStatus(t('map.searchFailed', { reason: (err as Error).message }), 'error')
     }
   })
 
@@ -243,7 +258,7 @@ export function createMapView(
     focusSearch: () => input.focus(),
     setLoading(loading) {
       root.classList.toggle('loading', loading)
-      if (loading) setStatus('Loading buildings from OpenStreetMap...')
+      if (loading) setStatus(t('map.loading'))
     },
   }
 }

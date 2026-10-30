@@ -1,13 +1,14 @@
 import { distanceToRing, type Building } from './osm'
+import { t } from './i18n'
 
 /**
  * How far around the building the neighbours are loaded and simulated (shadow casters, sun-map and panel rays).
  * Medium is close to what the app always used (all of the 350 m of Overpass data around the click).
  */
 export const NEIGHBORHOODS = [
-  { id: 'small', label: 'Small', radiusM: 150 },
-  { id: 'medium', label: 'Medium', radiusM: 300 },
-  { id: 'large', label: 'Large', radiusM: 500 },
+  { id: 'small', label: 'shell.hoodSmall', radiusM: 150 },
+  { id: 'medium', label: 'shell.hoodMedium', radiusM: 300 },
+  { id: 'large', label: 'shell.hoodLarge', radiusM: 500 },
 ] as const
 
 export type NeighborhoodId = (typeof NEIGHBORHOODS)[number]['id']
@@ -35,7 +36,7 @@ export const countBuildings = (buildings: Building[]): number =>
 
 /** "214 buildings within 300 m" (the count is of what the scene holds, the selection included). */
 export function neighborhoodLine(count: number, radiusM: number): string {
-  return `${count.toLocaleString('en')} ${count === 1 ? 'building' : 'buildings'} within ${radiusM} m`
+  return t('shell.hoodLine', { n: count, r: radiusM })
 }
 
 /** Ground, shadow-map half-width and sun distance (metres) for a scene whose neighbours reach `radiusM`. */

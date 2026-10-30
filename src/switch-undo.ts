@@ -1,4 +1,5 @@
 import type { View } from './ui'
+import { t } from './i18n'
 
 /** What a plain scene click on another building does: Garden reads it as a spot, Panels with the suitability map on only explains. */
 export type BuildingClick = 'switch' | 'explain' | 'ignore'
@@ -9,7 +10,7 @@ export function buildingClickAction(view: View, suitabilityOn: boolean): Buildin
   return 'switch'
 }
 
-export const NEIGHBOUR_NOTE = "That's a neighbour. Panels go on your building; to change building, use the Map tab."
+export const NEIGHBOUR_NOTE = t('shell.neighbourNote')
 
 /** One level of undo: the state to come back to after a switch; a newer switch replaces it, using it (or a dismiss) empties it. */
 export interface UndoSlot<T> {

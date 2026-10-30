@@ -2,6 +2,7 @@ import { dateValue, STEP } from './daylight'
 import type { Plan } from './plan'
 import { floorGrid, sunSlots, type Grid, type Slots, type SunMapResult } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
+import { t } from './i18n'
 
 const DEBOUNCE_MS = 250
 const CACHE_SIZE = 12
@@ -70,7 +71,7 @@ export function createSunMapJob(): SunMapJob {
       running = undefined
       worker = undefined
       workerScene = -1
-      emit({ status: 'error', message: 'The sun map could not run in this browser.' })
+      emit({ status: 'error', message: t('sun.mapError') })
     }
     return worker
   }

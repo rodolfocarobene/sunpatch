@@ -11,6 +11,7 @@ import {
   type Building,
   type Point,
 } from './osm'
+import { t } from './i18n'
 
 /*
  * One building is often mapped as several OSM polygons: an outline plus `building:part`s with their own
@@ -371,15 +372,15 @@ function connectedTo(all: Building[], ids: Set<string>, anchor: Building): Set<s
 export function togglePart(all: Building[], current: Building, polygonId: string): { selected: Building } | { hint: string } {
   const target = all.find((b) => b.id === polygonId)
   const anchor = all.find((b) => b.id === (current.anchor ?? current.id))
-  if (!target || !anchor) return { hint: 'That is not a building polygon.' }
+  if (!target || !anchor) return { hint: t('shell.partNotPolygon') }
   const ids = new Set(selectionIds(current))
   if (ids.has(polygonId)) {
-    if (polygonId === anchor.id) return { hint: 'The part you clicked first stays selected.' }
+    if (polygonId === anchor.id) return { hint: t('shell.partFirst') }
     ids.delete(polygonId)
     // A part leaves with the outline that was only its footprint.
     if (isPart(target)) for (const o of all) if (ids.has(o.id) && !isPart(o) && partIn(target, o)) ids.delete(o.id)
   } else {
-    if (!all.some((b) => ids.has(b.id) && linked(target, b))) return { hint: 'That building does not touch your selection.' }
+    if (!all.some((b) => ids.has(b.id) && linked(target, b))) return { hint: t('shell.partNoTouch') }
     ids.add(polygonId)
     if (!isPart(target)) for (const p of all) if (isPart(p) && partIn(p, target)) ids.add(p.id)
   }

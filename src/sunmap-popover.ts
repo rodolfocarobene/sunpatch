@@ -1,13 +1,14 @@
 import { DAY_MAX } from './daylight'
 import { freeBand, popoverTop } from './popover-place'
 import { clock, duration, type SpotStats } from './sunmap'
+import { t } from './i18n'
 
 /** The text of the popover: the answer first ("3 h 10 min of direct sun"), then the share and each interval. */
 export function spotSentence(stats: SpotStats): { headline: string; share: string; intervals: string[] } {
-  if (stats.minutes === 0) return { headline: 'No direct sun here', share: 'on this day', intervals: [] }
+  if (stats.minutes === 0) return { headline: t('sun.spotNone'), share: t('sun.spotNoneShare'), intervals: [] }
   return {
-    headline: `${duration(stats.minutes)} of direct sun`,
-    share: `${Math.round(stats.share * 100)}% of daylight`,
+    headline: t('sun.spotHead', { duration: duration(stats.minutes) }),
+    share: t('sun.spotShare', { pct: Math.round(stats.share * 100) }),
     intervals: stats.intervals.map((i) => `${clock(i.from)}–${clock(i.to)}`),
   }
 }
@@ -35,9 +36,9 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
   box.id = 'spotPopover'
   box.hidden = true
   box.setAttribute('role', 'dialog')
-  box.setAttribute('aria-label', 'Direct sun at this spot')
+  box.setAttribute('aria-label', t('sun.spotAria'))
   box.innerHTML = `
-    <button type="button" class="spotClose" aria-label="Close" title="Close (Esc)">
+    <button type="button" class="spotClose" aria-label="${t('sun.close')}" title="${t('sun.closeTitle')}">
       <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
     <strong class="spotHead"></strong>

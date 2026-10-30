@@ -31,7 +31,7 @@ import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees, TREE_RADIUS_M } from './trees'
-import { minutesOfDay } from './daylight'
+import { dateValue, minutesOfDay } from './daylight'
 import { createPanelCard, formatKwh, type CardState, type EnergyView } from './panel-card'
 import { createPanelTotals } from './panel-totals'
 import { EXCLUDED_INSIDE, panelInside, referenceEnergy, referenceLine, totalsLine, verdict } from './panel-verdict'
@@ -59,6 +59,8 @@ import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
+import { onBeforeLangSwitch, t } from './i18n'
+import { saveSession, takeSession } from './session'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
@@ -799,9 +801,17 @@ ui.onChange((when, sun, strip, place) => {
     requestShade()
   }
 })
-const mapView = createMapView(document.body, MILAN, pick, ui.searchSlot)
+// A language switch reloads the page: the building, tab and time come back from the session it saved (src/session.ts).
+const restored = takeSession()
+let restoreView: View | undefined
+onBeforeLangSwitch(() => {
+  if (plan && !exampleMode) savePlan(plan)
+  if (!last || !sunDay) return
+  saveSession({ lat: last.clicked.lat, lon: last.clicked.lon, view, date: dateValue(sunDay.when), minutes: minutesOfDay(sunDay.when), example: exampleMode })
+})
+const mapView = createMapView(document.body, restored ?? MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
-let exampleMode = new URLSearchParams(location.search).get('example') === 'milan'
+let exampleMode = new URLSearchParams(location.search).get('example') === 'milan' && (!restored || restored.example === true)
 const editor = createPlanEditor(document.body, setPlan, {
   autosave: () => !exampleMode,
   onSwitch: (id, at) => switchTo(id, at),
@@ -840,7 +850,11 @@ const chip = createStatusChip(app, () => last && void refine(last, current))
 let view: View = 'map'
 setView('map')
 if (exampleMode) void openExample()
-else mapView.focusSearch() // the search is the first thing to do on the map
+else if (restored) {
+  ui.setWhen(restored.date, restored.minutes)
+  restoreView = restored.view
+  pick(restored.lat, restored.lon)
+} else mapView.focusSearch() // the search is the first thing to do on the map
 
 async function openExample() {
   const { buildings, selected, origin, plan: examplePlan, elements, near } = await loadExample()
@@ -852,6 +866,10 @@ async function openExample() {
   ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
   ui.setExample(true)
   setView('3d')
+  if (restored) {
+    ui.setWhen(restored.date, restored.minutes)
+    setView(restored.view)
+  }
 }
 
 function walkInside() {
@@ -917,7 +935,7 @@ let hoodRadius = neighborhoodRadius('medium')
 let keepSelection = false
 /** Chip text to show instead of the usual one when the current load ends (set when switching buildings). */
 let note: string | undefined
-const SWITCHED = 'Switched building. Your previous plan is saved.'
+const SWITCHED = t('shell.switched')
 /** What "Undo" after a scene-click switch goes back to: a point inside the old building, its plan and the view. */
 interface SwitchUndo {
   at: { lat: number; lon: number }
@@ -930,7 +948,7 @@ const switchUndo = createUndoSlot<SwitchUndo>()
 let noteAction: ChipAction | undefined
 const switchedTo = (b: Building) => {
   const name = buildingLine(b).title
-  return name ? `Switched to ${name}.` : 'Switched building.'
+  return name ? t('shell.switchedTo', { name }) : t('shell.switchedPlain')
 }
 
 function pick(lat: number, lon: number) {
@@ -999,6 +1017,11 @@ function show(full: Building[], picked: Building, origin: Origin, keepCamera: bo
   mapView.setSelection(selectionGeoJSON(selected, origin))
   if (view === 'plan') openEditor()
   else if (view !== 'panels' && view !== 'garden') setView('3d') // these views stay put when another building is picked in 3D
+  if (restoreView) {
+    const back = restoreView
+    restoreView = undefined
+    setView(back)
+  }
 }
 
 const NEIGHBOR_RADIUS_M = 60
@@ -1054,7 +1077,7 @@ function switchTo(polygonId: string, at: Point, undoable = false) {
     note = SWITCHED
     if (before) {
       switchUndo.set(before)
-      noteAction = { label: 'Undo', run: undoSwitch }
+      noteAction = { label: t('shell.undo'), run: undoSwitch }
     }
     return
   }
@@ -1076,7 +1099,7 @@ function switchTo(polygonId: string, at: Point, undoable = false) {
   switchUndo.clear()
   if (before) {
     switchUndo.set(before)
-    chip.done(switchedTo(selected), { label: 'Undo', run: undoSwitch })
+    chip.done(switchedTo(selected), { label: t('shell.undo'), run: undoSwitch })
   } else chip.done(SWITCHED)
   if (view === 'plan') editor.notify(SWITCHED) // the chip lives in the 3D view
 }
@@ -1095,7 +1118,7 @@ function undoSwitch() {
     setPlan(rebasePlan(back.plan, site.origin), true)
   }
   if (back.view !== view) setView(back.view)
-  chip.done('Back to the previous building.')
+  chip.done(t('shell.switchedBack'))
 }
 
 /** Shift-click in 3D: add the polygon to the selection or take it out; the plan carries over and is saved. */
@@ -1174,7 +1197,7 @@ function setHeight(id: string, override: HeightOverride | null) {
   }
   setPlan(updated, true)
   if (!exampleMode) savePlan(updated)
-  chip.done(override ? 'Height set. Right-click the building to reset it.' : 'Height reset to the data.')
+  chip.done(override ? t('shell.heightSet') : t('shell.heightReset'))
 }
 
 /** keepView leaves the camera where it is; otherwise the first plan of a building is framed. */
@@ -1209,7 +1232,7 @@ async function refine({ clicked, origin }: Pick, token: number) {
       if (first) sceneOrigin = unproject(ringCentroid(first.outer), clicked)
     }
     if (!sceneOrigin) {
-      mapView.setStatus('No building here, click on a building', 'error')
+      mapView.setStatus(t('shell.noBuilding'), 'error')
       return
     }
     const { buildings } = parseOverpass(elements, sceneOrigin)
@@ -1220,17 +1243,17 @@ async function refine({ clicked, origin }: Pick, token: number) {
     const selected = hasPreview && (edited || keep) && site ? carrySelection(buildings, site.selected, at) : choose(buildings, sceneOrigin, clicked)
     if (!selected) {
       // Nothing in OSM under the click: the preview stays.
-      if (hasPreview) chip.done('Detailed OSM data loaded (no OSM building at this point)')
-      else mapView.setStatus('No building here, click on a building', 'error')
+      if (hasPreview) chip.done(t('shell.chipLoadedNone'))
+      else mapView.setStatus(t('shell.noBuilding'), 'error')
       return
     }
     loaded = { elements, center: data.center, radius: data.radius }
     show(buildings, selected, sceneOrigin, hasPreview)
     placeTrees(elements, sceneOrigin, site!.buildings)
-    if (hasPreview) chip.done(note ?? 'Detailed OSM data loaded', noteAction)
+    if (hasPreview) chip.done(note ?? t('shell.chipLoaded'), noteAction)
   } catch (err) {
     if (token !== current) return
-    if (hasPreview) chip.failed('Showing map-tile buildings (OpenStreetMap server unavailable)')
+    if (hasPreview) chip.failed(t('shell.chipFailed'))
     else mapView.setStatus((err as Error).message, 'error')
   } finally {
     if (token === current) mapView.setLoading(false)

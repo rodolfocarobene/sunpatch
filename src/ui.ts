@@ -1,4 +1,6 @@
 import SunCalc from 'suncalc'
+import { createLangSwitch } from './lang-switch'
+import { fmt1Fixed, fmtNumber, fmtTime, t, type Key } from './i18n'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
@@ -16,9 +18,6 @@ const DETAILS_KEY = 'sunpatch.details'
 const NEIGHBORHOOD_KEY = 'sunpatch.neighborhood'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
-
-/** One 24-hour HH:MM format for every time shown in the app. */
-export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
@@ -120,79 +119,81 @@ export function createUI(
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
-    <a id="about" href="../" title="About Sunpatch">&larr; Sunpatch</a>
+    <div id="panelTop">
+      <a id="about" href="../" title="${t('shell.aboutTitle')}">&larr; ${t('shell.back')}</a>
+    </div>
     <nav id="views">
-      <button type="button" data-view="map">Map</button>
-      <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
-      <button type="button" data-view="3d" disabled title="Pick a building first">3D</button>
-      <button type="button" data-view="panels" disabled title="Pick a building first">Panels</button>
-      <button type="button" data-view="garden" disabled title="Pick a building first">Garden</button>
+      <button type="button" data-view="map">${t('shell.tabMap')}</button>
+      <button type="button" data-view="plan" disabled title="${t('shell.pickFirst')}">${t('shell.tabPlan')}</button>
+      <button type="button" data-view="3d" disabled title="${t('shell.pickFirst')}">${t('shell.tab3d')}</button>
+      <button type="button" data-view="panels" disabled title="${t('shell.pickFirst')}">${t('shell.tabPanels')}</button>
+      <button type="button" data-view="garden" disabled title="${t('shell.pickFirst')}">${t('shell.tabGarden')}</button>
     </nav>
     <section data-views="map">
-      <h2>Find your building</h2>
+      <h2>${t('shell.findBuilding')}</h2>
       <div id="searchSlot"></div>
     </section>
     <div id="building" hidden></div>
     <div data-views="map" id="firstRun">
       <details id="guide" open>
-        <summary>How it works</summary>
+        <summary>${t('shell.guide')}</summary>
         <ol>
-          <li aria-current="step"><strong>Pick your building</strong><span>Search, or click it on the map.</span></li>
-          <li>Draw your apartment and windows</li>
-          <li>See the sun come in</li>
+          <li aria-current="step"><strong>${t('shell.guide1')}</strong><span>${t('shell.guide1Detail')}</span></li>
+          <li>${t('shell.guide2')}</li>
+          <li>${t('shell.guide3')}</li>
         </ol>
       </details>
-      <a id="exampleLink" href="?example=milan">Try the Milan example</a>
+      <a id="exampleLink" href="?example=milan">${t('shell.example')}</a>
     </div>
     <p class="hint" id="mapHint" data-views="map" hidden></p>
     <div data-views="plan 3d" id="notes">
       <div id="note" class="noteBox" hidden>
         <div><p id="noteExample"></p><p id="noteHint"></p></div>
-        <button id="noteClose" class="closeX" type="button" aria-label="Dismiss note" title="Dismiss">${CLOSE_ICON}</button>
+        <button id="noteClose" class="closeX" type="button" aria-label="${t('shell.noteClose')}" title="${t('shell.noteCloseTitle')}">${CLOSE_ICON}</button>
       </div>
     </div>
-    <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>See it in 3D</button></p>
+    <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>${t('shell.see3d')}</button></p>
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
       <div id="aptTools">
-        <button id="walk" class="primary" type="button" hidden title="Stand inside the apartment (or double-click its floor in 3D)">Walk inside</button>
+        <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">
-          <h3 class="groupHead">Show</h3>
+          <h3 class="groupHead">${t('shell.show')}</h3>
           <div id="aptShow" hidden>
-            <label class="row"><input id="cutaway" type="checkbox" checked> Hide floors above <kbd class="walkKey">H</kbd></label>
-            <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
+            <label class="row"><input id="cutaway" type="checkbox" checked> ${t('shell.cutaway')} <kbd class="walkKey">H</kbd></label>
+            <label class="row" title="${t('shell.sunMapTitle')}"><input id="sunMap" type="checkbox"> ${t('shell.sunMap')} <kbd class="walkKey">M</kbd></label>
             <div id="sunMapLegend" hidden></div>
           </div>
         </div>
       </div>
       <details id="location">
-        <summary>Details</summary>
+        <summary>${t('shell.details')}</summary>
         <div id="guessedBox">
-          <label class="row" title="Stripe the buildings whose height OpenStreetMap does not have (a 9 m default is used)"><input id="guessed" type="checkbox" checked> Mark guessed heights</label>
-          <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>Hatched: height guessed (no data in OpenStreetMap)</p>
+          <label class="row" title="${t('shell.guessedTitle')}"><input id="guessed" type="checkbox" checked> ${t('shell.guessed')}</label>
+          <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>${t('shell.guessedLegend')}</p>
         </div>
         <div id="hoodBox">
-          <label class="hoodRow" title="How far around the building the neighbours are loaded and cast shadows">Neighbourhood
-            <select id="hood">${NEIGHBORHOODS.map((n) => `<option value="${n.id}">${n.label} (${n.radiusM} m)</option>`).join('')}</select></label>
+          <label class="hoodRow" title="${t('shell.hoodTitle')}">${t('shell.hood')}
+            <select id="hood">${NEIGHBORHOODS.map((n) => `<option value="${n.id}">${t(n.label)} (${n.radiusM} m)</option>`).join('')}</select></label>
           <p id="hoodLine" class="legendNote" role="status"></p>
         </div>
         <div class="coords">
-          <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
-          <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
-          <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
+          <label>${t('shell.lat')} <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
+          <label>${t('shell.lon')} <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
+          <p class="note">${t('shell.directOnly')} <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">${t('shell.accuracy')}</a></p>
         </div>
       </details>
     </section>
     <section data-views="panels">
-      <p id="panelLead" class="panelLead">Turn on Panel suitability, then click a roof, a facade or the ground to place a panel.</p>
+      <p id="panelLead" class="panelLead">${t('shell.panelLead')}</p>
       <div class="field">
-        <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
+        <label class="row" title="${t('shell.suitTitle')}"><input id="suit" type="checkbox"> ${t('shell.suit')}</label>
         <div id="suitLegend" hidden></div>
       </div>
       <div id="panelList">
         <p id="panelTotals" class="hint" hidden></p>
         <ul id="panelRows" hidden></ul>
-        <p id="panelEmpty" class="hint">Or draw one with the Panel tool in <button id="emptyToPlan" class="link" type="button">Plan</button>.</p>
+        <p id="panelEmpty" class="hint">${t('shell.panelEmptyBefore')}<button id="emptyToPlan" class="link" type="button">${t('shell.tabPlan')}</button>${t('shell.panelEmptyAfter')}</p>
       </div>
       <div id="cardSlot"></div>
     </section>
@@ -200,33 +201,34 @@ export function createUI(
       <div id="gardenSlot"></div>
       <div id="gardenMonthSlot"></div>
       <div class="field findGroup">
-        <h3 class="groupHead">Or find a place for a plant</h3>
+        <h3 class="groupHead">${t('shell.gardenFind')}</h3>
         <div id="gardenFindSlot"></div>
       </div>
       <div class="field">
-        <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
-        <p id="gardenRoofHint" class="cardNote small" hidden>Untick Hide floors above to see and pick the roof.</p>
+        <label class="row" title="${t('shell.gardenCutawayTitle')}"><input id="gardenCutaway" type="checkbox" checked> ${t('shell.cutaway')}</label>
+        <p id="gardenRoofHint" class="cardNote small" hidden>${t('shell.gardenRoofHint')}</p>
       </div>
     </section>`
+  panel.querySelector('#panelTop')!.append(createLangSwitch())
   document.body.appendChild(panel)
   // One docked bar for date and time, shared by the 3D view and walk mode (the walk key hints stack above it).
   const dock = document.createElement('div')
   dock.id = 'dock'
   dock.hidden = true
   dock.innerHTML = `
-    <div id="timeBar" role="group" aria-label="Date and time">
+    <div id="timeBar" role="group" aria-label="${t('sun.dock')}">
       <div id="sunSummary"></div>
       <div class="barRow">
-        <div id="presets" role="group" aria-label="Date presets"></div>
-        <input id="date" type="date" aria-label="Date" value="${dateValue(now)}">
-        <button id="play" type="button" title="Play the day (P)">Play</button>
+        <div id="presets" role="group" aria-label="${t('sun.presets')}"></div>
+        <input id="date" type="date" aria-label="${t('sun.date')}" value="${dateValue(now)}">
+        <button id="play" type="button" title="${t('sun.playTitle')}">${t('sun.play')}</button>
       </div>
       <div class="barRow">
         <div class="timeTrack">
           <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
-          <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="Time of day" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
+          <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="${t('sun.time')}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
-        <span id="timeLabel" title="Times use your browser's time zone"></span>
+        <span id="timeLabel" title="${t('sun.tzTitle')}"></span>
       </div>
     </div>`
   document.body.appendChild(dock)
@@ -235,8 +237,8 @@ export function createUI(
   reframe.id = 'reframe'
   reframe.type = 'button'
   reframe.hidden = true
-  reframe.textContent = 'Frame the view'
-  reframe.title = 'Back to a good view of this tab (the camera keeps where you put it until you press this)'
+  reframe.textContent = t('shell.reframe')
+  reframe.title = t('shell.reframeTitle')
   let reframeListener: (() => void) | undefined
   reframe.addEventListener('click', () => reframeListener?.())
   document.body.appendChild(reframe)
@@ -353,10 +355,10 @@ export function createUI(
     if (note.hidden) return
     const parts = (building?.members?.length ?? 1) > 1
     $('noteExample').hidden = !example
-    $('noteExample').textContent = 'Sample apartment in Milan. Pick your own building on the Map.'
+    $('noteExample').textContent = t('shell.noteExample')
     $('noteHint').hidden = !hint
     $('noteHint').textContent =
-      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift\u2011click to add or remove parts${parts ? ' of your building' : ''}. Right\u2011click a building to set its height.`
+      view === 'plan' ? t('shell.notePlan') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
@@ -386,7 +388,7 @@ export function createUI(
   /** One line under the tabs; the open guide already says what to do, so it stays quiet then. */
   function updateMapHint() {
     $('firstRun').hidden = picked
-    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan, 3D, Panels and Garden.'
+    const text = picked ? t('shell.mapSwitch') : guide.open ? '' : t('shell.mapUnlock')
     mapHint.textContent = text
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
@@ -409,7 +411,7 @@ export function createUI(
     const lo = lon.valueAsNumber
     $('timeLabel').textContent = formatMinutes(Number(time.value))
     if (!when || Number.isNaN(la) || Number.isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
-      summary.textContent = 'Invalid latitude, longitude or date'
+      summary.textContent = t('sun.invalid')
       summary.removeAttribute('title')
       return
     }
@@ -423,16 +425,16 @@ export function createUI(
     onSun(sun)
     listener?.(when, sun, strip.style.background, { lat: la, lon: lo })
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
-    const rise = formatTime(times.sunrise)
-    const set = formatTime(times.sunset)
-    strip.title = day.info.polar === 'day' ? 'Sun up all day' : day.info.polar === 'night' ? 'Sun below the horizon all day' : `Daylight ${rise} to ${set}`
-    summary.title = `Azimuth ${sun.azimuthDeg.toFixed(1)} deg from north, altitude ${sun.altitudeDeg.toFixed(1)} deg`
+    const rise = fmtTime(times.sunrise)
+    const set = fmtTime(times.sunset)
+    strip.title = day.info.polar === 'day' ? t('sun.upAllDay') : day.info.polar === 'night' ? t('sun.downAllDay') : t('sun.daylight', { rise, set })
+    summary.title = t('sun.angles', { az: fmt1Fixed(sun.azimuthDeg), alt: fmt1Fixed(sun.altitudeDeg) })
     // Two deliberate lines instead of one that wraps at an arbitrary word.
     const { where, height } = sunParts(sun)
     summary.innerHTML =
       `<strong>${where}</strong>` +
       (height ? `<span>${height}</span>` : '') +
-      `<span>${rise && set ? `Sunrise ${rise} \u00b7 Sunset ${set}` : 'No sunrise or sunset on this date'}</span>`
+      `<span>${rise && set ? t('sun.riseSet', { rise, set }) : t('sun.noRiseSet')}</span>`
   }
 
   /** Rebuilds the chips when the year or hemisphere changes, and marks the one matching the date. */
@@ -471,14 +473,14 @@ export function createUI(
       stop()
       return
     }
-    play.textContent = 'Pause'
+    play.textContent = t('sun.pause')
     playStep()
     timer = window.setInterval(playStep, 50)
   })
   function stop() {
     window.clearInterval(timer)
     timer = undefined
-    play.textContent = 'Play'
+    play.textContent = t('sun.play')
   }
 
   for (const el of [lat, lon, date, time]) el.addEventListener('input', refresh)
@@ -529,20 +531,20 @@ export function createUI(
         if (b.dataset.view === 'map') continue
         b.disabled = !picked
         b.title = !picked
-          ? 'Pick a building first'
-          : b.dataset.view === 'plan' ? 'Draw your apartment on this building'
-          : b.dataset.view === 'panels' ? 'Solar panels: where they would do best and what yours make'
-          : b.dataset.view === 'garden' ? 'Click a spot to see what grows there, or find a place for a plant' : 'Sun and shadows in 3D'
+          ? t('shell.pickFirst')
+          : b.dataset.view === 'plan' ? t('shell.tabPlanTitle')
+          : b.dataset.view === 'panels' ? t('shell.tabPanelsTitle')
+          : b.dataset.view === 'garden' ? t('shell.tabGardenTitle') : t('shell.tab3dTitle')
       }
     },
     setNextStep(step) {
       $('planNext').textContent =
-        step === 'outline' ? "Draw your apartment's outline, then place its windows."
-        : step === 'windows' ? 'Now place windows on the outline.'
-        : 'Windows placed.'
+        step === 'outline' ? t('shell.planOutline')
+        : step === 'windows' ? t('shell.planWindows')
+        : t('shell.planDone')
       $('planToThree').hidden = step !== 'see'
       nextButton.hidden = step === 'see'
-      nextButton.textContent = step === 'outline' ? 'Draw your apartment' : 'Place the windows'
+      nextButton.textContent = step === 'outline' ? t('shell.nextOutline') : t('shell.nextWindows')
       // Walking needs windows; before that the Next prompt leads, and double-clicking the floor still works.
       walk.hidden = step !== 'see'
     },
@@ -674,22 +676,22 @@ export function createUI(
 function legendHtml(status: SunMapStatus): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
-    return `<span class="legendHead" role="status">Computing the sun map\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
+    return `<span class="legendHead" role="status">${t('sun.mapComputing', { pct })}</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
   const { daylightMinutes, day } = status
   const label = dayLabel(day.getMonth(), day.getDate())
-  if (daylightMinutes === 0) return `<span class="legendHead">No daylight on ${label}</span>`
+  if (daylightMinutes === 0) return `<span class="legendHead">${t('sun.mapNoDaylight', { day: label })}</span>`
   // Hours along the bar (6 h and more share the lightest colour) and, behind the disclosure, what each is of today's daylight.
   const hours = [0, 2, 4, 6]
   const share = (h: number) => (h * 60 <= daylightMinutes ? `${Math.round((h * 6000) / daylightMinutes)}%` : '\u2013')
   return (
-    `<span class="legendHead" title="Click the floor to see the hours at a spot">Direct sun on ${label}</span>` +
+    `<span class="legendHead" title="${t('sun.mapTitle')}">${t('sun.mapHead', { day: label })}</span>` +
     `<div class="legendLine"><span>0 h</span><div class="legendBar" style="background:${sunGradient()}"></div><span>6 h+</span></div>` +
-    `<details class="legendMore"><summary>Share of daylight</summary>` +
+    `<details class="legendMore"><summary>${t('sun.mapShare')}</summary>` +
     `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
     `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
-    `<span class="legendHint">Percent of the day's ${duration(daylightMinutes)} of daylight. Click the floor to see the hours at a spot.</span></details>`
+    `<span class="legendHint">${t('sun.mapShareHint', { duration: duration(daylightMinutes) })}</span></details>`
   )
 }
 
@@ -697,18 +699,18 @@ function legendHtml(status: SunMapStatus): string {
 function suitabilityLegendHtml(status: SuitabilityStatus): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
-    const head = status.updating ? 'Updating the panel map' : 'Computing the panel map'
+    const head = t(status.updating ? 'sun.suitUpdating' : 'sun.suitComputing')
     return `<span class="legendHead" role="status">${head}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
-  const at = (t: number) => (((t - status.min) / (status.max - status.min)) * 100).toFixed(1)
-  const tick = (t: number) => `<span style="left:${at(t)}%">${t.toLocaleString('en')}</span>`
+  const at = (v: number) => (((v - status.min) / (status.max - status.min)) * 100).toFixed(1)
+  const tick = (v: number) => `<span style="left:${at(v)}%">${fmtNumber(v)}</span>`
   return (
-    `<span class="legendHead">Energy a year for each kW of panels, ${status.weather ? 'with local weather' : 'clear sky (no weather data)'}</span>` +
+    `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>` +
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
     `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
-    `<span class="legendHint">${status.count.toLocaleString('en')} spots on the facade (vertical), roof and ground (30\u00b0 stands facing the sun). Colours span the range found here. The whole building is shown, floors above the apartment included. Click a spot for details.</span>`
+    `<span class="legendHint">${t('sun.suitHint', { n: status.count })}</span>`
   )
 }
 
@@ -717,19 +719,19 @@ function renderBuilding(el: HTMLElement, b: Building) {
   const line = buildingLine(b)
   const row = document.createElement('div')
   row.className = 'buildLine'
-  const id = line.href ? Object.assign(document.createElement('a'), { href: line.href, target: '_blank', rel: 'noreferrer', textContent: line.label, className: 'osmLink', title: `Open ${line.osmId} in OpenStreetMap`, ariaLabel: `${line.label}: ${line.osmId}, opens in a new tab` }) : document.createTextNode(line.label)
+  const id = line.href ? Object.assign(document.createElement('a'), { href: line.href, target: '_blank', rel: 'noreferrer', textContent: line.label, className: 'osmLink', title: t('bld.open', { id: line.osmId ?? '' }), ariaLabel: t('bld.openAria', { label: line.label, id: line.osmId ?? '' }) }) : document.createTextNode(line.label)
   const facts = Object.assign(document.createElement('span'), { textContent: ` \u00b7 ${line.facts.join(' \u00b7 ')}`, title: line.heightNote })
   row.append(id, facts)
   const extra: HTMLElement[] = []
   // Where the height came from, when it is a guess or yours; the button is the way to change any height without a neighbour to click.
   const note = Object.assign(document.createElement('span'), { className: 'heightNote' })
-  if (line.source) note.append(Object.assign(document.createElement('span'), { className: line.source.includes('guessed') || line.source.includes('estimated') ? 'guess' : '', textContent: line.source }), ' ')
-  note.append(Object.assign(document.createElement('button'), { type: 'button', className: 'link editHeight', textContent: 'Edit height', title: 'Set the height of this building in floors or metres (right-click any building in 3D to do the same)' }))
+  if (line.source) note.append(Object.assign(document.createElement('span'), { className: line.guess ? 'guess' : '', textContent: line.source }), ' ')
+  note.append(Object.assign(document.createElement('button'), { type: 'button', className: 'link editHeight', textContent: t('bld.editHeight'), title: t('bld.editHeightTitle') }))
   extra.push(note)
-  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: 'Stopped at a large selection; shift-click to trim it.' }))
+  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: t('bld.capped') }))
   // The Map view says how to grow the selection; 3D and Plan have the dismissible switching hint instead.
   const parts = b.members?.length ?? 1
-  extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: parts > 1 ? 'Shift-click in 3D to add or remove parts.' : 'Shift-click a neighbour in 3D to add it.' }))
+  extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: t(parts > 1 ? 'bld.addParts' : 'bld.addNeighbour') }))
   el.replaceChildren(...(line.title ? [Object.assign(document.createElement('strong'), { textContent: line.title })] : []), row, ...extra)
 }
 
@@ -737,16 +739,11 @@ function formatMinutes(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
 
-/** 24-hour HH:MM, or '' when the date is missing (no sunrise or sunset). */
-function formatTime(d: Date | null): string {
-  return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString([], TIME_FORMAT) : ''
-}
-
-const WORDS: Record<string, string> = { N: 'north', E: 'east', S: 'south', W: 'west' }
+const WORDS: Record<string, Key> = { N: 'sun.dirN', E: 'sun.dirE', S: 'sun.dirS', W: 'sun.dirW' }
 
 /** The two halves of the sun sentence: where it is, and how high (empty while it is down). */
-export function sunParts(sun: SunDirection, tail = 'above the horizon'): { where: string; height: string } {
-  if (sun.altitudeDeg <= 0) return { where: 'Sun below the horizon', height: '' }
-  const dir = [...compassName(sun.azimuthDeg)].map((c) => WORDS[c]).join('-')
-  return { where: `Sun in the ${dir}`, height: `${sun.altitudeDeg.toFixed(0)}\u00b0 ${tail}` }
+export function sunParts(sun: SunDirection): { where: string; height: string } {
+  if (sun.altitudeDeg <= 0) return { where: t('sun.below'), height: '' }
+  const dir = [...compassName(sun.azimuthDeg)].map((c) => t(WORDS[c])).join('-')
+  return { where: t('sun.where', { dir }), height: t('sun.above', { alt: sun.altitudeDeg.toFixed(0) }) }
 }

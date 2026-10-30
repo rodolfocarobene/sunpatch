@@ -100,8 +100,14 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .timeRange::-moz-range-thumb { width: 16px; height: 22px; border-radius: 4px; box-sizing: border-box; background: var(--surface); border: 2px solid var(--text); }
 #timeLabel { min-width: 3.4em; color: var(--text); font-weight: 600; text-align: right; }
 #panel a { color: var(--link); }
-#panel #about { font-size: var(--text-sm); color: var(--muted); text-decoration: none; align-self: flex-start; }
+#panelTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#panel #about { font-size: var(--text-sm); color: var(--muted); text-decoration: none; }
 #panel #about:hover { color: var(--accent-strong); text-decoration: underline; }
+#panel .langSwitch { display: inline-flex; align-items: center; gap: 1px; font-size: var(--text-xs); color: var(--disabled); }
+#panel .langSwitch button { padding: 2px 5px; background: transparent; border-color: transparent; color: var(--muted); font: inherit; font-weight: 600; letter-spacing: 0.03em; }
+#panel .langSwitch button[aria-pressed='true'] { color: var(--text); cursor: default; }
+#panel .langSwitch button:hover:not(:disabled), #panel .langSwitch button:active:not(:disabled) { background: transparent; border-color: transparent; color: var(--accent-strong); }
+#panel .langSwitch button[aria-pressed='true']:hover:not(:disabled) { color: var(--text); }
 /* Message kinds: a hint is small muted text, a note a soft box with a close button, a next step a link-button with an arrow. */
 #panel .hint, #panel .note { margin: 0; font-size: var(--text-xs); line-height: 1.4; color: var(--muted); }
 #panel .note { margin-top: 8px; }
@@ -222,7 +228,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #building .buildLine { color: var(--muted); font-variant-numeric: tabular-nums; }
 #panel:not([data-view='map']) #building .mapOnly { display: none; }
 /* Walking, the panel keeps the tabs and the two floor switches with the sun map legend, nothing else. */
-#panel.walking > :not(#views, #about, section[data-views~='3d']) { display: none; }
+#panel.walking > :not(#views, #panelTop, section[data-views~='3d']) { display: none; }
 #panel.walking section[data-views~='3d'] > :not(#aptTools) { display: none; }
 #panel.walking #walk, #panel.walking .legendMore { display: none; }
 #panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }

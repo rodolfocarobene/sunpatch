@@ -3,6 +3,7 @@ import type { Point } from './osm'
 import type { Plan } from './plan'
 import type { SunDirection } from './sun'
 import { bandMarker, headingDeg, movePosition, relativeBearing } from './walk-geom'
+import { t, type Key } from './i18n'
 
 export const EYE_HEIGHT = 1.6
 const WALK_SPEED = 1.4
@@ -168,7 +169,7 @@ const BAND_WIDTH = 320
 const BAND_INSET = 16 // the sun marker's half width: it stops this far from the end of the band
 const BAND_HALF_SPAN = 90 // degrees either side of the view direction that the band maps onto its inner width
 const PX_PER_DEGREE = (BAND_WIDTH / 2 - BAND_INSET) / BAND_HALF_SPAN
-const CARDINALS = new Map([[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW']])
+const CARDINALS = new Map<number, string>([[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW']])
 const SUN_ICON =
   '<svg class="sunMark" viewBox="-10 -10 20 20" width="20" height="20" aria-hidden="true"><circle r="4.5"/>' +
   [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-6.5" y2="-9" transform="rotate(${a})"/>`).join('') +
@@ -182,7 +183,7 @@ function bandTicks(): string {
   for (let a = -180; a < 540; a += 15) {
     const name = CARDINALS.get(((a % 360) + 360) % 360)
     const kind = name ? (name.length === 1 ? 'main' : 'half') : 'minor'
-    html += `<i class="tick ${kind}" style="left:${(a + 180) * PX_PER_DEGREE}px">${name ? `<b>${name}</b>` : ''}</i>`
+    html += `<i class="tick ${kind}" style="left:${(a + 180) * PX_PER_DEGREE}px">${name ? `<b>${t(`walk.card${name}` as Key)}</b>` : ''}</i>`
   }
   return html
 }
@@ -194,12 +195,12 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
   hud.hidden = true
   hud.innerHTML = `
     <div class="walkHelp">
-      <span><kbd>Drag</kbd> look</span>
-      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
-      <span><kbd>Shift</kbd> faster</span>
+      <span><kbd>${t('walk.drag')}</kbd> ${t('walk.look')}</span>
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ${t('walk.walk')}</span>
+      <span><kbd>${t('walk.shift')}</kbd> ${t('walk.faster')}</span>
       <span><kbd>[</kbd><kbd>]</kbd> \u00b115 min</span>
-      <span><kbd>Click</kbd> floor for sun</span>
-      <button type="button" class="walkExit">Exit walk <kbd>Esc</kbd></button>
+      <span><kbd>${t('walk.click')}</kbd> ${t('walk.floorSun')}</span>
+      <button type="button" class="walkExit">${t('walk.exit')} <kbd>Esc</kbd></button>
     </div>`
   // Nothing in the HUD reaches the look-drag handlers, and the slider gives the keys back to the walk.
   for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) hud.addEventListener(type, (e) => e.stopPropagation())
@@ -209,7 +210,7 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
   compass.hidden = true
   compass.style.setProperty('--band', `${BAND_WIDTH}px`)
   compass.innerHTML = `
-    <div class="compassBand" role="img" aria-label="Where the sun is, relative to where you look">
+    <div class="compassBand" role="img" aria-label="${t('walk.compassAria')}">
       <div class="compassStrip">${bandTicks()}</div>
       <span class="compassAhead"></span>
       ${CHEVRON('left')}${CHEVRON('right')}${SUN_ICON}
@@ -232,7 +233,7 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
     const stripX = Math.round((BAND_WIDTH / 2 - (heading + 180) * PX_PER_DEGREE) * 4) / 4
     const markX = Math.round(marker.offset * (BAND_WIDTH / 2 - BAND_INSET) * 4) / 4
     const up = sunNow.altitudeDeg > 0
-    const text = up ? `Sun ${Math.round(sunNow.altitudeDeg)}\u00b0 up` : 'Sun below the horizon'
+    const text = up ? t('walk.sunUp', { alt: Math.round(sunNow.altitudeDeg) }) : t('sun.below')
     const state = `${stripX}|${markX}|${marker.clamped ? Math.sign(relative) : 0}|${up}|${text}`
     if (state === drawn) return
     drawn = state
