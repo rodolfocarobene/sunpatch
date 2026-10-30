@@ -489,3 +489,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .findPanel .findCounts { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .findPanel .findCounts strong { color: var(--text); font-weight: 650; }
 .findPanel .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
