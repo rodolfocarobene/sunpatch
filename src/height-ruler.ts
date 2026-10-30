@@ -93,6 +93,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   let drag: { startY: number; height: number; moved: boolean } | undefined
   let timer = 0
   let switchTimer = 0
+  let last = { x: 0, y: 0 }
   let inside = false
   let pointer = { x: 0, y: 0 }
 
@@ -163,6 +164,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     const dy = drag.startY - e.clientY
     if (!drag.moved && Math.abs(dy) < DRAG_DEAD_PX) return
     drag.moved = true
+    last = { x: e.clientX, y: e.clientY }
     const { building, anchor } = target
     drag.height = heightFromDrag(building.height, building.minHeight, dy, anchor.pxPerM, e.shiftKey)
     place(drag.height)
@@ -176,10 +178,11 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     handlers.onPreview(id, null)
     if (commit && moved && height !== building.height) {
       handlers.onCommit(id, overrideFromRuler(building, height))
+      pointer = { x: last.x - 48, y: last.y } // stand where the handle was let go, with the new height, ready to go on
       if (!show(id)) return
     } else layout(building.height)
     clearTimeout(timer) // the commit rebuilt the scene, which reported the pointer off the building
-    if (!inside) timer = window.setTimeout(hide, GRACE_MS)
+    if (!handle.matches(':hover')) timer = window.setTimeout(hide, GRACE_MS)
   }
   handle.addEventListener('pointerup', () => finish(true))
   handle.addEventListener('pointercancel', () => finish(false))
