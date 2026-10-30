@@ -113,6 +113,10 @@ const GARDEN_MAP_GAP = 0.06
 const GARDEN_MAP_OPACITY = 0.9
 /** How long the camera takes to slide a spot into view, milliseconds. */
 const SLIDE_MS = 600
+/** The Frame the view button's camera move. */
+const REFRAME_MS = 400
+/** Closer than this (metres, camera and target both) the camera already is where the framing puts it. */
+const FRAMED_EPS_M = 0.3
 /** The spot's pulse: how long one spreading ring takes, and how many are sent. */
 const GARDEN_PULSE_MS = 1100
 const GARDEN_PULSES = 3
@@ -214,7 +218,7 @@ export interface SunScene {
    * Frames what a view is about, whatever the camera did before: the apartment (3D), the whole building (Panels) or the
    * apartment with the ground around the building and, with the floors shown, the roof (Garden).
    */
-  frameView(target: FrameTarget): void
+  frameView(target: FrameTarget): boolean
   /** The same when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
   frameOnEntry(target: FrameTarget): void
   /** Brings a scene point into view when it is off screen (under the panel, past an edge or behind the camera): a gentle slide, no zoom. */
@@ -1022,7 +1026,7 @@ export function createScene(container: HTMLElement): SunScene {
 
   // A slide of the camera and its target together (so the view keeps its angle and distance) that puts a point in the
   // middle of the free area; it is not the user's own move, so a camera framed by the scene stays "unmoved".
-  let slideTo: { from: { position: Vector3; target: Vector3 }; to: { position: Vector3; target: Vector3 }; start: number } | undefined
+  let slideTo: { from: { position: Vector3; target: Vector3 }; to: { position: Vector3; target: Vector3 }; start: number; ms: number } | undefined
   const reducedMotion = (): boolean => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   function revealPoint(at: { x: number; y: number; z: number }) {
     if (walking) return
@@ -1042,12 +1046,13 @@ export function createScene(container: HTMLElement): SunScene {
       from: { position: camera.position.clone(), target: controls.target.clone() },
       to: { position: target.clone().add(offset), target },
       start: performance.now(),
+      ms: SLIDE_MS,
     }
     if (reducedMotion()) stepSlide(slideTo.start + SLIDE_MS)
   }
   function stepSlide(now: number) {
     if (!slideTo) return
-    const k = Math.min(1, (now - slideTo.start) / SLIDE_MS)
+    const k = Math.min(1, (now - slideTo.start) / slideTo.ms)
     const e = k * k * (3 - 2 * k)
     camera.position.lerpVectors(slideTo.from.position, slideTo.to.position, e)
     controls.target.lerpVectors(slideTo.from.target, slideTo.to.target, e)
@@ -1524,7 +1529,16 @@ export function createScene(container: HTMLElement): SunScene {
       applyCutaway()
     },
     frameView(target) {
+      const from = { position: camera.position.clone(), target: controls.target.clone() }
       frameTarget(target)
+      const to = { position: camera.position.clone(), target: controls.target.clone() }
+      if (from.position.distanceTo(to.position) < FRAMED_EPS_M && from.target.distanceTo(to.target) < FRAMED_EPS_M) return false
+      if (!reducedMotion()) {
+        camera.position.copy(from.position)
+        controls.target.copy(from.target)
+        slideTo = { from, to, start: performance.now(), ms: REFRAME_MS }
+      }
+      return true
     },
     frameOnEntry(target) {
       if (!userMoved) frameTarget(target)

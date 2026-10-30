@@ -288,6 +288,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #reframe:hover { background: var(--bg-band); border-color: var(--accent-strong); }
 #reframe:active { background: var(--line); }
+#reframe.done { color: var(--muted); border-color: var(--accent-strong); }
 #panel.walking ~ #reframe { display: none; }
 
 /* The docked bar: date, time and the sun's position for the 3D view and walk mode; the walk key hints stack above it. */
