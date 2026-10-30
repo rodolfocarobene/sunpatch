@@ -164,6 +164,7 @@ describe('hover note', () => {
   it('names the building, the height with its source, and the gesture', () => {
     const b = make('way/1', rect(0, 0, 10, 10), { name: 'Casa Rossa' })
     expect(hoverLines(b)).toEqual(['Casa Rossa', '9 m · height guessed: 9 m default', 'Right-click to edit the height'])
+    expect(hoverLines(b, true)[2]).toContain('Drag the ruler')
     expect(hoverLines({ ...b, heightSource: 'tag' })[1]).toBe('9 m')
   })
 })

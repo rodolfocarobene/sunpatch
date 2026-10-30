@@ -85,7 +85,10 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    faint diagonal stripes (switch it off with *Mark guessed heights*), and pointing at a building tells you where its
    height came from. To correct one, right-click it in 3D (or press *Edit height* under the selected building's name),
    enter its height in floors (3 m each) or in metres, and press *Set*. This works for neighbours as well as your own
-   building; *Reset to the data* undoes it. The shadows, the sun map and the panel results follow at once, and the
+   building; *Reset to the data* undoes it. In 3D you can also point at a building and drag the **height ruler** that
+   appears beside it: the handle snaps to whole floors, **Shift** gives 0.5 m steps, **Esc** cancels, and the height is
+   set when you let go (the Height box stays the exact way to type it). The ruler is only in the 3D tab, not in Panels
+   or Garden, where a click on a roof means something else. The shadows, the sun map and the panel results follow at once, and the
    heights are saved with your plan (they are part of its export).
 2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
    OpenStreetMap data. Then:

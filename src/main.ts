@@ -25,6 +25,7 @@ import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
+import { createHeightRuler } from './height-ruler'
 import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
@@ -70,6 +71,15 @@ const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
 // Building heights: the hover note says where a height came from, the right-click box (or the building line's button) changes it.
 const hoverTip = createHoverTip(document.body)
+const heightRuler = createHeightRuler(document.body, {
+  resolve(id, near) {
+    const building = site?.buildings.find((b) => b.id === id)
+    const anchor = building && sunScene.rulerAnchor(building, near)
+    return building && anchor ? { building, anchor } : null
+  },
+  onPreview: (id, height) => sunScene.previewHeight(id, height),
+  onCommit: (id, override) => setHeight(id, override),
+})
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
 let sunResult: SunMapResult | undefined
@@ -763,6 +773,7 @@ if (import.meta.env.DEV) {
 sunScene.setWalkHandlers({
   change(isWalking) {
     walking = isWalking
+    if (isWalking) heightRuler.hide()
     if (isWalking) ui.setSuitability(false) // the map belongs to the outside view
     hud.show(isWalking)
     ui.setWalking(isWalking)
@@ -801,7 +812,14 @@ sunScene.onPanelClick((id) => {
 })
 ui.onPanelPick(selectPanel)
 sunScene.onPartClick(togglePartAt)
-sunScene.onBuildingHover((b, at) => (b && !heightPopover.isOpen ? hoverTip.show(hoverLines(b), at) : hoverTip.hide()))
+// The ruler is a 3D-view tool: Panels and Garden use a click on the roof for their own picks, which a ruler there would block.
+sunScene.onBuildingHover((b, at) => {
+  const ruler = view === '3d' && !heightPopover.isOpen
+  if (b && !heightPopover.isOpen && !heightRuler.dragging) hoverTip.show(hoverLines(b, ruler), at)
+  else hoverTip.hide()
+  if (b && ruler) heightRuler.follow(b, at)
+  else heightRuler.release()
+})
 sunScene.onBuildingMenu((id, at) => openHeight(site?.buildings.find((b) => b.id === id), at))
 ui.onEditHeight((at) => {
   const mine = site?.selected
@@ -862,6 +880,7 @@ function setView(next: View) {
   view = next
   heightPopover.hide()
   hoverTip.hide()
+  heightRuler.hide()
   const scene3d = next === '3d' || next === 'panels' || next === 'garden' // one scene and one camera for all three
   sunScene.setGardenPicking(next === 'garden')
   app.hidden = !scene3d
@@ -1090,6 +1109,7 @@ function newPlan(): Plan {
 function openHeight(b: Building | undefined, at: { x: number; y: number }) {
   if (!b) return
   hoverTip.hide()
+  heightRuler.hide()
   heightPopover.open(b, at)
 }
 
