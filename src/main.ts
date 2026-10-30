@@ -41,6 +41,7 @@ import { climateKey, loadClimate, type Climate } from './weather'
 import { modules, newPanelId } from './panel'
 import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-job'
 import { createSunMapJob } from './sunmap-job'
+import { dayHeadline } from './headline'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
@@ -574,7 +575,12 @@ function scheduleSunMap() {
 }
 
 function requestSunMap() {
-  if (!sunMapOn || !site || !plan || !sunDay) return
+  // The 3D tab's headline needs the day's lit flags too, so the job runs there with or without the painted map.
+  if (!(sunMapOn || view === '3d') || !site || !plan || !sunDay) return
+  if (plan.windows.length === 0) {
+    sunJob.stop()
+    return ui.setHeadline({ kind: 'noWindows' })
+  }
   const { selected } = site
   const { when, lat, lon } = sunDay
   sunJob.request({
@@ -696,28 +702,39 @@ function showProbe() {
 }
 
 sunJob.onState((state) => {
-  if (!sunMapOn) return
   if (state.status === 'computing') {
     // An old map would show the wrong day while the new one runs.
     sunResult = undefined
-    sunScene.setSunMap(null)
-    if (popover.open) closeProbe()
-    ui.setSunMapStatus({ kind: 'computing', progress: state.progress })
+    ui.setHeadline({ kind: 'working' })
+    if (sunMapOn) {
+      sunScene.setSunMap(null)
+      if (popover.open) closeProbe()
+      ui.setSunMapStatus({ kind: 'computing', progress: state.progress })
+    }
   } else if (state.status === 'ready') {
     sunResult = state.result
+    ui.setHeadline({ kind: 'ready', day: sunDay?.when ?? new Date(), headline: dayHeadline(state.result) })
+    if (!sunMapOn) return
     sunScene.setSunMap({ grid: state.result.grid, minutes: sampleMinutes(state.result) })
     ui.setSunMapStatus({ kind: 'ready', daylightMinutes: state.result.daylightMinutes, day: sunDay?.when ?? new Date() })
     showProbe()
-  } else if (state.status === 'error') ui.setSunMapStatus({ kind: 'error', message: state.message })
+  } else if (state.status === 'error') {
+    ui.setHeadline({ kind: 'error' })
+    if (sunMapOn) ui.setSunMapStatus({ kind: 'error', message: state.message })
+  }
 })
 ui.onSunMap((on) => {
   sunMapOn = on
   if (on && suitOn) ui.setSuitability(false)
   sunScene.setSunMapVisible(on)
-  if (on) scheduleSunMap()
-  else {
-    sunJob.stop()
-    sunResult = undefined
+  if (on) {
+    if (sunResult) {
+      // The headline's trace is the sun map: paint it without tracing again.
+      sunScene.setSunMap({ grid: sunResult.grid, minutes: sampleMinutes(sunResult) })
+      ui.setSunMapStatus({ kind: 'ready', daylightMinutes: sunResult.daylightMinutes, day: sunDay?.when ?? new Date() })
+    } else scheduleSunMap()
+  } else {
+    if (view !== '3d') sunJob.stop() // in 3D the headline keeps the job and its result
     sunScene.setSunMap(null)
     closeProbe()
   }
@@ -736,7 +753,7 @@ sunScene.onSceneChange(() => {
   sunKey = ''
   sunResult = undefined
   closeProbe()
-  if (sunMapOn) scheduleSunMap()
+  scheduleSunMap()
   if (suitOn) {
     // The map belongs to the scene it was traced in: a new building or plan clears it (a panel placed from it keeps it until the update arrives).
     closeSuitPick()
@@ -804,7 +821,7 @@ ui.onChange((when, sun, strip, place) => {
   const key = `${dateKey(when)} ${place.lat} ${place.lon}`
   if (key !== sunKey) {
     sunKey = key
-    if (sunMapOn) scheduleSunMap()
+    scheduleSunMap()
     requestShade()
   }
 })
@@ -924,6 +941,7 @@ function setView(next: View) {
     suitLeaving = false
   } else if (suitWish) ui.setSuitability(true)
   ui.setView(next)
+  if (next === '3d') scheduleSunMap()
   renderTotals()
   planSummary.hidden = next !== 'plan' || selectedPanel === null
 }

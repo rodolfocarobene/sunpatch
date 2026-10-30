@@ -6,6 +6,7 @@ import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
+import { headlineText, type DayHeadline } from './headline'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 import { rangeText } from './suitability'
@@ -27,6 +28,13 @@ export type SunMapStatus =
   | { kind: 'computing'; progress: number }
   | { kind: 'ready'; daylightMinutes: number; day: Date }
   | { kind: 'error'; message: string }
+
+/** The headline sentence under the building line (3D tab). */
+export type HeadlineStatus =
+  | { kind: 'working' }
+  | { kind: 'noWindows' }
+  | { kind: 'ready'; day: Date; headline: DayHeadline }
+  | { kind: 'error' }
 
 export type SuitabilityStatus =
   | { kind: 'computing'; progress: number; updating?: boolean }
@@ -72,6 +80,8 @@ export interface UI {
   toggleSunMap(): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
+  /** The one-line answer above the apartment tools: when the sun gets in on the shown date. */
+  setHeadline(status: HeadlineStatus | null): void
   /** The "Panel suitability" switch (off by default): hear about changes, set it, and fill the legend under it. */
   onSuitability(listener: (on: boolean) => void): void
   setSuitability(on: boolean): void
@@ -157,6 +167,7 @@ export function createUI(
     <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>${t('shell.see3d')}</button></p>
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
+      <div id="sunHeadline" hidden role="status"></div>
       <div id="aptTools">
         <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">
@@ -297,6 +308,7 @@ export function createUI(
   })
   const sunMap = $<HTMLInputElement>('sunMap')
   const legend = $('sunMapLegend')
+  const headline = $('sunHeadline')
   let sunMapListener: ((on: boolean) => void) | undefined
   const applySunMap = () => {
     legend.hidden = !sunMap.checked
@@ -600,6 +612,28 @@ export function createUI(
     toggleSunMap() {
       sunMap.checked = !sunMap.checked
       applySunMap()
+    },
+    setHeadline(status) {
+      headline.hidden = status === null
+      if (!status) return headline.replaceChildren()
+      if (status.kind === 'noWindows') {
+        const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
+        toPlan.addEventListener('click', () => onView('plan'))
+        headline.replaceChildren(t('sun.headNoWindowsBefore'), toPlan, t('sun.headNoWindowsAfter'))
+        headline.className = 'quiet'
+      } else if (status.kind === 'working') {
+        headline.replaceChildren(t('sun.headWorking'))
+        headline.className = 'quiet'
+      } else if (status.kind === 'error') {
+        headline.replaceChildren(t('sun.mapError'))
+        headline.className = 'quiet'
+      } else {
+        const { text, detail } = headlineText(status.headline, status.day)
+        const parts = [Object.assign(document.createElement('strong'), { textContent: text })]
+        if (detail) parts.push(Object.assign(document.createElement('span'), { textContent: detail }))
+        headline.replaceChildren(...parts)
+        headline.className = ''
+      }
     },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
