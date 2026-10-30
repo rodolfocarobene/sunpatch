@@ -35,6 +35,8 @@ describe('spot card text', () => {
     expect(Math.min(...t.cells.map((c) => c.lowShare))).toBe(0)
     expect(Math.max(...t.cells.map((c) => c.highShare))).toBe(1)
     expect(t.cells.every((c) => c.lowShare < c.highShare)).toBe(true)
+    const winter = tempStrip({ tMin: [-3, 0, 4, 8, 12, 16, 18, 17, 13, 8, 3, 1], tMax: Array(12).fill(20) })
+    expect(winter.cells.map((c) => c.cold)).toEqual([true, true, false, false, false, false, false, false, false, false, false, true])
     expect(tempStrip({ tMin: Array(12).fill(5), tMax: Array(12).fill(15) }).zeroShare).toBeNull()
     expect(tempStrip({ tMin: Array(12).fill(-10), tMax: Array(12).fill(10) }).zeroShare).toBe(0.5)
   })

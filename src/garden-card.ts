@@ -120,12 +120,17 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
     cells.forEach((c, i) => {
       const top = H - c.highShare * H
       const h = Math.max(2, (c.highShare - c.lowShare) * H)
-      add(s, 'rect', { class: 'tempBar', x: String(i * SLOT + (SLOT - BAR) / 2), y: String(top), width: String(BAR), height: String(h), rx: '2' }, undefined, c.text)
+      add(s, 'rect', { class: c.cold ? 'tempBar cold' : 'tempBar', x: String(i * SLOT + (SLOT - BAR) / 2), y: String(top), width: String(BAR), height: String(h), rx: '2' }, undefined, c.text)
     })
     add(s, 'line', { class: 'baseline', x1: '0', x2: String(W), y1: String(H + 0.5), y2: String(H + 0.5) })
     labels(s, H + 12, month)
     const wrap = el('div', 'gardenChart')
-    wrap.append(el('span', 'chartLabel', 'Typical night and day temperature, °C'), s, el('span', 'chartCaption', `Typical lows and highs run from ${Math.round(min)} to ${Math.round(max)} °C over the year`))
+    const cold = cells.some((c) => c.cold)
+    wrap.append(
+      el('span', 'chartLabel', 'Typical night and day temperature, °C'),
+      s,
+      el('span', 'chartCaption', `Each bar runs from the typical low to the typical high; hover for the numbers. They span ${Math.round(min)} to ${Math.round(max)} °C over the year.${cold ? ' Blue: nights near or below freezing.' : ''}`),
+    )
     return wrap
   }
 

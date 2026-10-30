@@ -48,7 +48,12 @@ export interface TempCell {
   /** Where the typical low and high fall on the strip, 0 = coldest low of the year, 1 = warmest high. */
   lowShare: number
   highShare: number
+  /** The typical night is near or below freezing: the bar is tinted cool. */
+  cold: boolean
 }
+
+/** Typical lows at or under this count as "near freezing" (degC). */
+export const NEAR_FREEZING = 1
 
 /** Twelve floating bars from the typical daily low to the typical daily high, and the year's extremes for the caption. */
 export function tempStrip(climate: Pick<Climate, 'tMin' | 'tMax'>): { cells: TempCell[]; min: number; max: number; zeroShare: number | null } {
@@ -66,6 +71,7 @@ export function tempStrip(climate: Pick<Climate, 'tMin' | 'tMax'>): { cells: Tem
       text: `${name}: typically ${deg(climate.tMin[i])} at night, ${deg(climate.tMax[i])} by day`,
       lowShare: at(climate.tMin[i]),
       highShare: at(climate.tMax[i]),
+      cold: climate.tMin[i] <= NEAR_FREEZING,
     })),
   }
 }
