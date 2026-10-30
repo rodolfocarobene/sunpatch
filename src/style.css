@@ -53,7 +53,7 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 #panel button.primary:hover:not(:disabled), .maplibregl-popup-content button:hover { background: #e89a14; border-color: var(--accent-strong); }
 #panel button.primary:active:not(:disabled), .maplibregl-popup-content button:active { background: #d98d0c; }
 #panel button.primary:disabled { background: var(--bg-band); border-color: var(--line); }
-input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select {
+input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select, .findPanel select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px;
 }
 input::placeholder { color: var(--muted); opacity: 1; }
@@ -447,3 +447,21 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .plantGrowing { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .gardenCard .plantReason { color: var(--muted); font-size: var(--text-xs); line-height: 1.4; text-wrap: pretty; }
 .gardenCard .plantsPoor > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+
+/* Garden view: "Find a place for" picker, the legend of the plant map and its summary. */
+.findPanel { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+#panel .findPanel label.findRow { color: var(--text); font-weight: 600; }
+#panel .findPanel label.findRow + label.findRow { flex-direction: row; align-items: center; gap: 8px; }
+.findPanel .findRow select { min-width: 0; font-weight: 400; }
+.findPanel .findRow + .findRow select { flex: 1; }
+.findPanel .findResult { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.findPanel .findResult > * { align-self: stretch; }
+.findPanel .findResult > button { align-self: flex-start; }
+.findPanel .findLegend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--text-xs); }
+.findPanel .legendItem { display: inline-flex; align-items: center; gap: 5px; }
+.findPanel .legendSwatch { width: 12px; height: 12px; border-radius: 2px; box-sizing: border-box; }
+.findPanel .legendSwatch.none { border: 1px dashed var(--muted); }
+.findPanel .findSummary { margin: 0; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findCounts { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.findPanel .findCounts strong { color: var(--text); font-weight: 650; }
+.findPanel .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }

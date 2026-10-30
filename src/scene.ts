@@ -58,6 +58,8 @@ import { collectOccluders } from './sunmap-trace'
 import { heatTexels, type Grid } from './sunmap'
 import { along, facing } from './panel'
 import type { SurfaceSample } from './suitability'
+import { POT_HEIGHT } from './garden-spots'
+import { CELL_SIZE, STEP_COLORS, type FindKind, type Step } from './garden-find'
 import { hatchedMaterial, hatchStrength } from './hatch'
 import { isGuessed } from './heights'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
@@ -100,6 +102,10 @@ const SUNMAP_WALK_OPACITY = 0.55
 const SUIT_LIFT = 0.08
 const SUIT_GAP = 0.08
 const SUIT_OPACITY = 0.92
+// Plant map (Garden view): flat quads just above the surface under each spot, a little see-through so the ground still reads.
+const GARDEN_MAP_LIFT = 0.06
+const GARDEN_MAP_GAP = 0.06
+const GARDEN_MAP_OPACITY = 0.78
 const PROBE_COLOR = 0x1f2a37
 const PROBE_RING = 0xfffdf8
 const SKY_DAY = new Color(0x8fbfe8)
@@ -202,6 +208,8 @@ export interface SunScene {
   onGardenClick(handler: (hit: GardenHit | null) => void): void
   /** Marks a spot of the Garden view on the surface (`y` is the surface height); null removes the mark. */
   setGardenMark(at: { x: number; y: number; z: number } | null): void
+  /** Paints the plant map: one flat quad per spot of step good or ok (`y` is the pot's height; quads lie on the surface below it); null removes it. */
+  setGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind; cell?: number }[]; steps: Step[] } | null): void
   dispose(): void
 }
 
@@ -413,7 +421,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' | 'garden' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' | 'garden' | 'gardenmap' | 'gardenroof' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -435,6 +443,7 @@ export function createScene(container: HTMLElement): SunScene {
   let gardenAt: { x: number; y: number; z: number } | null = null
   let gardenMark: Group | undefined
   let gardenClick: ((hit: GardenHit | null) => void) | undefined
+  let gardenMapMeshes: Mesh[] = []
   // Panel suitability: the data (kept across rebuilds of the scene), its quads and the outline of the chosen one.
   let suitOn = false
   let suitData: { samples: SurfaceSample[]; colors: Float32Array } | null = null
@@ -553,7 +562,7 @@ export function createScene(container: HTMLElement): SunScene {
   function showAptLines(on: boolean) {
     for (const { line, kind } of aptLines) {
       const shown =
-        kind === 'ceiling' ? !cutawayNow() : kind === 'ghost' ? !cutawayNow() && !walking : kind === 'outline' ? !walking : kind === 'sunmap' ? sunMapOn : kind === 'suit' ? suitOn && !walking : true
+        kind === 'ceiling' ? !cutawayNow() : kind === 'ghost' ? !cutawayNow() && !walking : kind === 'outline' ? !walking : kind === 'sunmap' ? sunMapOn : kind === 'suit' ? suitOn && !walking : kind === 'gardenroof' ? !cutawayNow() : true
       line.visible = on && shown
     }
   }
@@ -639,6 +648,52 @@ export function createScene(container: HTMLElement): SunScene {
     world.add(probeMark)
     // Each ring is itself an apartment line: the second pass leaves those meshes drawn, not the group around them.
     for (const child of probeMark.children) aptLines.push({ line: child, kind: 'sunmap' })
+  }
+
+  function removeGardenMap() {
+    for (const m of gardenMapMeshes) world.remove(m)
+    aptLines = aptLines.filter((l) => !gardenMapMeshes.includes(l.line as Mesh))
+    gardenMapMeshes.forEach((m) => disposeMeshes(m))
+    gardenMapMeshes = []
+  }
+
+  // One mesh per kind of spot (the roof's hides with the floors above it hidden, or it would hang in the air).
+  function paintGardenMap(map: { spots: { x: number; y: number; z: number; kind: FindKind; cell?: number }[]; steps: Step[] } | null) {
+    removeGardenMap()
+    if (!map) return
+    for (const kind of ['indoor', 'ground', 'roof'] as const) {
+      const idx = map.spots.map((s, i) => (s.kind === kind && map.steps[i] > 0 ? i : -1)).filter((i) => i >= 0)
+      if (idx.length === 0) continue
+      const positions = new Float32Array(idx.length * 12)
+      const colors = new Float32Array(idx.length * 12)
+      const index = new Uint32Array(idx.length * 6)
+      const c = new Color()
+      idx.forEach((si, n) => {
+        const { x, y, z, cell } = map.spots[si]
+        const h = (cell ?? CELL_SIZE[kind]) / 2 - GARDEN_MAP_GAP / 2
+        const top = y - POT_HEIGHT + GARDEN_MAP_LIFT
+        positions.set([[-1, -1], [1, -1], [1, 1], [-1, 1]].flatMap(([u, v]) => [x + h * u, top, z + h * v]), n * 12)
+        c.setHex(STEP_COLORS[map.steps[si] as 1 | 2], SRGBColorSpace)
+        for (let k = 0; k < 4; k++) colors.set([c.r, c.g, c.b], n * 12 + k * 3)
+        index.set([0, 1, 2, 0, 2, 3].map((k) => n * 4 + k), n * 6)
+      })
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      geometry.setAttribute('color', new Float32BufferAttribute(colors, 3))
+      geometry.setIndex(new BufferAttribute(index, 1))
+      const mesh = new Mesh(
+        geometry,
+        new MeshBasicMaterial({
+          vertexColors: true, transparent: true, opacity: GARDEN_MAP_OPACITY, depthWrite: false, toneMapped: false, side: DoubleSide,
+          polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+        }),
+      )
+      mesh.raycast = () => {} // a click goes through to the surface below, which names the spot
+      world.add(mesh)
+      gardenMapMeshes.push(mesh)
+      aptLines.push({ line: mesh, kind: kind === 'roof' ? 'gardenroof' : 'gardenmap' })
+    }
+    applyCutaway()
   }
 
   // The Garden view's spot: the probe's two rings, on the ground, a roof or the floor; scaled with the distance so it can be found from afar.
@@ -839,6 +894,7 @@ export function createScene(container: HTMLElement): SunScene {
     removeSunMap()
     clearWorld()
     suitMesh = suitMark = undefined // cleared with the world; the data is painted again below
+    gardenMapMeshes = [] // cleared with the world; the page asks for the plant map again after a scene change
     version++
     sceneChange?.()
     apartmentMeshes = new Set()
@@ -1336,6 +1392,9 @@ export function createScene(container: HTMLElement): SunScene {
     },
     onGardenClick(handler) {
       gardenClick = handler
+    },
+    setGardenMap(map) {
+      paintGardenMap(map)
     },
     setGardenMark(at) {
       gardenAt = at

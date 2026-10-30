@@ -90,7 +90,7 @@ export const rateYear = (plant: Plant, spot: Spot, climate: Temperatures): Month
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 const hours = (h: number): string => (h < 1 ? `${Math.round(h * 60)} min` : `${+h.toFixed(1)} h`)
-const deg = (t: number): string => `${Math.round(t)} C`
+const deg = (t: number): string => `${Math.round(t)} °C`
 
 /** One plain sentence about a month, e.g. "Too dark in December: 40 min of direct sun, basil needs 6 h." */
 export function explain(plant: Plant, r: MonthResult): string {
@@ -113,13 +113,13 @@ export function explain(plant: Plant, r: MonthResult): string {
       if (!issue.severe && r.tMean < t.min) return `Resting in ${month}: ${deg(r.tMean)} on average, ${name} stops growing below ${deg(t.min)}.`
       return issue.severe
         ? `Too cold in ${month}: ${deg(r.tMean)} on average, ${name} needs ${deg(t.min)} to grow.`
-        : `Workable in ${month}, but cool: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} C.`
+        : `Workable in ${month}, but cool: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} °C.`
     case 'frost':
       return `Frost in ${month}: nights down to ${deg(r.tNight)}, ${name} survives down to ${deg(t.survive)}.`
     case 'hot':
       return issue.severe
         ? `Too hot in ${month}: days reach ${deg(r.tMax)}, ${name} stops thriving above ${deg(t.max)}.`
-        : `Workable in ${month}, but warm: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} C.`
+        : `Workable in ${month}, but warm: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} °C.`
   }
 }
 

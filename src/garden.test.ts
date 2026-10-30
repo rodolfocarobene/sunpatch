@@ -154,7 +154,7 @@ describe('explanations', () => {
   it('says why in one sentence', () => {
     const dec = rateMonth(plant('basil'), { indoor: true, sunMinutes: Array(12).fill(40) }, milan, 11)
     expect(explain(plant('basil'), dec)).toBe('Too dark in December: 40 min of direct sun, basil needs 6 h.')
-    expect(explain(plant('lettuce'), rateMonth(plant('lettuce'), southBalcony, milan, 6))).toMatch(/^Too hot in July: days reach 29 C/)
+    expect(explain(plant('lettuce'), rateMonth(plant('lettuce'), southBalcony, milan, 6))).toMatch(/^Too hot in July: days reach 29 °C/)
     expect(explain(plant('tomato'), rateMonth(plant('tomato'), brightOutdoor, milan, 3))).toMatch(/^Frost in April/)
     expect(explain(plant('basil'), rateMonth(plant('basil'), southBalcony, milan, 6))).toMatch(/^Good in July: 8.3 h of direct sun/)
   })

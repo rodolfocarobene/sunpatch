@@ -133,6 +133,13 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    wall (a facade) makes no spot and the card says to pick a floor, ground or roof spot. To click the roof, untick **Hide floors
    above**. Esc or the close button removes the spot. Plant figures are typical values for a common variety, not checked plant by plant,
    and only direct sun is counted.
+   **Find a place for...** goes the other way: pick a plant (and a month, or all year) and every spot around the
+   building, on its apartment floor and on its roof is coloured green (good) or amber (OK); poor spots stay uncoloured.
+   A summary says where it grows best (for example "the ground south-west of the building and the roof"), with counts
+   per kind of spot, and **Show the best spot** opens that spot's card. Clicking a spot still opens the card while a
+   plant is picked. Indoor-only plants skip outdoor spots and outdoor-only plants skip the floor, with a line saying so;
+   if the temperatures cannot load, outdoor spots are left uncoloured. The area is traced once per scene (a few
+   seconds), then changing plant or month only scores again.
 6. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
    faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The same date and
    time bar stays at the bottom, with the key hints above it, and the small panel on

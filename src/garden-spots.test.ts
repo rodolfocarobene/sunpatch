@@ -43,6 +43,17 @@ describe('garden spots', () => {
     }
   })
 
+  it('thins to a regular coarser grid and records the cell each spot stands for', () => {
+    for (const spots of [groundSpots(selected, buildings, origin.lat), roofSpots(selected, origin.lat), indoorSpots(selected, plan)]) {
+      const cell = spots[0].cell!
+      expect(cell).toBeGreaterThan(0)
+      expect(spots.every((s) => s.cell === cell)).toBe(true)
+      const minX = Math.min(...spots.map((s) => s.x))
+      // every kept column lies a whole number of cells from the first
+      for (const s of spots) expect(Math.abs((s.x - minX) / cell - Math.round((s.x - minX) / cell))).toBeLessThan(0.01)
+    }
+  })
+
   it('has no indoor spots without a plan, and a bounded total', () => {
     const all = gardenSpots(selected, buildings, plan, origin.lat)
     expect(all.length).toBeLessThanOrEqual(INDOOR_CAP + GROUND_CAP + ROOF_CAP)
