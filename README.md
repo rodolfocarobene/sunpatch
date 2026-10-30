@@ -122,7 +122,18 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      to shading, the month by hour chart (hover a cell for the figure) and the *Assumptions* (module efficiency 21%,
      system losses 14%; kWp is the panel's rated power, and 1 kWp is about 5 m² of panels). It is an estimate: direct sun is
      traced in 3D, diffuse light is approximated and not shaded.
-5. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
+5. **Garden**: the same 3D scene and camera again, to see what would grow at a spot. Click the apartment floor
+   (an indoor spot), the ground, a roof or a terrace (outdoor spots); a ring marks the spot. The card traces the direct
+   sun there for the 21st of each month and shows it as twelve bars, then lists the plants of a built-in catalogue
+   of about 30 best first, with a rating (good, OK), the months it grows, the month to sow an annual crop, and one
+   sentence of reason. Pick a month to rate the plants for that month only. The poor ones are kept behind **Why not
+   others?**, each with its reason. Outdoor spots also show the typical night and day temperature by month and need
+   the local climate from NASA POWER; if it cannot load, the card says so and offers **Retry** instead of ratings.
+   Indoors the card assumes a heated home at 18-24 degrees C all year, which real rooms may not match. A click on a
+   wall (a facade) makes no spot and the card says to pick a floor, ground or roof spot. To click the roof, untick **Hide floors
+   above**. Esc or the close button removes the spot. Plant figures are typical values for a common variety, not checked plant by plant,
+   and only direct sun is counted.
+6. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
    faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The same date and
    time bar stays at the bottom, with the key hints above it, and the small panel on
    the left keeps **Hide floors above** (`H`) and **Sun map** (`M`) with its legend; they are the same switches as
@@ -209,9 +220,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 - Address search by [Nominatim](https://nominatim.org/) and building data by the [Overpass API](https://overpass-api.de/)
   and its mirrors. Please respect their usage policies: the app sends one search per submit and one Overpass
   query per picked building, and caches the results.
-- Weather for the panel energy: monthly clear-sky index from [NASA POWER](https://power.larc.nasa.gov/) climatology
+- Weather: monthly clear-sky index (panel energy) and air temperatures (Garden tab) from [NASA POWER](https://power.larc.nasa.gov/) climatology
   (25-year averages). One request per place, rounded to 0.1 degrees, cached in the browser for a month, and made
-  only once a panel exists or the suitability map is on. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
+  only once a panel exists, the suitability map is on, or an outdoor Garden spot is picked. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
 
 ## License
 
