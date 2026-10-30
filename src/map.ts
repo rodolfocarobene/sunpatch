@@ -197,8 +197,9 @@ export function createMapView(
     if (outline && (isStreetLevel(hit) || !isBuildingLike(hit))) setHighlight(outline)
     else highlightBuildingUnder(lngLat, token, outline)
     const view = viewFor(hit)
-    if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18 })
-    else map.flyTo({ center: lngLat, zoom: view.zoom })
+    const animate = !matchMedia('(prefers-reduced-motion: reduce)').matches
+    if ('bounds' in view) map.fitBounds(view.bounds, { maxZoom: 18, animate })
+    else map.flyTo({ center: lngLat, zoom: view.zoom, animate })
     setStatus('Click on a building to pick it.')
   }
 

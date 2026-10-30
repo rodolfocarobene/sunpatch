@@ -43,3 +43,7 @@
   background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
 }
 .editor-status[data-kind='error'] span { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

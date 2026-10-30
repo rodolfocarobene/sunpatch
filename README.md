@@ -1,22 +1,28 @@
 # Sunpatch
 
 See where the sun comes into your home: pick your building on a map, sketch your apartment and its windows,
-then walk inside in 3D and watch the sun patches move across the floor for any day of the year.
+then walk inside in 3D and watch the sun patches move across the floor for any day of the year. The same sun
+model also tells you what a balcony solar panel would make in a year and which plants would grow on your balcony,
+roof or garden.
 
 [![Demo: pick a building, sketch the apartment, watch the sun move and step inside](docs/demo.gif)](docs/demo.mp4)
 
 *Click the animation for the full video (45 s).*
 
-Sunpatch runs entirely in the browser. Building footprints and heights come from
+Sunpatch runs entirely in the browser. Building footprints, heights and trees come from
 [OpenStreetMap](https://www.openstreetmap.org/), the sun position from [SunCalc](https://github.com/mourner/suncalc),
-and the 3D scene is rendered with [three.js](https://threejs.org/). No account or API key is needed.
+and the 3D scene is rendered with [three.js](https://threejs.org/). No account or API key is needed. The app has
+five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 
 ## Features
 
 - **Find your building** on an OpenStreetMap map, by address search or by clicking it. The 3D view opens at once
   from the map's own building data, and the detailed OpenStreetMap buildings load in the background.
 - **Real neighbourhood shadows**: every building within about 300 m is modelled, so the blocks across the street
-  shade your windows just like in reality.
+  shade your windows just like in reality. Trees mapped in OpenStreetMap, and parks and woods filled with trees,
+  cast shadows too. Buildings made of several mapped parts are merged into one.
+- **Honest heights**: where OpenStreetMap has no height, Sunpatch assumes 9 m and draws the building with faint
+  stripes. Right-click any building, yours or a neighbour's, to set its real height.
 - **Sketch your apartment** in a top-down plan editor: choose the floor, draw the outline (it snaps to the
   building's walls), add interior walls and place windows with their width, sill and height.
 - **Fix the building** where OpenStreetMap is incomplete: add a missing balcony or a protruding wall, or cut away a
@@ -26,8 +32,14 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
 - **Solar panels** in their own **Panels** tab: place panels on a facade, roof or the ground and read, in one
   sentence, how much energy each makes a year and how that compares with an unshaded panel, with the shading and
   the month-by-month figures one click away.
+  Figures come in two flavours: the ideal clear-sky energy and one weighted by the local weather
+  ([NASA POWER](https://power.larc.nasa.gov/) climate averages).
 - **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
   building, in kWh a year for each kW of panels, with local weather. Click a spot and place a panel there.
+- **Garden**: click a spot (your apartment floor, a balcony, the ground or a roof) and see the direct sun it gets
+  each month and which plants of a built-in catalogue of about 30 would grow there, month by month, with a reason
+  for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
+  not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.
@@ -41,6 +53,8 @@ and the 3D scene is rendered with [three.js](https://threejs.org/). No account o
 | Pick a building on the map | Sketch the floor plan and windows |
 | ![3D cutaway with neighbourhood shadows](docs/screenshot-cutaway.png) | ![First-person view with sun through the windows](docs/screenshot-walk.png) |
 | 3D cutaway with neighbourhood shadows | Walk inside and see the sun patches |
+| ![Panel suitability map and a panel card](docs/screenshot-panels.png) | ![Garden: plants that grow at a spot](docs/screenshot-garden.png) |
+| Where solar panels would do best | What grows at a spot, month by month |
 
 ## Quick start
 
@@ -163,12 +177,18 @@ building data.
   a guess are striped in 3D. Wrong heights move shadows by metres, so correct the ones that matter near you
   (right-click a building in 3D). Your own heights are exact only as far as you know them: 3 m a floor is a
   typical value, not a measurement.
-- Roofs are flat, and trees, awnings and most balconies are missing. Use **Fix building** for the ones that matter
-  to you.
+- Roofs are flat, and awnings and most balconies are missing. Use **Fix building** for the ones that matter to
+  you.
+- Trees are rough: those mapped one by one in OpenStreetMap are placed exactly, but parks, gardens and woods are
+  filled with a random scatter of trees (at most 1,500 within 300 m), and every tree is a simple trunk with a
+  round crown. A tree casts the same solid shadow all year, with or without leaves.
 - The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to
   about a hand's width. It counts the sun as a point, so the soft edge of a shadow is a sharp line.
 - Only direct sunlight is simulated. The general brightness of the rooms is a simple stand-in for light bouncing
   around, not a measurement.
+- Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
+  and approximates diffuse light without shading it; the plant catalogue holds typical values for a common
+  variety, and Garden needs the local climate from NASA POWER for outdoor spots.
 - Distant terrain (hills, mountains) is not modelled yet, so very low sun near sunrise and sunset may be
   reported as reaching you when a ridge would block it.
 - The public Overpass servers are sometimes busy. When they fail you keep the map-tile buildings, which have
