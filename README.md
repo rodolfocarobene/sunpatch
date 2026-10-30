@@ -241,7 +241,8 @@ bundled fixture; its edits are never autosaved.
 `?walk=1&edits=1`).
 
 The app is in English and Italian: the language is the stored choice (`sunpatch.lang`, set by the EN / IT switch at
-the top of the left panel), else the browser's. Text lives in `src/i18n/*.ts`; the header of `src/i18n.ts` says how to add some.
+the top of the left panel), else the browser's. The landing page has an Italian twin at `/it/` (`it/index.html`);
+the EN / IT link in its header sets the same choice, so the app opens in that language. Edit both landing pages together. Text lives in `src/i18n/*.ts`; the header of `src/i18n.ts` says how to add some.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
