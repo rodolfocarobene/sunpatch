@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
 import { assess } from './garden'
-import { hardestMonth, hoursText, INDOOR_NOTE, MONTH_NAMES, monthsText, plantRow, reasonText, splitPlants, sunStrip, tempStrip, WHERE } from './garden-text'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, sunStrip, tempStrip, WHERE } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -57,10 +57,26 @@ describe('spot card text', () => {
     expect(row.reason.length).toBeGreaterThan(10)
   })
 
-  it('explains the chosen month, or the hardest month for the whole year', () => {
+  it('explains the chosen month', () => {
     const basil = assess(plantById('basil')!, sunnyWindow, milan, 11)
     expect(reasonText(basil, 11)).toContain('December')
-    expect(reasonText(basil, null)).toContain(MONTH_NAMES[hardestMonth(basil)])
+  })
+
+  it('speaks for a whole year by a month the plant grows in, never one it cannot', () => {
+    const outdoors = { indoor: false, sunMinutes: [0, 60, 180, 300, 420, 600, 630, 600, 420, 240, 60, 0] }
+    const basil = assess(plantById('basil')!, outdoors, milan)
+    expect(basil.rating).not.toBe('poor')
+    expect(basil.summary.months[representativeMonth(basil)]).toBe(true)
+    expect(reasonText(basil, null)).not.toContain('January')
+    // The sunniest of its good months stands for a good plant.
+    if (basil.rating === 'good') expect(basil.year[representativeMonth(basil)].rating).toBe('good')
+  })
+
+  it('speaks for a poor plant by its hardest month', () => {
+    const dark = { indoor: true, sunMinutes: Array(12).fill(0) }
+    const tomato = assess(plantById('tomato')!, dark, milan)
+    expect(tomato.rating).toBe('poor')
+    expect(reasonText(tomato, null).length).toBeGreaterThan(10)
   })
 
   it('keeps poor plants apart for "Why not others?"', () => {

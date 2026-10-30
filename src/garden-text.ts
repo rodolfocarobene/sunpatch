@@ -91,17 +91,22 @@ const KIND_LABEL: Record<PlantKind, string> = { vegetable: 'vegetable', fruit: '
 
 const ORDER: Record<Rating, number> = { poor: 0, ok: 1, good: 2 }
 
-/** The month that sets a plant's all-year verdict: the worst rating, and among equals the dimmest. */
-export function hardestMonth(result: PlantResult): number {
-  let worst = 0
-  result.year.forEach((r, i) => {
-    const w = result.year[worst]
-    if (ORDER[r.rating] < ORDER[w.rating] || (r.rating === w.rating && r.sunHours < w.sunHours)) worst = i
-  })
-  return worst
+/**
+ * The month that stands for a plant's all-year verdict. A plant that is good somewhere is described by its best month
+ * ("Good in June: ..."), one that is only OK by its hardest month among those it grows in (what holds it back), and a
+ * poor one by its hardest month of all (why it fails). Months it cannot grow in do not speak for a plant that grows.
+ */
+export function representativeMonth(result: PlantResult): number {
+  const { year, summary, rating } = result
+  const growing = year.map((_, i) => i).filter((i) => summary.months[i])
+  const pool = rating === 'poor' || growing.length === 0 ? year.map((_, i) => i) : growing
+  const pick = (better: (a: number, b: number) => boolean) => pool.reduce((best, i) => (better(i, best) ? i : best), pool[0])
+  const rank = (i: number) => ORDER[year[i].rating]
+  if (rating === 'good') return pick((i, best) => rank(i) > rank(best) || (rank(i) === rank(best) && year[i].sunHours > year[best].sunHours))
+  return pick((i, best) => rank(i) < rank(best) || (rank(i) === rank(best) && year[i].sunHours < year[best].sunHours))
 }
 
-/** One plain sentence for a plant at this spot: the chosen month's, or for the whole year the hardest month's (or the short season). */
+/** One plain sentence for a plant at this spot: the chosen month's, or for the whole year that of its representative month (or the short season). */
 export function reasonText(result: PlantResult, month: number | null): string {
   const { plant, summary, year } = result
   if (month !== null) return explain(plant, year[month])
@@ -109,7 +114,7 @@ export function reasonText(result: PlantResult, month: number | null): string {
     const n = summary.runMonths
     return `Too short a season: the good stretch is ${n} ${n === 1 ? 'month' : 'months'}, ${plant.name} needs about ${plant.days} days.`
   }
-  return explain(plant, year[hardestMonth(result)])
+  return explain(plant, year[representativeMonth(result)])
 }
 
 export interface PlantRow {

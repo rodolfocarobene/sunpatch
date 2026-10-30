@@ -617,7 +617,9 @@ ui.onEditHeight((at) => {
   openHeight(mine?.members ? [...mine.members].sort((a, b) => b.height - a.height)[0] : mine, at)
 })
 ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
-sunScene.onBuildingClick((id, at) => switchTo(id, at))
+sunScene.onBuildingClick((id, at) => {
+  if (view !== 'garden') switchTo(id, at) // in Garden a click is a spot, not a wish to change building
+})
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
 // Starts on the map: there is nothing to show in 3D until a building is picked.

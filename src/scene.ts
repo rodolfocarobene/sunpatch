@@ -1061,11 +1061,14 @@ export function createScene(container: HTMLElement): SunScene {
   // The Garden view: a plain click names the surface the camera sees (not glass, not an overlay, not a hidden block).
   renderer.domElement.addEventListener('click', (e) => {
     if (walking || !gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
-    const hit = seenHit(e.clientX, e.clientY)
-    if (!hit) return gardenClick(null)
-    const normalY = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).y : 0
-    const { x, y, z } = hit.point
-    gardenClick({ x, y, z, normalY, apartmentFloor: hit.object === floorMesh && plan !== null && insideOutline(plan, { x, z }) })
+    const built = seenHit(e.clientX, e.clientY) // also aims the raycaster at the pointer
+    // The ground plane is not part of the world group: it is the nearer hit when nothing built is in front of it.
+    const flatGround = raycaster.intersectObject(ground, false)[0]
+    if (flatGround && (!built || flatGround.distance < built.distance)) return gardenClick({ x: flatGround.point.x, y: 0, z: flatGround.point.z, normalY: 1, apartmentFloor: false })
+    if (!built) return gardenClick(null)
+    const normalY = built.face ? built.face.normal.clone().transformDirection(built.object.matrixWorld).y : 0
+    const { x, y, z } = built.point
+    gardenClick({ x, y, z, normalY, apartmentFloor: built.object === floorMesh && plan !== null && insideOutline(plan, { x, z }) })
   })
 
   // A click on a quad of the suitability map names its sample (the nearer of the quad and whatever the camera sees
