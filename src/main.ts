@@ -19,6 +19,7 @@ import {
 import { carrySelection, restoreSelection, selectBuilding, togglePart } from './block'
 import { fetchBuildingElements, RADIUS_M } from './overpass'
 import { nextStep } from './next-step'
+import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
@@ -920,6 +921,7 @@ function show(raw: Building[], picked: Building, origin: Origin, keepCamera: boo
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
   ui.setBuildingPicked(true)
+  mapView.setSelection(selectionGeoJSON(selected, origin))
   if (view === 'plan') openEditor()
   else if (view !== 'panels' && view !== 'garden') setView('3d') // these views stay put when another building is picked in 3D
 }
@@ -1097,7 +1099,6 @@ async function refine({ clicked, origin }: Pick, token: number) {
     show(buildings, selected, sceneOrigin, hasPreview)
     sunScene.setTrees(scatterTrees(parseGreen(elements, sceneOrigin), buildings))
     if (hasPreview) chip.done(note ?? 'Detailed OSM data loaded')
-    else mapView.setStatus('Click on a building to pick it.')
   } catch (err) {
     if (token !== current) return
     if (hasPreview) chip.failed('Showing map-tile buildings (OpenStreetMap server unavailable)')

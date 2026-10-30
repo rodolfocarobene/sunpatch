@@ -1,6 +1,7 @@
 import { type GeoJSONSource, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+import { mapIdleHint, type SelectionCollection } from './map-selection'
 import { buildingAt, highlightFeature, hitLabel, isBuildingLike, isStreetLevel, rankHits, searchUrl, viewFor, type GeoHit, type TileBuilding } from './geocode'
 
 // MapLibre looks for its worker next to its own module, but Vite bundles that module
@@ -8,6 +9,7 @@ import { buildingAt, highlightFeature, hitLabel, isBuildingLike, isStreetLevel, 
 setWorkerUrl(workerUrl)
 
 const FOUND = 'found'
+const PICKED = 'picked'
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 export interface MapView {
@@ -19,6 +21,8 @@ export interface MapView {
   getTileBuildings(): TileBuilding[]
   /** Puts the cursor in the place search. */
   focusSearch(): void
+  /** Outlines the picked building on the map and drops the first-pick hint; pass empty features when none is picked. */
+  setSelection(outline: SelectionCollection): void
 }
 
 export function createMapView(
@@ -96,6 +100,21 @@ export function createMapView(
           'fill-extrusion-opacity': 0.9,
         },
       })
+    })
+  }
+
+  function setSelection(outline: SelectionCollection) {
+    const picked = outline.features.length > 0
+    if (picked) setStatus(mapIdleHint(true))
+    whenStyleReady(() => {
+      const source = map.getSource(PICKED) as GeoJSONSource | undefined
+      if (source) {
+        source.setData(outline as never)
+        return
+      }
+      map.addSource(PICKED, { type: 'geojson', data: outline as never })
+      map.addLayer({ id: `${PICKED}-fill`, type: 'fill', source: PICKED, paint: { 'fill-color': '#f5a623', 'fill-opacity': 0.25 } })
+      map.addLayer({ id: `${PICKED}-line`, type: 'line', source: PICKED, paint: { 'line-color': '#f5a623', 'line-width': 3.5 } })
     })
   }
 
@@ -210,7 +229,7 @@ export function createMapView(
     }
   })
 
-  setStatus('Click on a building to pick it.')
+  setStatus(mapIdleHint(false))
 
   return {
     setVisible(visible) {
@@ -218,6 +237,7 @@ export function createMapView(
       if (visible) map.resize()
     },
     setStatus,
+    setSelection,
     getTileBuildings,
     focusSearch: () => input.focus(),
     setLoading(loading) {
