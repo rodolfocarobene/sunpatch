@@ -63,9 +63,14 @@ export function buildingLine(b: Building): BuildingLine {
   }
 }
 
+/** A building's name for a title or a label: its name or address, else "Neighbour building". */
+export function buildingName(b: Building): string {
+  return buildingLine(b).title ?? t('bld.neighbour')
+}
+
 /** The hover note on a building in 3D: its name or id, its height with where that came from, and how to change it. */
 export function hoverLines(b: Building, ruler = false): string[] {
   const line = buildingLine(b)
   const height = [`${fmt1(b.height)} m`, line.source].filter(Boolean).join(' \u00b7 ')
-  return [line.title ?? line.osmId ?? line.label, height, ruler ? t('bld.hoverRuler') : t('bld.hoverEdit')]
+  return [line.title ?? t('bld.neighbour'), height, ruler ? t('bld.hoverRuler') : t('bld.hoverEdit')]
 }

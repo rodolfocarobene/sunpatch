@@ -188,7 +188,7 @@ export const garden = defineStrings({
     'garden.closest': 'La più vicina: {name}, {rating} {months}.',
     'garden.allPoor': 'Qui nessuna pianta supera il livello scarso, in nessun mese.',
     'garden.showMonth': 'Mostra {month}',
-    'garden.explainGood': 'Bene in {month}: {sun} di sole diretto e {t} di media vanno bene.',
+    'garden.explainGood': 'A {month}: {sun} di sole diretto e {t} di media, va bene.',
     'garden.explainIndoorOnly': 'Non si coltiva all’aperto.',
     'garden.explainOutdoorOnly': 'Non si coltiva in casa.',
     'garden.explainDark': 'Troppo buio in {month}: {sun} di sole diretto, ne servono {need}.',

@@ -20,6 +20,7 @@ export const buildings = defineStrings({
     'bld.heightMin': ', starts at {m} m',
     'bld.heightWas': ' (the data had {h} m: {source})',
     'bld.levelsUnknown': '; levels unknown',
+    'bld.neighbour': 'Neighbour building',
     'bld.hoverRuler': 'Drag the ruler to change it (Shift: 0.5 m steps), or right-click to type it',
     'bld.hoverEdit': 'Right-click to edit the height',
     'bld.open': 'Open {id} in OpenStreetMap',
@@ -48,6 +49,7 @@ export const buildings = defineStrings({
     'hp.errMetres': 'Enter a height in metres, above 0.',
     'hr.label': { one: '{n} floor · {h} m', other: '{n} floors · {h} m' },
     'hr.aria': 'Height ruler: drag to change the height. The Height box (right-click) does it by typing.',
+    'hr.handleAria': 'Height of {name}',
     'hr.handle': 'Drag to change the height (Shift: 0.5 m steps)',
   },
   it: {
@@ -68,6 +70,7 @@ export const buildings = defineStrings({
     'bld.heightMin': ', parte da {m} m',
     'bld.heightWas': ' (i dati avevano {h} m: {source})',
     'bld.levelsUnknown': '; piani sconosciuti',
+    'bld.neighbour': 'Edificio vicino',
     'bld.hoverRuler': "Trascina il righello per cambiarla (Maiusc: passi da 0,5 m), o clic destro per scriverla",
     'bld.hoverEdit': "Clic destro per modificare l'altezza",
     'bld.open': 'Apri {id} su OpenStreetMap',
@@ -96,6 +99,7 @@ export const buildings = defineStrings({
     'hp.errMetres': "Inserisci un'altezza in metri, maggiore di 0.",
     'hr.label': { one: '{n} piano · {h} m', other: '{n} piani · {h} m' },
     'hr.aria': "Righello dell'altezza: trascina per cambiarla. La finestra Altezza (clic destro) lo fa scrivendo.",
+    'hr.handleAria': 'Altezza di {name}',
     'hr.handle': 'Trascina per cambiare l’altezza (Maiusc: passi da 0,5 m)',
   },
 })

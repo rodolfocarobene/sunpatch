@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heightFromDrag, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
+import { heightFromDrag, keyHeight, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
 import type { Building } from './osm'
 
 const building = { id: 'way/1', minHeight: 0, height: 9, heightSource: 'default', outer: [], holes: [], tags: {} } as unknown as Building
@@ -51,5 +51,23 @@ describe('overrideFromRuler', () => {
   it('stores whole floors as floors and half metres as metres', () => {
     expect(overrideFromRuler(building, 24)).toEqual({ height: 24, levels: 8 })
     expect(overrideFromRuler(building, 10.5)).toEqual({ height: 10.5 })
+  })
+})
+
+describe('keyHeight', () => {
+  it('moves one whole floor, snapping from between floors', () => {
+    expect(keyHeight(9, 0, 1, false)).toBe(12)
+    expect(keyHeight(9, 0, -1, false)).toBe(6)
+    expect(keyHeight(10, 0, 1, false)).toBe(12)
+    expect(keyHeight(10, 0, -1, false)).toBe(9)
+  })
+  it('never goes below one floor', () => {
+    expect(keyHeight(3, 0, -1, false)).toBe(3)
+    expect(keyHeight(7, 4, -1, false)).toBe(7)
+  })
+  it('moves 0.5 m with Shift, at least 0.5 m above the start', () => {
+    expect(keyHeight(9, 0, 1, true)).toBe(9.5)
+    expect(keyHeight(9, 0, -1, true)).toBe(8.5)
+    expect(keyHeight(0.5, 0, -1, true)).toBe(0.5)
   })
 })

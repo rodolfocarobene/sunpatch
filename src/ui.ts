@@ -78,6 +78,8 @@ export interface UI {
   setSuitabilityStatus(status: SuitabilityStatus): void
   /** The "Frame the view" button over the scene (3D, Panels, Garden): hear its press. */
   onReframe(listener: () => void): void
+  /** The press changed nothing (the camera is already framed): say so on the button for a moment. */
+  flashReframed(): void
   /** The Panels view's list: one row per panel and the total line (null while the panels are still analysed). */
   setPanelList(list: PanelList): void
   /** A click on a row of the list. */
@@ -240,6 +242,7 @@ export function createUI(
   reframe.textContent = t('shell.reframe')
   reframe.title = t('shell.reframeTitle')
   let reframeListener: (() => void) | undefined
+  let reframeTimer = 0
   reframe.addEventListener('click', () => reframeListener?.())
   document.body.appendChild(reframe)
 
@@ -614,6 +617,15 @@ export function createUI(
     },
     onReframe(fn) {
       reframeListener = fn
+    },
+    flashReframed() {
+      reframe.textContent = t('shell.reframed')
+      reframe.classList.add('done')
+      window.clearTimeout(reframeTimer)
+      reframeTimer = window.setTimeout(() => {
+        reframe.textContent = t('shell.reframe')
+        reframe.classList.remove('done')
+      }, 1400)
     },
     setPanelList({ items, selected, total }) {
       const totalEl = $('panelTotals')

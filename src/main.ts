@@ -379,6 +379,9 @@ function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number, ope
 const suitJob = createSuitabilityJob()
 const suitPopover = createSuitabilityPopover(app, { onClose: closeSuitPick, onPlace: placeHere })
 let suitOn = false
+/** The user has the suitability map on: it stays on for the session, off only while another tab is open. */
+let suitWish = false
+let suitLeaving = false
 let suitResult: SuitabilityResult | undefined
 let suitEnergy: SurfaceEnergy[] = []
 let suitPicked: number | null = null
@@ -656,6 +659,7 @@ suitJob.onState((state) => {
 })
 ui.onSuitability((on) => {
   suitOn = on
+  if (!suitLeaving) suitWish = on
   sunScene.setSuitabilityVisible(on)
   if (on) {
     if (sunMapOn) ui.setSunMap(false) // both paint on the same surfaces; one at a time
@@ -667,7 +671,9 @@ ui.onSuitability((on) => {
     sunScene.setSuitability(null)
   }
 })
-ui.onReframe(() => sunScene.frameView(frameTargetFor(view)))
+ui.onReframe(() => {
+  if (!sunScene.frameView(frameTargetFor(view))) ui.flashReframed()
+})
 sunScene.setFrameInset(() => document.getElementById('panel')?.getBoundingClientRect().right ?? 0)
 sunScene.onSuitabilityClick((index) => {
   suitPicked = index
@@ -911,7 +917,12 @@ function setView(next: View) {
   // Opening a scene view shows its answer, unless the user has orbited since the camera was framed: the apartment
   // in 3D and Garden, the whole building in Panels (its map covers the facades and the roof).
   if (scene3d && from !== next) sunScene.frameOnEntry(frameTargetFor(next))
-  if (next !== 'panels') ui.setSuitability(false) // the map belongs to the Panels view
+  // The map belongs to the Panels view: it goes off when leaving and comes back (recomputed if the scene changed) on return.
+  if (next !== 'panels') {
+    suitLeaving = true
+    ui.setSuitability(false)
+    suitLeaving = false
+  } else if (suitWish) ui.setSuitability(true)
   ui.setView(next)
   renderTotals()
   planSummary.hidden = next !== 'plan' || selectedPanel === null
