@@ -37,6 +37,10 @@ import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-jo
 import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
+import { createGardenJob, type GardenState } from './garden-job'
+import { pointSpot } from './garden-spots'
+import { classifyHit, FACADE_HINT, type PickedKind } from './garden-pick'
+import { createGardenCard, type GardenCardInput } from './garden-card'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
 import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
@@ -66,6 +70,112 @@ let probePoint: Point | undefined
 let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
 let sunKey = ''
 let sunTimer: number | undefined
+
+// Garden: a click on the floor, the ground or a roof traces that one point over the year in a worker and the card says
+// what grows there. Outdoor spots also need the local temperatures (NASA POWER, cached by weather.ts).
+const gardenJob = createGardenJob()
+const gardenCard = createGardenCard({
+  onMonth: (m) => {
+    gardenMonth = m
+    renderGarden()
+  },
+  onRetryClimate: () => {
+    gardenClimate = { key: '', status: 'idle' }
+    ensureGardenClimate()
+  },
+  onRetryTrace: () => requestGarden(true),
+  onClose: () => clearGardenSpot(),
+})
+ui.gardenSlot.appendChild(gardenCard.el)
+let gardenSpot: { kind: PickedKind; x: number; y: number; z: number } | undefined
+let gardenTrace: GardenCardInput['trace'] = { status: 'idle' }
+let gardenMonth: number | null = null
+let gardenHint: string | undefined
+let gardenClimate: { key: string; status: GardenCardInput['weather']; climate?: Climate } = { key: '', status: 'idle' }
+
+function renderGarden() {
+  gardenCard.set({
+    kind: gardenSpot?.kind ?? null,
+    hint: gardenHint,
+    trace: gardenTrace,
+    weather: gardenClimate.status,
+    climate: gardenClimate.climate,
+    month: gardenMonth,
+  })
+}
+
+renderGarden() // the hint, until a spot is picked
+
+function clearGardenSpot() {
+  gardenSpot = undefined
+  gardenHint = undefined
+  gardenTrace = { status: 'idle' }
+  gardenJob.stop()
+  sunScene.setGardenMark(null)
+  renderGarden()
+}
+
+function ensureGardenClimate() {
+  if (!gardenSpot || gardenSpot.kind === 'indoor' || !sunDay) return
+  const place = climateKey(sunDay.lat, sunDay.lon)
+  if (gardenClimate.key === place.key && gardenClimate.status !== 'idle') return
+  gardenClimate = { key: place.key, status: 'loading' }
+  loadClimate(place.lat, place.lon).then(
+    (c) => {
+      if (gardenClimate.key !== place.key) return
+      gardenClimate = { key: place.key, status: 'ready', climate: c }
+      renderGarden()
+    },
+    () => {
+      if (gardenClimate.key !== place.key) return
+      gardenClimate = { key: place.key, status: 'error' }
+      renderGarden()
+    },
+  )
+}
+
+/** Traces the picked spot over the year; `again` forgets a failed run. */
+function requestGarden(again = false) {
+  if (!gardenSpot || !site || !plan || !sunDay) return
+  const { x, y, z, kind } = gardenSpot
+  if (again) gardenTrace = { status: 'running', progress: 0 }
+  gardenJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan,
+    lat: sunDay.lat,
+    lon: sunDay.lon,
+    year: sunDay.when.getFullYear(),
+    tag: `${kind} ${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`,
+    spots: () => [pointSpot(x, y, z, kind === 'indoor')],
+    occluders: () => sunScene.occluders(),
+  })
+  renderGarden()
+}
+
+gardenJob.onState((state: GardenState) => {
+  if (!gardenSpot) return
+  gardenTrace =
+    state.status === 'running' ? { status: 'running', progress: state.progress }
+    : state.status === 'done' ? { status: 'done', sunMinutes: state.result.spots[0].sunMinutes }
+    : state.status === 'error' ? { status: 'error', message: state.message }
+    : { status: 'idle' }
+  renderGarden()
+})
+sunScene.onGardenClick((hit) => {
+  if (!hit) return // the sky: the spot stays
+  const kind = classifyHit(hit)
+  if (!kind) {
+    gardenHint = FACADE_HINT
+    renderGarden()
+    return
+  }
+  gardenHint = undefined
+  gardenSpot = { kind, x: hit.x, y: hit.y, z: hit.z }
+  gardenTrace = { status: 'running', progress: 0 }
+  sunScene.setGardenMark({ x: hit.x, y: hit.y, z: hit.z })
+  ensureGardenClimate()
+  requestGarden()
+})
 
 // Panel suitability: where on the facade, roof and ground a panel would make the most energy per kWp. Computed in a
 // worker when the switch goes on, painted as coloured quads, read by clicking one (and a panel placed from there).
@@ -409,6 +519,7 @@ ui.onSunMap((on) => {
   }
 })
 sunScene.onSceneChange(() => {
+  if (gardenSpot) clearGardenSpot() // the spot belongs to the scene it was picked in
   requestShade()
   sunKey = ''
   sunResult = undefined
@@ -446,7 +557,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || walking) return
   if (heightPopover.isOpen) return heightPopover.hide()
   if (suitPopover.open) return closeSuitPick()
-  if (view === 'panels' && selectedPanel && !popover.open) selectPanel(null)
+  if (view === 'garden' && gardenSpot) clearGardenSpot()
+  else if (view === 'panels' && selectedPanel && !popover.open) selectPanel(null)
   else escape() // walking, the walk controls report Esc themselves
 })
 sunScene.onProbeScreen((at) => popover.moveTo(at))
@@ -505,7 +617,9 @@ ui.onEditHeight((at) => {
   openHeight(mine?.members ? [...mine.members].sort((a, b) => b.height - a.height)[0] : mine, at)
 })
 ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
-sunScene.onBuildingClick((id, at) => switchTo(id, at))
+sunScene.onBuildingClick((id, at) => {
+  if (view !== 'garden') switchTo(id, at) // in Garden a click is a spot, not a wish to change building
+})
 const chip = createStatusChip(app, () => last && void refine(last, current))
 
 // Starts on the map: there is nothing to show in 3D until a building is picked.
@@ -530,20 +644,23 @@ function walkInside() {
   sunScene.startWalk()
 }
 
-/** The Panels view needs a plan to hold the panels: the whole floor, as when the editor opens first. */
-function ensurePlan(): boolean {
+/** The Panels and Garden views need a plan (panels to hold, a floor to stand on): the whole floor, as when the editor opens first. */
+function ensurePlan(keepView = false): boolean {
   if (!site) return false
-  if (!plan) setPlan(newPlan())
+  if (!plan) setPlan(newPlan(), false, keepView)
   return true
 }
 
 function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
+  if (next === 'garden' && !ensurePlan(true)) return // the camera stays where it is
+  if (view === 'garden' && next !== 'garden') clearGardenSpot()
   view = next
   heightPopover.hide()
   hoverTip.hide()
-  const scene3d = next === '3d' || next === 'panels' // one scene and one camera for both
+  const scene3d = next === '3d' || next === 'panels' || next === 'garden' // one scene and one camera for all three
+  sunScene.setGardenPicking(next === 'garden')
   app.hidden = !scene3d
   mapView.setVisible(next === 'map')
   editor.setVisible(next === 'plan')
@@ -621,7 +738,7 @@ function show(raw: Building[], picked: Building, origin: Origin, keepCamera: boo
   ui.setBuildingInfo(selected)
   ui.setBuildingPicked(true)
   if (view === 'plan') openEditor()
-  else if (view !== 'panels') setView('3d') // the Panels view stays put when another building is picked in 3D
+  else if (view !== 'panels' && view !== 'garden') setView('3d') // these views stay put when another building is picked in 3D
 }
 
 const NEIGHBOR_RADIUS_M = 60

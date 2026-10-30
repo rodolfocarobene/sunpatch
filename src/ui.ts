@@ -19,7 +19,7 @@ export const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: '2-digit', minute
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 
-export type View = 'map' | 'plan' | '3d' | 'panels'
+export type View = 'map' | 'plan' | '3d' | 'panels' | 'garden'
 
 export type SunMapStatus =
   | { kind: 'computing'; progress: number }
@@ -81,6 +81,8 @@ export interface UI {
   readonly dock: HTMLElement
   /** Where the panel card is docked: the Panels view of the left panel. */
   readonly cardSlot: HTMLElement
+  /** Where the spot card is docked: the Garden view of the left panel. */
+  readonly gardenSlot: HTMLElement
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
@@ -110,6 +112,7 @@ export function createUI(
       <button type="button" data-view="plan" disabled title="Pick a building first">Plan</button>
       <button type="button" data-view="3d" disabled title="Pick a building first">3D</button>
       <button type="button" data-view="panels" disabled title="Pick a building first">Panels</button>
+      <button type="button" data-view="garden" disabled title="Pick a building first">Garden</button>
     </nav>
     <section data-views="map">
       <h2>Find your building</h2>
@@ -175,6 +178,10 @@ export function createUI(
         <p id="panelEmpty" class="hint">No panels yet. Turn on Panel suitability, click a spot and press Place a panel here, or use the Panel tool in <button id="emptyToPlan" class="link" type="button">Plan</button>.</p>
       </div>
       <div id="cardSlot"></div>
+    </section>
+    <section data-views="garden">
+      <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
+      <div id="gardenSlot"></div>
     </section>`
   document.body.appendChild(panel)
   // One docked bar for date and time, shared by the 3D view and walk mode (the walk key hints stack above it).
@@ -225,10 +232,17 @@ export function createUI(
   const cutaway = $<HTMLInputElement>('cutaway')
   let cutawayListener: ((hidden: boolean) => void) | undefined
   const applyCutaway = () => {
+    gardenCutaway.checked = cutaway.checked
     onCutaway(cutaway.checked)
     cutawayListener?.(cutaway.checked)
   }
   cutaway.addEventListener('change', applyCutaway)
+  // The Garden view has its own copy of the switch: it is the same state (the roof needs the floors above shown).
+  const gardenCutaway = $<HTMLInputElement>('gardenCutaway')
+  gardenCutaway.addEventListener('change', () => {
+    cutaway.checked = gardenCutaway.checked
+    applyCutaway()
+  })
   const sunMap = $<HTMLInputElement>('sunMap')
   const legend = $('sunMapLegend')
   let sunMapListener: ((on: boolean) => void) | undefined
@@ -310,7 +324,7 @@ export function createUI(
   /** One line under the tabs; the open guide already says what to do, so it stays quiet then. */
   function updateMapHint() {
     $('firstRun').hidden = picked
-    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan, 3D and Panels.'
+    const text = picked ? 'Click another building to switch.' : guide.open ? '' : 'Pick a building to unlock Plan, 3D, Panels and Garden.'
     mapHint.textContent = text
     mapHint.hidden = !text || panel.dataset.view !== 'map'
   }
@@ -454,7 +468,8 @@ export function createUI(
         b.title = !picked
           ? 'Pick a building first'
           : b.dataset.view === 'plan' ? 'Draw your apartment on this building'
-          : b.dataset.view === 'panels' ? 'Solar panels: where they would do best and what yours make' : 'Sun and shadows in 3D'
+          : b.dataset.view === 'panels' ? 'Solar panels: where they would do best and what yours make'
+          : b.dataset.view === 'garden' ? 'Click a spot to see what grows there' : 'Sun and shadows in 3D'
       }
     },
     setNextStep(step) {
@@ -549,6 +564,7 @@ export function createUI(
       panelPickListener = fn
     },
     cardSlot: $('cardSlot'),
+    gardenSlot: $('gardenSlot'),
     dock,
     setWalking(walking) {
       walk.disabled = walking
