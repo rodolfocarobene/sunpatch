@@ -37,7 +37,7 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 - **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
   building, in kWh a year for each kW of panels, with local weather. Click a spot and place a panel there.
 - **Garden**: click a spot (your apartment floor, a balcony, the ground or a roof) and see the direct sun it gets
-  each month and which plants of a built-in catalogue of about 30 would grow there, month by month, with a reason
+  each month and which plants of a built-in catalogue of about 70 would grow there, month by month, with a reason
   for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
   not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
@@ -142,7 +142,7 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
 5. **Garden**: the same 3D scene and camera again, to see what would grow at a spot. Click the apartment floor
    (an indoor spot), the ground, a roof or a terrace (outdoor spots); a ring marks the spot. The card traces the direct
    sun around there (a small disc of points about 30 cm across, averaged) for the 21st of each month and shows it as twelve bars, then lists the plants of a built-in catalogue
-   of about 30 best first, with a rating (good, OK), the months it grows, the month to sow an annual crop, and one
+   of about 70 best first, with a rating (good, OK), the months it grows, the month to sow an annual crop, and one
    sentence of reason. The **Month** control under the plant picker rates the plants for that month only. The poor ones are kept behind **Why not
    others?**, each with its reason. Outdoor spots also show the typical night and day temperature by month (a bar from low to high, blue where nights are near or below freezing) and need
    the local climate from NASA POWER; if it cannot load, the card says so and offers **Retry** instead of ratings.

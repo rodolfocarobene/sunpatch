@@ -14,9 +14,23 @@ const brightOutdoor: Spot = { indoor: false, sunMinutes: Array(12).fill(600) }
 const sunnyWindow: Spot = { indoor: true, sunMinutes: [180, 240, 300, 360, 420, 480, 480, 420, 360, 270, 200, 160] }
 
 describe('plant catalogue', () => {
-  it('has about 30 plants with unique ids', () => {
-    expect(PLANTS.length).toBeGreaterThanOrEqual(28)
+  it('has about 70 plants with unique ids and names', () => {
+    expect(PLANTS.length).toBeGreaterThanOrEqual(70)
     expect(new Set(PLANTS.map((p) => p.id)).size).toBe(PLANTS.length)
+    expect(new Set(PLANTS.map((p) => p.name)).size).toBe(PLANTS.length)
+  })
+
+  it('gives every plant an Italian name and a source', () => {
+    for (const p of PLANTS) {
+      expect(p.nameIt.trim().length, p.id).toBeGreaterThan(0)
+      expect(p.source, p.id).toMatch(/^General horticultural guidance \(.*\); typical values, not checked per plant/)
+    }
+    expect(plant('tomato').nameIt).toBe('pomodoro')
+    expect(plant('basil').nameIt).toBe('basilico')
+  })
+
+  it('covers every kind', () => {
+    for (const kind of ['vegetable', 'fruit', 'herb', 'flower', 'houseplant']) expect(PLANTS.some((p) => p.kind === kind), kind).toBe(true)
   })
 
   it.each(PLANTS.map((p) => [p.id, p] as const))('%s has consistent ranges', (_, p) => {
@@ -123,6 +137,36 @@ describe('scoring in Milan', () => {
     expect(s.runMonths).toBe(5)
     expect(s.fits).toBe(false)
     expect(s.sowMonth).toBeUndefined()
+  })
+})
+
+describe('scoring of the larger catalogue in Milan', () => {
+  it('rates aubergine good in June to August on a sunny south balcony', () => {
+    for (const m of [5, 6, 7]) expect(rateMonth(plant('aubergine'), southBalcony, milan, m).rating).toBe('good')
+    expect(rateMonth(plant('aubergine'), southBalcony, milan, 0).rating).toBe('poor')
+  })
+
+  it('rates a potted lemon poor in winter from frost and good in summer', () => {
+    const jan = rateMonth(plant('lemon'), southBalcony, milan, 0)
+    expect(jan.rating).toBe('poor')
+    expect(jan.issues).toContainEqual({ kind: 'frost', severe: true })
+    expect(rateMonth(plant('lemon'), southBalcony, milan, 6).rating).toBe('good')
+    expect(assess(plant('lemon'), southBalcony, milan).rating).toBe('poor')
+  })
+
+  it('keeps a monstera, peace lily and ZZ plant alive in a dark north room', () => {
+    for (const id of ['monstera', 'peace-lily', 'zz-plant', 'rubber-plant', 'orchid']) expect(assess(plant(id), northRoom, milan).summary.allYear, id).toBe(true)
+  })
+
+  it('treats a hardy fig and garlic as winter-proof and a begonia as frost-tender', () => {
+    expect(rateMonth(plant('fig'), southBalcony, milan, 0).issues.some((i) => i.kind === 'frost')).toBe(false)
+    expect(rateMonth(plant('garlic'), southBalcony, milan, 0).issues.some((i) => i.kind === 'frost')).toBe(false)
+    expect(rateMonth(plant('begonia'), brightOutdoor, milan, 0).issues).toContainEqual({ kind: 'frost', severe: true })
+  })
+
+  it('scorches a shade-loving busy Lizzie in strong sun and keeps houseplants off the balcony', () => {
+    expect(rateMonth(plant('impatiens'), brightOutdoor, milan, 6).issues).toContainEqual({ kind: 'glare', severe: true })
+    expect(rateMonth(plant('monstera'), southBalcony, milan, 6).rating).toBe('poor')
   })
 })
 
