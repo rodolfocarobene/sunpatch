@@ -53,7 +53,7 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 #panel button.primary:hover:not(:disabled), .maplibregl-popup-content button:hover { background: #e89a14; border-color: var(--accent-strong); }
 #panel button.primary:active:not(:disabled), .maplibregl-popup-content button:active { background: #d98d0c; }
 #panel button.primary:disabled { background: var(--bg-band); border-color: var(--line); }
-input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select, .findPanel select {
+input[type='number'], input[type='date'], input[type='search'], .editor-box select, .gardenCard select, .findPanel select, .monthRow select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px;
 }
 input::placeholder { color: var(--muted); opacity: 1; }
@@ -416,8 +416,15 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #gardenSlot { display: flex; flex-direction: column; }
 #gardenSlot .gardenCard { position: relative; padding-top: 10px; border-top: 1px solid var(--line); }
 #gardenSlot .gardenCard .cardClose { top: 6px; right: 0; }
+#gardenSlot .gardenCard:has(.gardenPrompt) { padding-top: 0; border-top: 0; }
 .gardenCard .gardenHead { display: flex; flex-direction: column; gap: 4px; }
 .gardenCard .gardenHead .cardNote { text-wrap: pretty; }
+.gardenCard .gardenPrompt { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--text); text-wrap: balance; }
+.gardenCard .plantChips { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.gardenCard .plantChips li { display: inline-flex; align-items: baseline; gap: 5px; }
+.gardenCard .plantChips strong { font-weight: 650; }
+.gardenCard .plantMore { color: var(--muted); font-size: var(--text-xs); }
+.gardenCard .gardenAnswer { margin-top: 6px; }
 .gardenCard .gardenHead .cardVerdict { font-size: var(--text-sm); }
 .gardenCard .gardenChart { display: flex; flex-direction: column; gap: 3px; }
 .gardenCard .chartLabel { font-weight: 600; }
@@ -451,7 +458,15 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .plantsPoor > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 
 /* Garden view: "Find a place for" picker, the legend of the plant map and its summary. */
-.findPanel { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+.findPanel { display: flex; flex-direction: column; gap: 8px; }
+.findPanel:has(.findResult:empty) { gap: 0; }
+.findPanel .findResult:empty { display: none; }
+#gardenSection .findGroup { padding-top: 10px; border-top: 1px solid var(--line); }
+#gardenSection .findGroup .groupHead { margin: 0; }
+#gardenSection > .field:last-child { padding-top: 10px; border-top: 1px solid var(--line); }
+#gardenSection.hasSpot #gardenMonthSlot { order: -1; }
+#panel label.monthRow { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
+#panel label.monthRow select { flex: 1; min-width: 0; font-weight: 400; }
 #panel .findPanel label.findRow { color: var(--text); font-weight: 600; }
 #panel .findPanel label.findRow + label.findRow { flex-direction: row; align-items: center; gap: 8px; }
 .findPanel .findRow select { min-width: 0; font-weight: 400; }

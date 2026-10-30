@@ -85,6 +85,10 @@ export interface UI {
   readonly gardenSlot: HTMLElement
   /** Where the "Find a place for" plant picker is docked. */
   readonly gardenFindSlot: HTMLElement
+  /** Where the shared Month control sits, between the spot card and the plant finder. */
+  readonly gardenMonthSlot: HTMLElement
+  /** The Garden section: marked while a spot is open, so the Month control rises above the card. */
+  readonly gardenSection: HTMLElement
   /** Shows or hides the Garden view's line about picking the roof. */
   setRoofHint(show: boolean): void
   /** Disables the Walk button while walking. */
@@ -183,11 +187,17 @@ export function createUI(
       </div>
       <div id="cardSlot"></div>
     </section>
-    <section data-views="garden">
-      <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
-      <p id="gardenRoofHint" class="cardNote small" hidden>Untick Hide floors above to see and pick the roof.</p>
-      <div id="gardenFindSlot"></div>
+    <section data-views="garden" id="gardenSection">
       <div id="gardenSlot"></div>
+      <div id="gardenMonthSlot"></div>
+      <div class="field findGroup">
+        <h3 class="groupHead">Or find a place for a plant</h3>
+        <div id="gardenFindSlot"></div>
+      </div>
+      <div class="field">
+        <label class="row" title="Hide the floors above the apartment to click its floor; show them to click the roof"><input id="gardenCutaway" type="checkbox" checked> Hide floors above</label>
+        <p id="gardenRoofHint" class="cardNote small" hidden>Untick Hide floors above to see and pick the roof.</p>
+      </div>
     </section>`
   document.body.appendChild(panel)
   // One docked bar for date and time, shared by the 3D view and walk mode (the walk key hints stack above it).
@@ -575,6 +585,8 @@ export function createUI(
     cardSlot: $('cardSlot'),
     gardenSlot: $('gardenSlot'),
     gardenFindSlot: $('gardenFindSlot'),
+    gardenMonthSlot: $('gardenMonthSlot'),
+    gardenSection: $('gardenSection'),
     dock,
     setWalking(walking) {
       walk.disabled = walking

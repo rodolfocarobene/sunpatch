@@ -27,6 +27,8 @@ export interface FindInput {
 
 export interface FindPanel {
   el: HTMLElement
+  /** The Month control, shared by the spot card and the plant map; the caller places it. */
+  monthEl: HTMLElement
   set(input: FindInput): void
 }
 
@@ -55,8 +57,8 @@ export function createFindPanel(options: {
   const root = el('div', 'findPanel')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', 'Find a place for a plant')
-  const plantLabel = el('label', 'findRow')
   const plantSelect = el('select')
+  plantSelect.setAttribute('aria-label', 'Plant to find a place for')
   plantSelect.append(option('', 'Choose a plant…'))
   for (const g of GROUPS) {
     const group = document.createElement('optgroup')
@@ -65,17 +67,16 @@ export function createFindPanel(options: {
     if (group.children.length > 0) plantSelect.append(group)
   }
   plantSelect.addEventListener('change', () => options.onPlant(plantSelect.value === '' ? null : plantSelect.value))
-  plantLabel.append(el('span', 'findLabel', 'Find a place for'), plantSelect)
 
-  const monthLabel = el('label', 'findRow')
+  const monthLabel = el('label', 'monthRow')
   const monthSelect = el('select')
   monthSelect.append(option('', 'All year'))
   MONTH_NAMES.forEach((m, i) => monthSelect.append(option(String(i), m)))
   monthSelect.addEventListener('change', () => options.onMonth(monthSelect.value === '' ? null : Number(monthSelect.value)))
-  monthLabel.append(el('span', 'findLabel', 'Month'), monthSelect)
+  monthLabel.append(el('span', '', 'Month'), monthSelect)
 
   const result = el('div', 'findResult')
-  root.append(plantLabel, monthLabel, result)
+  root.append(plantSelect, result)
 
   const swatch = (css: string | null, text: string): HTMLElement => {
     const s = el('span', 'legendItem')
@@ -98,6 +99,7 @@ export function createFindPanel(options: {
 
   return {
     el: root,
+    monthEl: monthLabel,
     set(input) {
       const keepFocus = document.activeElement === plantSelect || document.activeElement === monthSelect ? document.activeElement : null
       plantSelect.value = input.plantId ?? ''

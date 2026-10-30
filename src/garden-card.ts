@@ -1,13 +1,13 @@
 import { rankPlants, type PlantResult } from './garden'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, tempStrip, whereText, type PlantRow,
+  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
 
 // The Garden spot card: what the sun and the weather at one clicked spot let grow. It is docked in the left panel of the
-// Garden view; main.ts feeds it. It leads with where the spot is, then the months of sun and temperature, then the plants.
+// Garden view; main.ts feeds it. It leads with where the spot is and the best plants, then the months of sun and temperature, then the full list.
 
 export type GardenTrace =
   | { status: 'idle' }
@@ -122,9 +122,9 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const wrap = el('div', 'gardenChart')
     const cold = cells.some((c) => c.cold)
     wrap.append(
-      el('span', 'chartLabel', 'Typical night and day temperature, °C'),
+      el('span', 'chartLabel', 'Typical night to day, °C'),
       s,
-      el('span', 'chartCaption', `Each bar runs from the typical low to the typical high; hover for the numbers. They span ${Math.round(min)} to ${Math.round(max)} °C over the year.${cold ? ' Blue: nights near or below freezing.' : ''}`),
+      el('span', 'chartCaption', `${cold ? 'Blue: near freezing. ' : ''}${Math.round(min)} to ${Math.round(max)} °C over the year.`),
     )
     return wrap
   }
@@ -139,13 +139,15 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return li
   }
 
-  function plants(input: GardenCardInput, sunMinutes: number[]): HTMLElement {
+  /** The spot's plants in two parts: the short answer (shown first) and the full list with the poor ones (shown after the strips). */
+  function plants(input: GardenCardInput, sunMinutes: number[]): { answer: HTMLElement; rest: HTMLElement } {
     const indoor = input.kind === 'indoor'
     const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
     const { fit, poor } = splitPlants(ranked)
+    const answer = el('div', 'gardenPlants gardenAnswer')
     const box = el('div', 'gardenPlants')
     const when = input.month === null ? '' : ` in ${MONTH_NAMES[input.month]}`
-    box.append(
+    answer.append(
       el(
         'p',
         'plantsLead',
@@ -165,10 +167,20 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
           go.addEventListener('click', () => options.onMonth(month))
           line.append(' ', go)
         }
-        box.append(line)
+        answer.append(line)
       }
     }
     if (fit.length > 0) {
+      const { shown, more } = topPlants(fit)
+      const chips = el('ul', 'plantChips')
+      for (const r of shown) {
+        const row = plantRow(r, input.month)
+        const li = el('li')
+        li.append(el('strong', '', row.name), el('span', `rate ${row.rating}`, RATING_LABEL[row.rating]))
+        chips.append(li)
+      }
+      if (more > 0) chips.append(el('li', 'plantMore', `and ${more} more`))
+      answer.append(chips)
       const list = el('ul', 'plantList')
       list.append(...fit.map((r) => rowItem(plantRow(r, input.month), true)))
       box.append(list)
@@ -185,7 +197,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       more.append(list)
       box.append(more)
     }
-    return box
+    return { answer, rest: box }
   }
 
   function busy(text: string, progress?: number): HTMLElement {
@@ -222,7 +234,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     el: root,
     set(input) {
       if (input.kind === null) {
-        head.replaceChildren(el('p', 'cardNote', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
+        head.replaceChildren(el('p', 'gardenPrompt', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
         body.replaceChildren()
         return
@@ -239,15 +251,18 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         body.replaceChildren(problem(trace.message, 'Try again', options.onRetryTrace))
         return
       }
-      const parts: HTMLElement[] = [sunChart(trace.sunMinutes, input.month)]
+      const sun = sunChart(trace.sunMinutes, input.month)
+      const parts: HTMLElement[] = [sun]
       const outdoor = input.kind !== 'indoor'
       if (outdoor && input.weather === 'error') {
         parts.push(problem('Local temperatures could not be loaded (NASA POWER). Outdoor plants cannot be rated without them.', 'Retry the temperatures', options.onRetryClimate))
       } else if (outdoor && (input.weather !== 'ready' || !input.climate)) {
         parts.push(busy('Loading local temperatures…'))
       } else {
+        const { answer, rest } = plants(input, trace.sunMinutes)
+        parts.unshift(answer)
         if (outdoor) parts.push(tempChart(input.climate!, input.month))
-        results.replaceChildren(plants(input, trace.sunMinutes))
+        results.replaceChildren(rest)
         parts.push(results, caveat())
       }
       body.replaceChildren(...parts)
