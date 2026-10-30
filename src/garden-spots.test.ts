@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/overpass-milan-duomo.json'
 import { buildExample } from './example'
-import { GROUND_CAP, INDOOR_CAP, INDOOR_CELL, POT_HEIGHT, ROOF_CAP, gardenSpots, groundSpots, indoorSpots, pointSpot, roofSpots, spotPoints, withSun } from './garden-spots'
+import { DISC_RADIUS, GROUND_CAP, INDOOR_CAP, INDOOR_CELL, POT_HEIGHT, ROOF_CAP, discSpots, gardenSpots, groundSpots, meanSun, indoorSpots, pointSpot, roofSpots, spotPoints, withSun } from './garden-spots'
 import type { OverpassElement } from './osm'
 import { floorBase } from './plan'
 
@@ -64,6 +64,23 @@ describe('garden spots', () => {
   it('makes one spot for a clicked point', () => {
     expect(pointSpot(1, 3, 2, true)).toEqual({ x: 1, y: 3 + POT_HEIGHT, z: 2, indoor: true, kind: 'point' })
     expect(pointSpot(1, 0, 2, false).indoor).toBe(false)
+  })
+
+  it('spreads a clicked spot over a small disc at one height, dropping points that cannot hold a pot', () => {
+    const disc = discSpots(1, 3, 2, true)
+    expect(disc).toHaveLength(7)
+    expect(disc[0]).toEqual(pointSpot(1, 3, 2, true))
+    expect(new Set(disc.map((s) => s.y)).size).toBe(1)
+    for (const s of disc.slice(1)) expect(Math.hypot(s.x - 1, s.z - 2)).toBeCloseTo(DISC_RADIUS)
+    const east = discSpots(1, 3, 2, true, (x) => x <= 1)
+    expect(east.length).toBeLessThan(7)
+    expect(east[0].x).toBe(1)
+    expect(discSpots(1, 3, 2, true, () => false)).toHaveLength(1)
+  })
+
+  it('averages the monthly sun of a disc', () => {
+    const at = (m: number) => ({ ...pointSpot(0, 0, 0, false), sunMinutes: Array(12).fill(m) })
+    expect(meanSun([at(0), at(60), at(120)])).toEqual(Array(12).fill(60))
   })
 
   it('flattens spots for tracing and joins them with their minutes', () => {

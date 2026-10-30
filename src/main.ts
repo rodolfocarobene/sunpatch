@@ -38,7 +38,8 @@ import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
-import { gardenSpots, pointSpot } from './garden-spots'
+import { discSpots, gardenSpots, meanSun } from './garden-spots'
+import { insideOutline } from './walk-geom'
 import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
 import { MONTH_NAMES } from './garden-text'
@@ -270,6 +271,7 @@ function ensureGardenClimate() {
 function requestGarden(again = false) {
   if (!gardenSpot || !site || !plan || !sunDay) return
   const { x, y, z, kind } = gardenSpot
+  const thePlan = plan
   if (again) gardenTrace = { status: 'running', progress: 0 }
   gardenJob.request({
     sceneVersion: sunScene.sceneVersion(),
@@ -278,7 +280,7 @@ function requestGarden(again = false) {
     lon: sunDay.lon,
     year: sunDay.when.getFullYear(),
     tag: `${kind} ${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`,
-    spots: () => [pointSpot(x, y, z, kind === 'indoor')],
+    spots: () => discSpots(x, y, z, kind === 'indoor', kind === 'indoor' ? (px, pz) => insideOutline(thePlan, { x: px, z: pz }) : undefined),
     occluders: () => sunScene.occluders(),
   })
   renderGarden()
@@ -288,7 +290,7 @@ gardenJob.onState((state: GardenState) => {
   if (!gardenSpot) return
   gardenTrace =
     state.status === 'running' ? { status: 'running', progress: state.progress }
-    : state.status === 'done' ? { status: 'done', sunMinutes: state.result.spots[0].sunMinutes }
+    : state.status === 'done' ? { status: 'done', sunMinutes: meanSun(state.result.spots) }
     : state.status === 'error' ? { status: 'error', message: state.message }
     : { status: 'idle' }
   renderGarden()
