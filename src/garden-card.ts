@@ -66,6 +66,13 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   root.append(head, close, body)
   let poorOpen = false
   let allOpen = false
+  const CHARTS_KEY = 'sunpatch.gardenCharts'
+  let chartsOpen = false
+  try {
+    chartsOpen = sessionStorage.getItem(CHARTS_KEY) === '1'
+  } catch {
+    /* storage can be blocked */
+  }
 
   const svg = (height: number, label: string): SVGSVGElement => {
     const s = document.createElementNS(NS, 'svg')
@@ -206,6 +213,21 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return { answer, rest: box }
   }
 
+  function chartsDisclosure(charts: HTMLElement[], outdoor: boolean): HTMLElement {
+    const d = el('details', 'gardenCharts')
+    d.open = chartsOpen
+    d.addEventListener('toggle', () => {
+      chartsOpen = d.open
+      try {
+        sessionStorage.setItem(CHARTS_KEY, d.open ? '1' : '0')
+      } catch {
+        /* storage can be blocked */
+      }
+    })
+    d.append(el('summary', '', outdoor ? 'Sun and temperature through the year' : 'Sun through the year'), ...charts)
+    return d
+  }
+
   function busy(text: string, progress?: number): HTMLElement {
     const box = el('div', 'gardenBusy')
     box.append(Object.assign(el('p', 'cardBusy', text), { role: 'status' }))
@@ -257,19 +279,19 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         body.replaceChildren(problem(trace.message, 'Try again', options.onRetryTrace))
         return
       }
-      const sun = sunChart(trace.sunMinutes, input.month)
-      const parts: HTMLElement[] = [sun]
+      const charts: HTMLElement[] = [sunChart(trace.sunMinutes, input.month)]
+      const parts: HTMLElement[] = []
       const outdoor = input.kind !== 'indoor'
       if (outdoor && input.weather === 'error') {
-        parts.push(problem('Local temperatures could not be loaded (NASA POWER). Outdoor plants cannot be rated without them.', 'Retry the temperatures', options.onRetryClimate))
+        parts.push(...charts, problem('Local temperatures could not be loaded (NASA POWER). Outdoor plants cannot be rated without them.', 'Retry the temperatures', options.onRetryClimate))
       } else if (outdoor && (input.weather !== 'ready' || !input.climate)) {
-        parts.push(busy('Loading local temperatures…'))
+        parts.push(...charts, busy('Loading local temperatures…'))
       } else {
         const { answer, rest } = plants(input, trace.sunMinutes)
         parts.unshift(answer)
-        if (outdoor) parts.push(tempChart(input.climate!, input.month))
+        if (outdoor) charts.push(tempChart(input.climate!, input.month))
         results.replaceChildren(rest)
-        parts.push(results, caveat())
+        parts.splice(1, 0, chartsDisclosure(charts, outdoor), results, caveat())
       }
       body.replaceChildren(...parts)
     },
