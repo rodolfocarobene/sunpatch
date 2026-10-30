@@ -1,6 +1,6 @@
 # Architecture
 
-Sunpatch is a static site with no backend: a landing page at `/` (`index.html`) and the app at `/app/`
+Sunpatch is a static site with no backend: a landing page at `/` (`index.html`), its Italian twin at `/it/` (`it/index.html`) and the app at `/app/`
 (`app/index.html` loads `src/main.ts`), both built by Vite (`vite.config.ts`, multi-page). The app is a single-page app: Vite + TypeScript, three.js for the 3D scene, MapLibre GL JS
 for the map, plain DOM/SVG for the UI. Modules are small; geometry and parsing live in pure functions with Vitest
 tests next to them (`*.test.ts`).
@@ -327,6 +327,14 @@ the sun map, panels and garden recompute. `dataExtent(radius)` sizes the ground 
 the radius) and the sun distance; there is no fog. Trees stay within 300 m (`TREE_RADIUS_M`) or the radius if smaller.
 
 ## Languages (English, Italian)
+
+**Landing pages.** `index.html` (English) and `it/index.html` (Italian) are two static pages with the same markup and
+`src/landing.css`; only the text differs (plus `lang`, `og:url`, the `../` prefix on relative links, and the
+"Disponibile in italiano" hint that only the English page has). **Edit both together**, or they drift. Media in
+`public/media/` is shared and stays in English. Each page has `hreflang` alternates and an EN / IT link in the header.
+`src/landing.ts` (loaded by both) stores `sunpatch.lang` when a link with `data-lang` is clicked (the switch and the
+"Open the app" links), so the app opens in the page's language, and shows the hint when the browser is Italian and
+nothing is stored. There is no auto-redirect.
 
 `src/i18n.ts` holds `t(key, params)` (`{name}` interpolation, one/other plurals picked by the `n` param with
 `Intl.PluralRules`), `fmtNumber` / `fmtTime` / `fmtDay` (locale `en-GB` or `it-IT`) and the language choice: `localStorage`

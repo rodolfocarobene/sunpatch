@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sunpatch: scopri dove entra il sole in casa tua</title>
+    <meta
+      name="description"
+      content="Scegli il tuo edificio sulla mappa, disegna il tuo appartamento e le finestre, e guarda le macchie di sole diretto muoversi sul pavimento in qualsiasi giorno e a qualsiasi ora. Gratis, open source, funziona nel browser."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sunpatch: scopri dove entra il sole in casa tua" />
+    <meta
+      property="og:description"
+      content="Disegna il tuo appartamento dentro un edificio vero e guarda le macchie di sole che entrano dalle finestre, in qualsiasi giorno e a qualsiasi ora."
+    />
+    <meta property="og:image" content="https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png" />
+    <meta property="og:url" content="https://rodolfocarobene.github.io/sunpatch/it/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
+    <link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
+    <link rel="alternate" hreflang="x-default" href="https://rodolfocarobene.github.io/sunpatch/" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href="/src/landing.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Vai al contenuto</a>
+    <header class="top">
+      <a class="brand" href="./" aria-label="Sunpatch, pagina iniziale">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        Sunpatch
+      </a>
+      <nav aria-label="Principale">
+        <a href="#how">Come funziona</a>
+        <a href="#more">Pannelli e giardino</a>
+        <a href="#model">Cosa simula</a>
+        <a href="https://github.com/rodolfocarobene/sunpatch">GitHub</a>
+        <span class="langs" aria-label="Lingua">
+          <a href="../" data-lang="en" hreflang="en" lang="en">EN</a> &middot;
+          <a href="./" data-lang="it" aria-current="true">IT</a>
+        </span>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <h1>Scopri dove entra il sole in casa tua</h1>
+        <p class="lead">
+          Scegli il tuo edificio sulla mappa, disegna il tuo appartamento e le finestre, poi guarda le macchie di
+          sole diretto spostarsi sul pavimento, in qualsiasi giorno dell'anno.
+        </p>
+        <p class="actions">
+          <a class="btn primary" href="../app/" data-lang="it">Apri l'app</a>
+          <a class="btn" href="../app/?example=milan" data-lang="it">Prova l'esempio di Milano</a>
+        </p>
+        <figure class="demo">
+          <video
+            autoplay
+            muted
+            controls
+            playsinline
+            preload="metadata"
+            poster="/media/screenshot-cutaway.png"
+            aria-label="Registrazione dello schermo, con l'interfaccia in inglese: si sceglie un edificio, si disegna l'appartamento, il sole si muove sul pavimento e si cammina dentro casa"
+          >
+            <source src="/media/demo.mp4" type="video/mp4" />
+          </video>
+          <figcaption>Palazzo Reale a Milano, 21 dicembre: dalla mappa a una camminata in salotto. (Il video è in inglese.)</figcaption>
+        </figure>
+      </section>
+
+      <section id="how" class="band">
+        <h2>Come funziona</h2>
+        <ol class="steps">
+          <li>
+            <img src="/media/screenshot-map.png" alt="La mappa con un edificio selezionato (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <h3><span>1</span> Trova il tuo edificio</h3>
+            <p>Cerca un indirizzo e clicca il tuo edificio sulla mappa OpenStreetMap. I palazzi vicini vengono caricati con lui, quindi anche le loro ombre contano.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-plan.png" alt="L'editor della pianta con un perimetro, tre finestre e un muro interno (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <h3><span>2</span> Disegna il tuo appartamento</h3>
+            <p>Scegli il piano, traccia il perimetro di casa tua e clicca per aggiungere finestre e muri interni.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-cutaway.png" alt="Spaccato 3D dell'appartamento con le macchie di sole sul pavimento (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <h3><span>3</span> Guarda il sole muoversi</h3>
+            <p>Scorri la data e l'ora. I piani sopra sono tagliati via, così vedi le macchie di sole attraversare le stanze.</p>
+          </li>
+          <li>
+            <img src="/media/screenshot-walk.png" alt="Vista in prima persona dentro l'appartamento, con una macchia di sole sul pavimento (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <h3><span>4</span> Cammina dentro</h3>
+            <p>Entra in prima persona e guardati intorno. Con i tasti fai scorrere la giornata e vedi quando una stanza prende la luce.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="features">
+        <h2>Cosa trovi</h2>
+        <ul class="grid">
+          <li><h3>Qualsiasi giorno, qualsiasi ora</h3><p>La posizione reale del sole nel tuo luogo, dal solstizio d'inverno a quello d'estate.</p></li>
+          <li><h3>I palazzi vicini, quelli veri</h3><p>Edifici e alberi intorno arrivano da OpenStreetMap e fanno ombra al tuo. Dove manca l'altezza l'edificio è disegnato a strisce, e puoi impostarla tu.</p></li>
+          <li><h3>La tua pianta</h3><p>Disegna perimetro, finestre e muri in scala. Se sulla mappa manca un balcone, aggiungilo tu all'edificio.</p></li>
+          <li><h3>Spaccato e camminata</h3><p>Guarda l'appartamento dall'alto, oppure mettiti dentro e guarda la finestra che ti interessa.</p></li>
+          <li><h3>Mappa del sole</h3><p>Colora il pavimento in base alle ore di sole diretto nel giorno scelto, e clicca un punto qualsiasi per vedere gli orari.</p></li>
+          <li><h3>Idoneità pannelli</h3><p>Metti pannelli sul balcone o sul tetto e leggi quanta energia fanno in un anno, tenendo conto di ombre e meteo locale.</p></li>
+          <li><h3>Giardino</h3><p>Clicca un punto per vedere quali piante ci crescerebbero, mese per mese, oppure trova il posto migliore per una pianta.</p></li>
+          <li><h3>Esporta e importa</h3><p>Scarica una pianta in JSON e ricaricala più tardi o su un altro dispositivo.</p></li>
+          <li><h3>Nessuna registrazione</h3><p>Apri la pagina e parti. Niente account, niente installazione, niente costi.</p></li>
+        </ul>
+      </section>
+
+      <section id="more" class="more">
+        <h2>Anche per balconi e giardini</h2>
+        <p class="lead">Lo stesso modello del sole, fuori dalle tue finestre.</p>
+        <div class="pair">
+          <figure>
+            <img src="/media/screenshot-panels.png" alt="La scheda Pannelli con l'edificio colorato in base all'energia solare annua e la scheda di un pannello (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <figcaption>
+              <h3>Un pannello sul balcone conviene?</h3>
+              Colora facciata, tetto e terreno in base all'energia che un pannello farebbe lì, poi mettine uno e leggi
+              l'anno in kWh, tra ombre e meteo locale.
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="/media/screenshot-garden.png" alt="La scheda Giardino con un punto scelto sul pavimento dell'appartamento e le piante che ci crescono (interfaccia in inglese)" width="1280" height="720" loading="lazy" />
+            <figcaption>
+              <h3>Cosa cresce sul mio balcone?</h3>
+              Clicca un punto per vedere il suo sole nel corso dell'anno e le piante adatte, ognuna con il suo motivo.
+              Oppure scegli una pianta e guarda i posti migliori.
+            </figcaption>
+          </figure>
+        </div>
+        <p class="note">I dati sulle piante sono valori tipici, non verificati pianta per pianta. In casa si presume un ambiente riscaldato.</p>
+      </section>
+
+      <section id="model" class="band">
+        <h2>Cosa simula e cosa no</h2>
+        <div class="two">
+          <div>
+            <h3>Cosa simula</h3>
+            <ul class="plain">
+              <li>Solo sole diretto: il raggio che passa da ogni finestra, con le ombre del tuo edificio e dei vicini.</li>
+              <li>Altezze degli edifici da OpenStreetMap (tag altezza, altrimenti numero di piani, altrimenti una stima di 9 m), che puoi correggere.</li>
+              <li>Alberi: quelli mappati esattamente, mentre parchi e boschi hanno alberi sparsi.</li>
+              <li>Finestre con larghezza, davanzale e altezza proprie.</li>
+              <li>Energia solare e idoneità delle piante calcolate dal sole diretto più le medie meteo locali (NASA POWER).</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Cosa non simula</h3>
+            <ul class="plain">
+              <li>Luce diffusa o riflessa: le stanze all'ombra sembrano scure.</li>
+              <li>La forma dei tetti: i tetti sono piatti.</li>
+              <li>Terreno e colline lontane: per ora il suolo è piatto.</li>
+              <li>Tende, la maggior parte dei balconi e gli infissi. Quelli che contano disegnali con una correzione dell'edificio.</li>
+              <li>Le foglie: un albero fa la stessa ombra tutto l'anno.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="note">Prendilo come una buona stima, non come un rilievo. Le altezze di OpenStreetMap a volte mancano o sono sbagliate.</p>
+      </section>
+
+      <section class="split">
+        <div>
+          <h2>Privato per scelta</h2>
+          <p>
+            Tutto funziona nel tuo browser. Le tue piante restano salvate nella memoria locale di questo browser e non
+            lasciano mai il tuo dispositivo. Nessun account, nessun tracciamento. L'app contatta solo i servizi
+            gratuiti che le servono per mostrare la mappa e trovare gli edifici.
+          </p>
+        </div>
+        <div>
+          <h2>Open source</h2>
+          <p>
+            Sunpatch ha licenza MIT. Leggi il codice, segnala un problema o proponi un miglioramento.
+          </p>
+          <p class="actions">
+            <a class="btn" href="https://github.com/rodolfocarobene/sunpatch">Vedi su GitHub</a>
+            <a class="btn quiet" href="https://github.com/rodolfocarobene/sunpatch/issues/1">Idee e roadmap</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>Il tuo salotto è soleggiato alle cinque del pomeriggio a gennaio?</h2>
+        <p class="actions">
+          <a class="btn primary" href="../app/" data-lang="it">Apri l'app</a>
+          <a class="btn" href="../app/?example=milan" data-lang="it">Prova l'esempio di Milano</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Dati della mappa &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL).
+        Tile della mappa di <a href="https://openfreemap.org">OpenFreeMap</a> e
+        <a href="https://openmaptiles.org">OpenMapTiles</a>. Ricerca indirizzi con
+        <a href="https://nominatim.org">Nominatim</a>. Edifici tramite
+        <a href="https://overpass-api.de">Overpass API</a>. Meteo da
+        <a href="https://power.larc.nasa.gov/">NASA POWER</a>.
+      </p>
+      <p>Sunpatch ha licenza MIT. Realizzato da Rodolfo Carobene.</p>
+    </footer>
+    <script type="module" src="/src/landing.ts"></script>
+  </body>
+</html>

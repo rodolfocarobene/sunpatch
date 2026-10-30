@@ -142,3 +142,8 @@ footer p { margin-bottom: 8px; }
   html { scroll-behavior: auto; }
   .btn { transition: none; }
 }
+
+.langs { color: var(--muted); }
+.langs a[aria-current] { color: var(--text); font-weight: 700; }
+.hint { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--gutter) 8px; font-size: 0.95rem; text-align: right; }
+.hint[hidden] { display: none; }
