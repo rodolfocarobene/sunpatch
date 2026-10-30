@@ -180,8 +180,8 @@ export interface SunScene {
   onBuildingHover(handler: (polygon: Building | null, at: { x: number; y: number }) => void): void
   /** Called with the polygon under a right-click (not a drag): its id and where it is on screen. */
   onBuildingMenu(handler: (polygonId: string, at: { x: number; y: number }) => void): void
-  /** Where the height ruler stands for a polygon (its roof corner nearest the camera, in screen pixels); null when it would be hidden, behind the camera or too small to use. */
-  rulerAnchor(polygon: Building): RulerAnchor | null
+  /** Where the height ruler stands for a polygon (the on-screen roof corner nearest the screen point `near`, in screen pixels); null when it would be hidden, behind the camera or too small to use. */
+  rulerAnchor(polygon: Building, near: { x: number; y: number }): RulerAnchor | null
   /** Shows a polygon at another height without rebuilding the world (its mesh is stretched, shadows follow); null puts it back. */
   previewHeight(polygonId: string, height: number | null): void
   /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
@@ -1313,24 +1313,38 @@ export function createScene(container: HTMLElement): SunScene {
   })
   // The height ruler's helpers: where it stands, and a cheap preview of a new height while its handle moves.
   const MIN_RULER_PX_PER_M = 0.8
-  function rulerAnchor(b: Building): RulerAnchor | null {
+  function rulerAnchor(b: Building, near: { x: number; y: number }): RulerAnchor | null {
     if (walking || (selectedIds.has(b.id) && cutawayNow())) return null
     const rect = renderer.domElement.getBoundingClientRect()
-    let corner = b.outer[0]
-    let best = Infinity
-    for (const p of b.outer) {
-      const d = Math.hypot(p.x - camera.position.x, p.z - camera.position.z)
-      if (d < best) [best, corner] = [d, p]
-    }
-    const toScreen = (y: number) => {
-      const v = new Vector3(corner.x, y, corner.z).project(camera)
+    const toScreen = (x: number, y: number, z: number) => {
+      const v = new Vector3(x, y, z).project(camera)
       return v.z < 1 ? { x: rect.left + (v.x * 0.5 + 0.5) * rect.width, y: rect.top + (-v.y * 0.5 + 0.5) * rect.height } : null
     }
-    const base = toScreen(b.minHeight)
-    const top = toScreen(b.height)
-    if (!base || !top) return null
-    const pxPerM = (base.y - top.y) / (b.height - b.minHeight)
-    return pxPerM >= MIN_RULER_PX_PER_M ? { x: top.x, yBase: base.y, yTop: top.y, pxPerM } : null
+    // The roof corner nearest the pointer that is on screen (clear of the left panel and the edges): that is where the ruler stands.
+    const left = rect.left + frameInset() + 16
+    let corner: { top: { x: number; y: number }; p: { x: number; z: number } } | undefined
+    let best = Infinity
+    for (const p of b.outer) {
+      const top = toScreen(p.x, b.height, p.z)
+      if (!top || top.x < left || top.x > rect.right - 16 || top.y < rect.top + 16 || top.y > rect.bottom - 16) continue
+      const d = Math.hypot(top.x - near.x, top.y - near.y)
+      if (d < best) [best, corner] = [d, { top, p }]
+    }
+    if (!corner) {
+      // No roof corner in view (the camera is close): the ruler stands beside the pointer instead, its handle at the pointer
+      // and the size of a metre taken at the surface under it. Dragging it still adds or removes floors.
+      world.updateMatrixWorld(true) // the world may have just been rebuilt (a commit)
+      const hit = seenHit(near.x, near.y)
+      const here = hit && toScreen(hit.point.x, hit.point.y, hit.point.z)
+      const above = hit && toScreen(hit.point.x, hit.point.y + 1, hit.point.z)
+      if (!here || !above || here.y - above.y < MIN_RULER_PX_PER_M) return null
+      const pxPerM = here.y - above.y
+      return { x: Math.min(rect.right - 200, Math.max(left, near.x + 48)), yTop: near.y, yBase: near.y + (b.height - b.minHeight) * pxPerM, pxPerM }
+    }
+    const base = toScreen(corner.p.x, b.minHeight, corner.p.z)
+    if (!base) return null
+    const pxPerM = (base.y - corner.top.y) / (b.height - b.minHeight)
+    return pxPerM >= MIN_RULER_PX_PER_M ? { x: corner.top.x, yBase: base.y, yTop: corner.top.y, pxPerM } : null
   }
   let previewRing: LineLoop | undefined
   function previewHeight(id: string, height: number | null) {

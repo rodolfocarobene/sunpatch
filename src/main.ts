@@ -72,9 +72,9 @@ const popover = createSunMapPopover(app, closeProbe)
 // Building heights: the hover note says where a height came from, the right-click box (or the building line's button) changes it.
 const hoverTip = createHoverTip(document.body)
 const heightRuler = createHeightRuler(document.body, {
-  resolve(id) {
+  resolve(id, near) {
     const building = site?.buildings.find((b) => b.id === id)
-    const anchor = building && sunScene.rulerAnchor(building)
+    const anchor = building && sunScene.rulerAnchor(building, near)
     return building && anchor ? { building, anchor } : null
   },
   onPreview: (id, height) => sunScene.previewHeight(id, height),
@@ -817,7 +817,7 @@ sunScene.onBuildingHover((b, at) => {
   const ruler = view === '3d' && !heightPopover.isOpen
   if (b && !heightPopover.isOpen && !heightRuler.dragging) hoverTip.show(hoverLines(b, ruler), at)
   else hoverTip.hide()
-  if (b && ruler) heightRuler.follow(b)
+  if (b && ruler) heightRuler.follow(b, at)
   else heightRuler.release()
 })
 sunScene.onBuildingMenu((id, at) => openHeight(site?.buildings.find((b) => b.id === id), at))

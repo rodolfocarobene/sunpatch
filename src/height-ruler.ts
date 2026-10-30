@@ -48,7 +48,7 @@ export interface RulerAnchor {
 
 export interface HeightRulerHandlers {
   /** The building and its anchor now, or null when it is gone, hidden or too far to draw a ruler on. */
-  resolve(id: string): { building: Building; anchor: RulerAnchor } | null
+  resolve(id: string, near: { x: number; y: number }): { building: Building; anchor: RulerAnchor } | null
   /** Shows the building at `height` without rebuilding anything; null puts it back. */
   onPreview(id: string, height: number | null): void
   onCommit(id: string, override: HeightOverride): void
@@ -56,18 +56,19 @@ export interface HeightRulerHandlers {
 
 export interface HeightRuler {
   /** The pointer is over this building: stand the ruler on it. */
-  follow(b: Building): void
+  follow(b: Building, at: { x: number; y: number }): void
   /** The pointer left the building: the ruler goes after a short grace (time to reach it), unless it is being used. */
   release(): void
   hide(): void
   readonly dragging: boolean
 }
 
-const GRACE_MS = 450
+const GRACE_MS = 600
+const SWITCH_MS = 300
 const EDGE_PAD = 24
 
 /**
- * A vertical ruler with a floor tick for every 3 m, standing at the roof corner of the building under the pointer.
+ * A vertical ruler with a floor tick for every 3 m, standing at the roof corner nearest the pointer, on the building under it.
  * Dragging its handle changes that building's height live (whole floors, Shift for 0.5 m); the building is only
  * previewed while the handle moves, and the new height is committed when it is let go. Esc puts it back.
  */
@@ -91,7 +92,9 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   let target: { id: string; building: Building; anchor: RulerAnchor } | undefined
   let drag: { startY: number; height: number; moved: boolean } | undefined
   let timer = 0
+  let switchTimer = 0
   let inside = false
+  let pointer = { x: 0, y: 0 }
 
   const yFor = (height: number) => target!.anchor.yBase - (height - target!.building.minHeight) * target!.anchor.pxPerM
 
@@ -127,7 +130,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   }
 
   function show(id: string): boolean {
-    const resolved = handlers.resolve(id)
+    const resolved = handlers.resolve(id, pointer)
     if (!resolved) {
       hide()
       return false
@@ -139,6 +142,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   }
   function hide() {
     clearTimeout(timer)
+    clearTimeout(switchTimer)
     if (drag && target) handlers.onPreview(target.id, null)
     drag = undefined
     box.hidden = true
@@ -174,6 +178,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
       handlers.onCommit(id, overrideFromRuler(building, height))
       if (!show(id)) return
     } else layout(building.height)
+    clearTimeout(timer) // the commit rebuilt the scene, which reported the pointer off the building
     if (!inside) timer = window.setTimeout(hide, GRACE_MS)
   }
   handle.addEventListener('pointerup', () => finish(true))
@@ -192,6 +197,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   box.addEventListener('pointerenter', () => {
     inside = true
     clearTimeout(timer)
+    clearTimeout(switchTimer)
   })
   box.addEventListener('pointerleave', () => {
     inside = false
@@ -210,12 +216,19 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
   window.addEventListener('wheel', () => { if (!drag) hide() }, { passive: true, capture: true })
 
   return {
-    follow(b) {
+    follow(b, at) {
       clearTimeout(timer)
       if (drag) return
-      show(b.id)
+      // Once standing on a building the ruler stays where it is, so the pointer can travel to it. Crossing another
+      // building on the way does not move it: that one only gets the ruler when the pointer rests on it.
+      if (!box.hidden && target?.id === b.id) return clearTimeout(switchTimer)
+      clearTimeout(switchTimer)
+      pointer = at
+      if (box.hidden) show(b.id)
+      else switchTimer = window.setTimeout(() => show(b.id), SWITCH_MS)
     },
     release() {
+      clearTimeout(switchTimer)
       if (drag || inside || box.hidden) return
       clearTimeout(timer)
       timer = window.setTimeout(hide, GRACE_MS)
