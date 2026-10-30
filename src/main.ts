@@ -48,9 +48,9 @@ import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
 import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
-import { MONTH_NAMES, type DeadEnd } from './garden-text'
+import type { DeadEnd } from './garden-text'
 import { scoreSpots } from './garden'
-import { plantById, type Plant } from './plants'
+import { plantById, plantName, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
@@ -59,7 +59,7 @@ import { sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
 import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
-import { onBeforeLangSwitch, t } from './i18n'
+import { fmtMonth, onBeforeLangSwitch, t } from './i18n'
 import { saveSession, takeSession } from './session'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -261,7 +261,7 @@ function renderFind() {
     }
     roofHidden = roofNoteVisible(plant, spots, floorsHidden)
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
-    if (!waiting) summary = findSummary(plant.name, gardenMonth === null ? null : MONTH_NAMES[gardenMonth], stats, centre)
+    if (!waiting) summary = findSummary(plantName(plant), gardenMonth === null ? null : fmtMonth(gardenMonth), stats, centre)
   }
   findPanel.set({
     plantId: plant?.id ?? null,
@@ -407,7 +407,7 @@ function showCards(state: CardState) {
   planSummaryText.textContent =
     state.status === 'ready' ? state.energy.verdict.sentence
     : state.status === 'error' ? state.message
-    : 'Working out the sun on this panel\u2026'
+    : t('panels.working')
   // The same warning treatment and alert role as the Panels card's verdict.
   const warning = state.status === 'ready' && state.energy.verdict.warning
   planSummaryText.classList.toggle('warn', warning)
@@ -500,8 +500,8 @@ function renderTotals() {
   const indoor = new Set(panels.filter((p) => site && panelInside(p, site.selected)).map((p) => p.id))
   const items = panels.map((p, i) => {
     const e = energies.get(p.id)
-    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : e ? `${formatKwh(figure(e))} a year` : 'Analysing\u2026'
-    return { id: p.id, label: `Panel ${i + 1}`, detail }
+    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : e ? t('panels.perYear', { kwh: formatKwh(figure(e)) }) : t('panels.analysing')
+    return { id: p.id, label: t('panels.rowLabel', { n: i + 1 }), detail }
   })
   let total: string | null = null
   if (panels.length > 0 && !totals.busy() && energies.size === panels.length) {

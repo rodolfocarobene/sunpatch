@@ -1,3 +1,4 @@
+import { fmtNumber, t } from './i18n'
 import { buildingContains, type Building } from './osm'
 import { ROOF_TILT } from './panel'
 import { DAYS_IN_MONTH, SLOT_MINUTES, panelNormal, yearSlots } from './panel-shade'
@@ -15,7 +16,7 @@ export const panelInside = (panel: Panel, building: Building): boolean =>
   panel.elevation < building.height && buildingContains(building, { x: panel.x, z: panel.z })
 
 /** What the Panels list says in place of a yearly figure for a panel inside the building. */
-export const EXCLUDED_INSIDE = 'excluded (inside the building)'
+export const EXCLUDED_INSIDE = t('panels.excluded')
 
 /**
  * The totals line over the panels' yearly kWh. A panel inside the building is not counted (its figure is the sun
@@ -24,11 +25,10 @@ export const EXCLUDED_INSIDE = 'excluded (inside the building)'
 export function totalsLine(panels: { kwh: number; inside: boolean }[], weather: boolean): string {
   const counted = panels.filter((p) => !p.inside)
   const left = panels.length - counted.length
-  const plural = (n: number) => `${n} ${n === 1 ? 'panel' : 'panels'}`
-  const note = left > 0 ? ` (${plural(left)} inside the building not counted)` : ''
-  if (counted.length === 0) return `No panels counted: ${plural(left)} inside the building.`
-  const sum = counted.reduce((t, p) => t + p.kwh, 0)
-  return `${plural(counted.length)} \u00b7 ~${Math.round(sum).toLocaleString('en')} kWh a year${weather ? ' with local weather' : ', clear sky'}${note}`
+  const note = left > 0 ? t('panels.notCounted', { n: left }) : ''
+  if (counted.length === 0) return t('panels.noneCounted', { n: left })
+  const sum = counted.reduce((total, p) => total + p.kwh, 0)
+  return t(weather ? 'panels.totalWeather' : 'panels.totalClear', { count: t('panels.count', { n: counted.length }), kwh: kwh(sum), note })
 }
 
 export interface Verdict {
@@ -45,26 +45,26 @@ export interface VerdictInput {
   inside: boolean
 }
 
-const kwh = (v: number): string => `${Math.round(v).toLocaleString('en')} kWh`
-const round10 = (v: number): string => `${(Math.round(v / 10) * 10).toLocaleString('en')} kWh`
+const kwh = (v: number): string => `${fmtNumber(Math.round(v))} kWh`
+const round10 = (v: number): string => `${fmtNumber(Math.round(v / 10) * 10)} kWh`
 
 /** "Shading costs under 1%", or the good news. */
 function shadingClause(e: PanelEnergy): string {
   if (e.idealOpen <= 0) return ''
-  if (e.shadingCost < 0.5) return ' Nothing shades it.'
-  return e.shadingShare < 0.005 ? ' Shading costs under 1%.' : ` Shading costs ${Math.round(e.shadingShare * 100)}%.`
+  if (e.shadingCost < 0.5) return t('panels.clauseNone')
+  return e.shadingShare < 0.005 ? t('panels.clauseUnder1') : t('panels.clausePct', { pct: Math.round(e.shadingShare * 100) })
 }
 
 /** The one sentence: the yearly energy and how it compares with the ideal, or a warning. */
 export function verdict({ energy, weather, shadingLoss, inside }: VerdictInput): Verdict {
-  if (inside) return { sentence: 'This panel is inside the building, so it is always in shade. Move it outside.', warning: true }
-  if (shadingLoss >= SHADE_WARNING_LOSS) return { sentence: 'This panel is almost always in shade. Is it inside the building?', warning: true }
+  if (inside) return { sentence: t('panels.inside'), warning: true }
+  if (shadingLoss >= SHADE_WARNING_LOSS) return { sentence: t('panels.alwaysShade'), warning: true }
   if (weather === 'ready' && energy.weather !== undefined) {
     const share = energy.ideal > 0 ? Math.round((energy.weather / energy.ideal) * 100) : 0
-    return { sentence: `About ${kwh(energy.weather)} a year with local weather, ${share}% of the ideal.${shadingClause(energy)}`, warning: false }
+    return { sentence: t('panels.verdictWeather', { kwh: kwh(energy.weather), share, clause: shadingClause(energy) }), warning: false }
   }
-  const tail = weather === 'loading' ? ' Loading local weather…' : ' Local weather is unavailable.'
-  return { sentence: `About ${kwh(energy.ideal)} a year on a clear sky.${shadingClause(energy)}${tail}`, warning: false }
+  const tail = t(weather === 'loading' ? 'panels.tailLoading' : 'panels.tailUnavailable')
+  return { sentence: t('panels.verdictClear', { kwh: kwh(energy.ideal), clause: shadingClause(energy), tail }), warning: false }
 }
 
 /** Clear-sky irradiation of a panel with nothing in the way: the same days and slots as the traced analysis. */
@@ -97,6 +97,6 @@ export function referenceEnergy(panel: Panel, lat: number, lon: number, year: nu
 
 /** "An unshaded panel of the same size, tilted 30 degrees and facing south, would make about 1,040 kWh a year here." */
 export function referenceLine(ref: PanelEnergy, weather: boolean, lat: number): string {
-  const figure = weather && ref.weather !== undefined ? `${round10(ref.weather)} a year here` : `${round10(ref.ideal)} a year here on a clear sky`
-  return `An unshaded panel of the same size, tilted ${ROOF_TILT}° and facing ${lat < 0 ? 'north' : 'south'}, would make about ${figure}.`
+  const figure = weather && ref.weather !== undefined ? t('panels.refWeather', { kwh: round10(ref.weather) }) : t('panels.refClear', { kwh: round10(ref.ideal) })
+  return t('panels.refLine', { tilt: ROOF_TILT, dir: t(lat < 0 ? 'panels.dirN' : 'panels.dirS'), figure })
 }

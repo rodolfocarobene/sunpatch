@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { freeBand, popoverTop } from './popover-place'
 const GAP = 18
 const WIDTH = 284
@@ -20,14 +21,14 @@ export function createSuitabilityPopover(container: HTMLElement, handlers: { onC
   box.id = 'suitPopover'
   box.hidden = true
   box.setAttribute('role', 'dialog')
-  box.setAttribute('aria-label', 'Panel suitability at this spot')
+  box.setAttribute('aria-label', t('panels.popoverAria'))
   box.innerHTML = `
-    <button type="button" class="spotClose" aria-label="Close" title="Close (Esc)">
+    <button type="button" class="spotClose" aria-label="${t('sun.close')}" title="${t('sun.closeTitle')}">
       <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     </button>
     <strong class="spotHead"></strong>
     <span class="spotDetail"></span>
-    <button type="button" class="primary suitPlace">Place a panel here</button>`
+    <button type="button" class="primary suitPlace">${t('panels.place')}</button>`
   container.appendChild(box)
   const head = box.querySelector('.spotHead')!
   const detail = box.querySelector('.spotDetail')!

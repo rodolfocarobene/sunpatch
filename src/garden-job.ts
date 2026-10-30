@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { yearSlots } from './panel-shade'
 import { spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
 import type { Plan } from './plan'
@@ -77,7 +78,7 @@ export function createGardenJob(): GardenJob {
       running = undefined
       worker = undefined
       workerScene = -1
-      emit({ status: 'error', message: 'The garden analysis could not run in this browser.' })
+      emit({ status: 'error', message: t('garden.jobError') })
     }
     return worker
   }

@@ -1,7 +1,8 @@
 // Which plants suit a spot, month by month. Direct sun at the spot and local temperature are compared with the plant's
 // needs; a rating is the worst thing found, and every finding can be said in one plain sentence.
 
-import { PLANTS, type Plant } from './plants'
+import { fmtMonth, fmtNumber, locale, t, upFirst } from './i18n'
+import { PLANTS, plantName, type Plant } from './plants'
 import type { Climate } from './weather'
 
 export type Rating = 'good' | 'ok' | 'poor'
@@ -31,7 +32,6 @@ const INDOOR: Temperatures = {
 /** Plants that die from any frost are judged by the coldest night on record; hardier ones by the typical night. */
 export const TENDER_BELOW = -3
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 const SCORE: Record<Rating, number> = { good: 1, ok: 0.5, poor: 0 }
 
@@ -86,40 +86,42 @@ export function rateMonth(plant: Plant, spot: Spot, climate: Temperatures, month
 }
 
 export const rateYear = (plant: Plant, spot: Spot, climate: Temperatures): MonthResult[] =>
-  MONTH_NAMES.map((_, m) => rateMonth(plant, spot, climate, m))
+  Array.from({ length: 12 }, (_, m) => rateMonth(plant, spot, climate, m))
 
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
-const hours = (h: number): string => (h < 1 ? `${Math.round(h * 60)} min` : `${+h.toFixed(1)} h`)
-const deg = (t: number): string => `${Math.round(t)} °C`
+const hours = (h: number): string => (h < 1 ? t('garden.minutes', { n: Math.round(h * 60) }) : t('garden.hours', { n: +h.toFixed(1) }))
+const deg = (v: number): string => `${fmtNumber(Math.round(v))} °C`
 
 /** One plain sentence about a month, e.g. "Too dark in December: 40 min of direct sun, basil needs 6 h." */
 export function explain(plant: Plant, r: MonthResult): string {
-  const name = plant.name
-  const month = MONTH_NAMES[r.month]
+  const name = plantName(plant)
+  const Name = upFirst(name)
+  const month = fmtMonth(r.month)
   const issue = r.issues.find((i) => i.severe) ?? r.issues[0]
   const sun = hours(r.sunHours)
-  if (!issue) return `Good in ${month}: ${sun} of direct sun and ${deg(r.tMean)} on average suit ${name}.`
-  const t = plant.temp
+  const p = { name, Name, month, sun }
+  if (!issue) return t('garden.explainGood', { ...p, t: deg(r.tMean) })
+  const temp = plant.temp
+  const range = { lo: temp.optLow, hi: temp.optHigh }
   switch (issue.kind) {
     case 'place':
-      return plant.indoor ? `${cap(name)} is not grown outdoors.` : `${cap(name)} is not suited to growing indoors.`
+      return t(plant.indoor ? 'garden.explainIndoorOnly' : 'garden.explainOutdoorOnly', p)
     case 'dark':
       return issue.severe
-        ? `Too dark in ${month}: ${sun} of direct sun, ${name} needs ${hours(plant.sun.min)}.`
-        : `Workable in ${month}, but short of sun: ${sun} of direct sun, ${name} does best with ${hours(plant.sun.ideal)}.`
+        ? t('garden.explainDark', { ...p, need: hours(plant.sun.min) })
+        : t('garden.explainDarkMild', { ...p, ideal: hours(plant.sun.ideal) })
     case 'glare':
-      return `Too much sun in ${month}: ${sun} of direct sun, ${name} scorches above ${hours(plant.sun.max ?? 0)}.`
+      return t('garden.explainGlare', { ...p, max: hours(plant.sun.max ?? 0) })
     case 'cold':
-      if (!issue.severe && r.tMean < t.min) return `Resting in ${month}: ${deg(r.tMean)} on average, ${name} stops growing below ${deg(t.min)}.`
+      if (!issue.severe && r.tMean < temp.min) return t('garden.explainResting', { ...p, t: deg(r.tMean), min: deg(temp.min) })
       return issue.severe
-        ? `Too cold in ${month}: ${deg(r.tMean)} on average, ${name} needs ${deg(t.min)} to grow.`
-        : `Workable in ${month}, but cool: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} °C.`
+        ? t('garden.explainCold', { ...p, t: deg(r.tMean), min: deg(temp.min) })
+        : t('garden.explainCool', { ...p, t: deg(r.tMean), ...range })
     case 'frost':
-      return `Frost in ${month}: nights down to ${deg(r.tNight)}, ${name} survives down to ${deg(t.survive)}.`
+      return t('garden.explainFrost', { ...p, night: deg(r.tNight), survive: deg(temp.survive) })
     case 'hot':
       return issue.severe
-        ? `Too hot in ${month}: days reach ${deg(r.tMax)}, ${name} stops thriving above ${deg(t.max)}.`
-        : `Workable in ${month}, but warm: ${deg(r.tMean)} on average, ${name} does best at ${t.optLow}-${t.optHigh} °C.`
+        ? t('garden.explainHot', { ...p, tmax: deg(r.tMax), max: deg(temp.max) })
+        : t('garden.explainWarm', { ...p, t: deg(r.tMean), ...range })
   }
 }
 
@@ -219,7 +221,7 @@ export function rankPlants(
   return (options.plants ?? PLANTS)
     .map((p) => assess(p, spot, climate, options.month))
     .filter((r) => !options.allYear || r.summary.allYear)
-    .sort((a, b) => b.score - a.score || a.plant.name.localeCompare(b.plant.name))
+    .sort((a, b) => b.score - a.score || plantName(a.plant).localeCompare(plantName(b.plant), locale()))
 }
 
 const ISSUE_ORDER: IssueKind[] = ['dark', 'frost', 'cold', 'hot', 'glare', 'place']

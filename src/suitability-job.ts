@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import { yearSlots } from './panel-shade'
 import { SUITABILITY_SLOT_MINUTES, rayInputs, type SurfaceSample } from './suitability'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
@@ -67,7 +68,7 @@ export function createSuitabilityJob(): SuitabilityJob {
       running = undefined
       worker = undefined
       workerScene = -1
-      emit({ status: 'error', message: 'The suitability map could not run in this browser.' })
+      emit({ status: 'error', message: t('panels.suitJobError') })
     }
     return worker
   }

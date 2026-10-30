@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import type { Panel } from './plan'
 import { yearSlots, type PanelShade } from './panel-shade'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
@@ -63,7 +64,7 @@ export function createPanelShadeJob(): PanelShadeJob {
       running = undefined
       worker = undefined
       workerScene = -1
-      emit({ status: 'error', message: 'The shading analysis could not run in this browser.' })
+      emit({ status: 'error', message: t('panels.shadeJobError') })
     }
     return worker
   }

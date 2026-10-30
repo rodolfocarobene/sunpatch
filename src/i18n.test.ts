@@ -78,11 +78,13 @@ describe('dictionary', () => {
     expect(Object.keys(italian).filter((k) => !(k in en))).toEqual([])
   })
 
-  it('uses the same {params} in both languages', () => {
-    const params = (m: unknown) => [...JSON.stringify(m).matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort().join()
+  it('uses the same {params} in both languages (Italian may drop a plant {name}: it needs an article that depends on gender)', () => {
+    const params = (m: unknown, skip = false) =>
+      [...JSON.stringify(m).matchAll(/\{(\w+)\}/g)].map((x) => x[1]).filter((p) => !skip || (p !== 'name' && p !== 'Name')).sort().join()
     for (const key of Object.keys(en)) {
       const k = key as Key
-      expect(params(italian[k]), key).toBe(params(en[k]))
+      const it = params(italian[k])
+      expect([params(en[k]), params(en[k], true)], key).toContain(it)
     }
   })
 })

@@ -1,7 +1,8 @@
 import { POT_HEIGHT, type GardenSpot, type SpotKind, type SunnySpot } from './garden-spots'
 import { assess, type IssueKind, type Rating, type Temperatures } from './garden'
-import type { Plant } from './plants'
-import { MONTH_NAMES, hoursText, monthsText, whereText, type DeadEnd } from './garden-text'
+import { fmtMonth, t, upFirst, type Key } from './i18n'
+import { plantName, type Plant } from './plants'
+import { hoursText, monthsText, whereText, type DeadEnd } from './garden-text'
 import type { PickedKind } from './garden-pick'
 
 // "Find a place for ...": one plant scored over every spot of the garden analysis. The words, the three colour steps and
@@ -18,7 +19,7 @@ export const stepOf = (rating: Rating): Step => (rating === 'good' ? 2 : rating 
 export const stepColor = (step: 1 | 2): string => getComputedStyle(document.documentElement).getPropertyValue(step === 2 ? '--rate-good' : '--rate-ok').trim()
 /** An OK cell is drawn at this share of a good cell's side: a size cue that does not rely on colour. */
 export const OK_CELL_SCALE = 0.62
-export const STEP_LABELS: Record<Step, string> = { 2: 'Good', 1: 'OK', 0: 'Poor' }
+export const STEP_LABELS: Record<Step, string> = { 2: t('garden.stepGood'), 1: t('garden.stepOk'), 0: t('garden.stepPoor') }
 
 /** Side of a spot's square on the map, metres (the sampling cell of its kind). */
 export const CELL_SIZE: Record<FindKind, number> = { indoor: 0.5, ground: 2, roof: 1 }
@@ -29,12 +30,12 @@ export interface Kinds {
   note?: string
 }
 
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
+const cap = upFirst
 
 /** The spot kinds a plant can be judged on: indoor-only plants skip outdoor spots, outdoor-only plants skip the floor. */
 export function kindsFor(plant: Plant): Kinds {
-  if (plant.indoor && !plant.outdoor) return { kinds: ['indoor'], note: `${cap(plant.name)} is grown indoors, so ground and roof spots are not scored.` }
-  if (plant.outdoor && !plant.indoor) return { kinds: ['ground', 'roof'], note: `${cap(plant.name)} is grown outdoors, so indoor spots are not scored.` }
+  if (plant.indoor && !plant.outdoor) return { kinds: ['indoor'], note: t('garden.noteIndoorPlant', { Name: cap(plantName(plant)) }) }
+  if (plant.outdoor && !plant.indoor) return { kinds: ['ground', 'roof'], note: t('garden.noteOutdoorPlant', { Name: cap(plantName(plant)) }) }
   return { kinds: [...FIND_KINDS] }
 }
 
@@ -92,12 +93,12 @@ export function kindStats(spots: GardenSpot[], scored: (Scored | undefined)[]): 
   return out
 }
 
-const WINDS = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east']
+const WINDS: Key[] = ['panels.dirE', 'panels.dirNE', 'panels.dirN', 'panels.dirNW', 'panels.dirW', 'panels.dirSW', 'panels.dirS', 'panels.dirSE']
 
 /** Compass word for an offset in scene metres (x east, z south): "south", "north-east"; empty when it is within `near` metres. */
 export function compass(dx: number, dz: number, near: number): string {
   if (Math.hypot(dx, dz) < near) return ''
-  return WINDS[(Math.round(Math.atan2(-dz, dx) / (Math.PI / 4)) + 8) % 8]
+  return t(WINDS[(Math.round(Math.atan2(-dz, dx) / (Math.PI / 4)) + 8) % 8])
 }
 
 /**
@@ -107,58 +108,58 @@ export function compass(dx: number, dz: number, near: number): string {
 export function spotPlace(kind: PickedKind, at: { x: number; z: number }, centre: { x: number; z: number }, neighbourRoof = false): string {
   const base = whereText(kind, neighbourRoof)
   const dir = compass(at.x - centre.x, at.z - centre.z, kind === 'ground' ? 4 : 2)
-  if (kind === 'ground') return dir ? `${base}, ${dir} of the building` : `${base}, next to the building`
-  if (kind === 'indoor') return dir ? `${base}, in the ${dir} of the apartment` : base
+  if (kind === 'ground') return dir ? t('garden.placeGround', { base, dir }) : t('garden.placeGroundNear', { base })
+  if (kind === 'indoor') return dir ? t('garden.placeIndoor', { base, dir }) : base
   if (neighbourRoof) return base
-  return dir ? `${base}, in the ${dir} part` : base
+  return dir ? t('garden.placeRoof', { base, dir }) : base
 }
 
 /** The place words for the good (or ok) spots of one kind, relative to the building's centre. */
 function place(stat: KindStats, centre: { x: number; z: number }): string {
   const dir = stat.centre ? compass(stat.centre.x - centre.x, stat.centre.z - centre.z, stat.kind === 'ground' ? 4 : 2) : ''
-  if (stat.kind === 'roof') return 'the roof'
-  if (stat.kind === 'ground') return dir ? `the ground ${dir} of the building` : 'the ground around the building'
-  return dir ? `indoors, in the ${dir} of the apartment` : 'indoors'
+  if (stat.kind === 'roof') return t('garden.areaRoof')
+  if (stat.kind === 'ground') return dir ? t('garden.areaGroundDir', { dir }) : t('garden.areaGround')
+  return dir ? t('garden.areaIndoorDir', { dir }) : t('garden.areaIndoor')
 }
 
-const NOWHERE: Record<FindKind, string> = { indoor: 'indoors', ground: 'on the ground', roof: 'on the roof' }
+const NOWHERE: Record<FindKind, string> = { indoor: t('garden.nowhereIndoor'), ground: t('garden.nowhereGround'), roof: t('garden.nowhereRoof') }
 
 /** Why spots fail, in the words of "Nowhere suitable indoors (not enough direct sun)". Plain "place" has no reason to give. */
 const WHY: Partial<Record<IssueKind, string>> = {
-  dark: 'not enough direct sun',
-  glare: 'too much direct sun',
-  cold: 'too cold',
-  frost: 'frost',
-  hot: 'too hot',
+  dark: t('garden.whyDark'),
+  glare: t('garden.whyGlare'),
+  cold: t('garden.whyCold'),
+  frost: t('garden.whyFrost'),
+  hot: t('garden.whyHot'),
 }
 
-const list = (items: string[]): string => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`)
+const list = (items: string[]): string => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')}${t('garden.and')}${items[items.length - 1]}`)
 
 /**
  * Two plain sentences: where the plant grows best (good spots first, ok ones when none is good), and where it finds nowhere.
  * `centre` is the building's centre in scene metres, so spots can be named by direction.
  */
-export function findSummary(plantName: string, month: string | null, stats: KindStats[], centre: { x: number; z: number }): string {
-  const when = month === null ? '' : ` in ${month}`
+export function findSummary(plantLabel: string, month: string | null, stats: KindStats[], centre: { x: number; z: number }): string {
+  const when = month === null ? '' : t('garden.inMonth', { month })
   if (stats.length === 0) return ''
   const withGood = stats.filter((s) => s.good > 0)
   const withOk = stats.filter((s) => s.good === 0 && s.ok > 0)
   const none = stats.filter((s) => s.good === 0 && s.ok === 0)
   const parts: string[] = []
   if (withGood.length > 0) {
-    parts.push(`Best spots for ${plantName}${when}: ${list(withGood.map((s) => place(s, centre)))}.`)
-    if (withOk.length > 0) parts.push(`Only fair: ${list(withOk.map((s) => place(s, centre)))}.`)
+    parts.push(t('garden.sumBest', { name: plantLabel, when, places: list(withGood.map((s) => place(s, centre))) }))
+    if (withOk.length > 0) parts.push(t('garden.sumFair', { places: list(withOk.map((s) => place(s, centre))) }))
   } else if (withOk.length > 0) {
-    parts.push(`No spot is ideal for ${plantName}${when}; the best are ${list(withOk.map((s) => place(s, centre)))}.`)
+    parts.push(t('garden.sumNoIdeal', { name: plantLabel, when, places: list(withOk.map((s) => place(s, centre))) }))
   } else {
-    parts.push(`${cap(plantName)} finds no suitable spot${when}.`)
+    parts.push(t('garden.sumNone', { Name: cap(plantLabel), when }))
     return parts.join(' ')
   }
   // A kind with a clear reason gets its own sentence, so the reason cannot be read as belonging to the others.
   const why = (s: KindStats) => (s.why ? WHY[s.why] : undefined)
   const plain = none.filter((s) => !why(s))
-  if (plain.length > 0) parts.push(`Nowhere suitable ${list(plain.map((s) => NOWHERE[s.kind]))}.`)
-  for (const s of none.filter(why)) parts.push(`Nowhere suitable ${NOWHERE[s.kind]} (${why(s)}).`)
+  if (plain.length > 0) parts.push(t('garden.sumNowhere', { places: list(plain.map((s) => NOWHERE[s.kind])) }))
+  for (const s of none.filter(why)) parts.push(t('garden.sumNowhereWhy', { place: NOWHERE[s.kind], reason: why(s)! }))
   return parts.join(' ')
 }
 
@@ -206,7 +207,7 @@ export function monthCounts(plant: Plant, spots: SunnySpot[], climate: Temperatu
  * reason most spots share). Undefined when the data holds no other month to point to.
  */
 export function findDeadEnd(plant: Plant, month: number | null, counts: MonthCount[], spots: SunnySpot[], why?: IssueKind): DeadEnd | undefined {
-  const name = cap(plant.name)
+  const name = plantName(plant)
   const working = counts.map((c) => c.good + c.ok > 0)
   const withGood = counts.map((c) => c.good > 0)
   if (working.some(Boolean)) {
@@ -215,15 +216,15 @@ export function findDeadEnd(plant: Plant, month: number | null, counts: MonthCou
     if (!others.some(Boolean)) return undefined
     const better = (a: number, b: number) => counts[a].good > counts[b].good || (counts[a].good === counts[b].good && counts[a].ok > counts[b].ok)
     const best = others.map((o, m) => (o ? m : -1)).filter((m) => m >= 0).reduce((b, m) => (better(m, b) ? m : b))
-    return { text: `${name} ${withGood.some(Boolean) ? 'does well' : 'is only fair'} here in ${monthsText(others)}.`, switchMonth: best }
+    return { text: t(withGood.some(Boolean) ? 'garden.endWell' : 'garden.endFair', { Name: cap(name), months: monthsText(others) }), switchMonth: best }
   }
   if (spots.length === 0) return undefined
   let sunMax = 0
   let sunMonth = 0
   for (const s of spots) s.sunMinutes.forEach((m, i) => { if (m > sunMax) { sunMax = m; sunMonth = i } })
   if (why === 'dark' || (why === undefined && sunMax / 60 < plant.sun.min)) {
-    return { text: `Nowhere suitable all year; the sunniest spot gets ${hoursText(sunMax)} in ${MONTH_NAMES[sunMonth]}, ${plant.name} needs ${hoursText(plant.sun.min * 60)}.` }
+    return { text: t('garden.endSunniest', { sun: hoursText(sunMax), month: fmtMonth(sunMonth), name, need: hoursText(plant.sun.min * 60) }) }
   }
   const reason = why ? WHY[why] : undefined
-  return { text: reason ? `Nowhere suitable all year (${reason}).` : 'Nowhere suitable in any month.' }
+  return { text: reason ? t('garden.endReason', { reason }) : t('garden.endNone') }
 }

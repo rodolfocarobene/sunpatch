@@ -1,7 +1,8 @@
 import { type FindKind, type KindStats } from './garden-find'
 import type { GardenTrace } from './garden-card'
-import { MONTH_NAMES, type DeadEnd } from './garden-text'
-import { PLANTS, type PlantKind } from './plants'
+import { monthLabel as monthText, type DeadEnd } from './garden-text'
+import { fmtMonth, t, upFirst, type Key } from './i18n'
+import { PLANTS, plantMatches, plantName, type Plant, type PlantKind } from './plants'
 
 // "Find a place for ...": the plant picker of the Garden view, the colour legend of the plant map and its summary.
 // main.ts feeds it; the map itself is painted by the scene.
@@ -32,14 +33,15 @@ export interface FindPanel {
   set(input: FindInput): void
 }
 
-const GROUPS: { kinds: PlantKind[]; label: string }[] = [
-  { kinds: ['vegetable', 'fruit'], label: 'Vegetables and fruit' },
-  { kinds: ['herb'], label: 'Herbs' },
-  { kinds: ['flower'], label: 'Flowers' },
-  { kinds: ['houseplant'], label: 'Houseplants' },
+const GROUPS: { kinds: PlantKind[]; label: Key }[] = [
+  { kinds: ['vegetable', 'fruit'], label: 'garden.groupVegFruit' },
+  { kinds: ['herb'], label: 'garden.groupHerbs' },
+  { kinds: ['flower'], label: 'garden.groupFlowers' },
+  { kinds: ['houseplant'], label: 'garden.groupHouseplants' },
 ]
-const KIND_WORD: Record<FindKind, string> = { indoor: 'Indoors', ground: 'Ground', roof: 'Roof' }
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
+const KIND_WORD: Record<FindKind, Key> = { indoor: 'garden.kindIndoors', ground: 'garden.kindGround', roof: 'garden.kindRoof' }
+/** How many rows the plant list shows while a search is typed. */
+const SEARCH_ROWS = 6
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] =>
   Object.assign(document.createElement(tag), { className, textContent: text })
@@ -55,27 +57,48 @@ export function createFindPanel(options: {
 }): FindPanel {
   const root = el('div', 'findPanel')
   root.setAttribute('role', 'region')
-  root.setAttribute('aria-label', 'Find a place for a plant')
+  root.setAttribute('aria-label', t('garden.findAria'))
+  const search = el('input')
+  search.type = 'search'
+  search.className = 'plantSearch'
+  search.placeholder = t('garden.searchPlaceholder')
+  search.setAttribute('aria-label', t('garden.searchAria'))
+  search.autocomplete = 'off'
   const plantSelect = el('select')
-  plantSelect.setAttribute('aria-label', 'Plant to find a place for')
-  plantSelect.append(option('', 'Choose a plant…'))
-  for (const g of GROUPS) {
-    const group = document.createElement('optgroup')
-    group.label = g.label
-    for (const p of PLANTS.filter((x) => g.kinds.includes(x.kind))) group.append(option(p.id, cap(p.name)))
-    if (group.children.length > 0) plantSelect.append(group)
+  plantSelect.setAttribute('aria-label', t('garden.plantAria'))
+  let chosenId = ''
+  /** The plant list: every plant, or those whose English or Italian name matches the search (a short list box while searching). */
+  const fillPlants = (query: string) => {
+    const matches = (p: Plant) => plantMatches(p, query)
+    plantSelect.replaceChildren(option('', t('garden.choosePlant')))
+    for (const g of GROUPS) {
+      const group = document.createElement('optgroup')
+      group.label = t(g.label)
+      const plants = PLANTS.filter((x) => g.kinds.includes(x.kind) && matches(x))
+      for (const p of plants) group.append(option(p.id, upFirst(plantName(p))))
+      if (group.children.length > 0) plantSelect.append(group)
+    }
+    const found = plantSelect.querySelectorAll('option').length - 1
+    if (query.trim() !== '' && found === 0) plantSelect.append(Object.assign(option('', t('garden.noPlantMatch')), { disabled: true }))
+    plantSelect.size = query.trim() === '' ? 0 : Math.min(SEARCH_ROWS, found + plantSelect.querySelectorAll('optgroup').length + 1)
+    plantSelect.value = chosenId
   }
-  plantSelect.addEventListener('change', () => options.onPlant(plantSelect.value === '' ? null : plantSelect.value))
+  fillPlants('')
+  search.addEventListener('input', () => fillPlants(search.value))
+  plantSelect.addEventListener('change', () => {
+    chosenId = plantSelect.value
+    options.onPlant(chosenId === '' ? null : chosenId)
+  })
 
   const monthLabel = el('label', 'monthRow')
   const monthSelect = el('select')
-  monthSelect.append(option('', 'All year'))
-  MONTH_NAMES.forEach((m, i) => monthSelect.append(option(String(i), m)))
+  monthSelect.append(option('', t('garden.monthAllYear')))
+  for (let i = 0; i < 12; i++) monthSelect.append(option(String(i), monthText(i)))
   monthSelect.addEventListener('change', () => options.onMonth(monthSelect.value === '' ? null : Number(monthSelect.value)))
-  monthLabel.append(el('span', '', 'Month'), monthSelect)
+  monthLabel.append(el('span', '', t('garden.month')), monthSelect)
 
   const result = el('div', 'findResult')
-  root.append(plantSelect, result)
+  root.append(search, plantSelect, result)
 
   const swatch = (kind: 'good' | 'ok' | 'none', text: string): HTMLElement => {
     const s = el('span', 'legendItem')
@@ -100,7 +123,8 @@ export function createFindPanel(options: {
     monthEl: monthLabel,
     set(input) {
       const keepFocus = document.activeElement === plantSelect || document.activeElement === monthSelect ? document.activeElement : null
-      plantSelect.value = input.plantId ?? ''
+      chosenId = input.plantId ?? ''
+      plantSelect.value = chosenId
       monthSelect.value = input.month === null ? '' : String(input.month)
       if (!input.plantId) return result.replaceChildren()
       const parts: HTMLElement[] = []
@@ -109,40 +133,40 @@ export function createFindPanel(options: {
         const pct = trace.status === 'running' ? Math.round(trace.progress * 100) : 0
         const bar = el('div', 'gardenBar')
         bar.style.setProperty('--progress', `${pct}%`)
-        parts.push(withRole(el('p', 'cardBusy', `Measuring the sun over the whole area… ${pct}%`), 'status'), bar)
+        parts.push(withRole(el('p', 'cardBusy', t('garden.findMeasuring', { pct })), 'status'), bar)
       } else if (trace.status === 'error') {
-        parts.push(withRole(el('p', 'cardVerdict warn', trace.message), 'alert'), button('Try again', options.onRetryTrace))
+        parts.push(withRole(el('p', 'cardVerdict warn', trace.message), 'alert'), button(t('garden.tryAgain'), options.onRetryTrace))
       } else {
         if (input.needsClimate && input.weather === 'error') {
           parts.push(
-            withRole(el('p', 'cardVerdict warn', 'Local temperatures could not be loaded (NASA POWER). Outdoor spots cannot be rated without them, so they are not coloured.'), 'alert'),
-            button('Retry the temperatures', options.onRetryClimate),
+            withRole(el('p', 'cardVerdict warn', t('garden.findNoTemps')), 'alert'),
+            button(t('garden.retryTemps'), options.onRetryClimate),
           )
         } else if (input.needsClimate && input.weather !== 'ready') {
-          parts.push(withRole(el('p', 'cardBusy', 'Loading local temperatures…'), 'status'))
+          parts.push(withRole(el('p', 'cardBusy', t('garden.loadingTemps')), 'status'))
         }
         const legend = el('div', 'findLegend')
-        legend.setAttribute('aria-label', 'Colours of the plant map')
-        legend.append(swatch('good', 'Good'), swatch('ok', 'OK, smaller'), swatch('none', 'Poor: not coloured'))
+        legend.setAttribute('aria-label', t('garden.legendAria'))
+        legend.append(swatch('good', t('garden.legendGood')), swatch('ok', t('garden.legendOk')), swatch('none', t('garden.legendPoor')))
         parts.push(legend)
         if (input.summary) parts.push(withRole(el('p', 'findSummary', input.summary), 'status'))
         if (input.deadEnd) {
           const line = el('p', 'findNext', input.deadEnd.text)
           const m = input.deadEnd.switchMonth
-          if (m !== undefined) line.append(' ', button(`Show ${MONTH_NAMES[m]}`, () => options.onMonth(m)))
+          if (m !== undefined) line.append(' ', button(t('garden.showMonth', { month: fmtMonth(m) }), () => options.onMonth(m)))
           parts.push(line)
         }
         if (input.stats.length > 0) {
           const list = el('ul', 'findCounts')
           for (const s of input.stats) {
             const li = el('li')
-            li.append(el('strong', '', `${KIND_WORD[s.kind]}: `), `${s.good} good, ${s.ok} OK of ${s.total} spots`)
+            li.append(el('strong', '', `${t(KIND_WORD[s.kind])}: `), t('garden.counts', { good: s.good, ok: s.ok, total: s.total }))
             list.append(li)
           }
           parts.push(list)
         }
-        if (input.roofHidden) parts.push(el('p', 'cardNote small', 'Roof spots are not counted while the floors above are hidden.'))
-        if (input.canShowBest) parts.push(button('Show the best spot', options.onBest))
+        if (input.roofHidden) parts.push(el('p', 'cardNote small', t('garden.roofHidden')))
+        if (input.canShowBest) parts.push(button(t('garden.best'), options.onBest))
       }
       if (input.note) parts.push(el('p', 'cardNote small', input.note))
       result.replaceChildren(...parts)

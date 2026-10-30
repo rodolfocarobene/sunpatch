@@ -1,7 +1,8 @@
 import { rankPlants, type PlantResult } from './garden'
+import { fmtMonth, fmtNumber, t } from './i18n'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, MONTH_NAMES, NO_SPOT_HINT, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
+  INDOOR_NOTE, NO_SPOT_HINT, monthLabel, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
@@ -55,12 +56,12 @@ const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: A
 export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void; onToggle: () => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
-  root.setAttribute('aria-label', 'What grows at the selected spot')
+  root.setAttribute('aria-label', t('garden.cardAria'))
   const head = el('div', 'gardenHead')
   const close = el('button', 'cardClose')
   close.type = 'button'
-  close.title = 'Close (Esc)'
-  close.setAttribute('aria-label', 'Close')
+  close.title = t('sun.closeTitle')
+  close.setAttribute('aria-label', t('sun.close'))
   close.innerHTML = CLOSE_ICON
   close.addEventListener('click', options.onClose)
   const body = el('div', 'cardBody')
@@ -93,7 +94,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return n
   }
   const labels = (s: SVGElement, y: number, month: number | null) => {
-    MONTH_NAMES.forEach((m, i) => add(s, 'text', { x: String(i * SLOT + SLOT / 2), y: String(y), class: i === month ? 'barLabel on' : 'barLabel', 'text-anchor': 'middle' }, m[0]))
+    for (let i = 0; i < 12; i++) add(s, 'text', { x: String(i * SLOT + SLOT / 2), y: String(y), class: i === month ? 'barLabel on' : 'barLabel', 'text-anchor': 'middle' }, monthLabel(i)[0])
   }
   const highlight = (s: SVGElement, height: number, month: number | null) => {
     if (month !== null) add(s, 'rect', { class: 'monthMark', x: String(month * SLOT), y: '0', width: String(SLOT), height: String(height), rx: '3' })
@@ -102,7 +103,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   function sunChart(sunMinutes: number[], month: number | null): HTMLElement {
     const H = 44
     const cells = sunStrip(sunMinutes)
-    const s = svg(H + 14, `Direct sun a day at this spot by month: ${cells.map((c) => c.text).join('; ')}`)
+    const s = svg(H + 14, t('garden.sunAria', { list: cells.map((c) => c.text).join('; ') }))
     highlight(s, H + 14, month)
     cells.forEach((c, i) => {
       const h = Math.max(1, c.share * H)
@@ -113,15 +114,18 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const wrap = el('div', 'gardenChart')
     const most = sunMinutes.indexOf(Math.max(...sunMinutes))
     const least = sunMinutes.indexOf(Math.min(...sunMinutes))
-    const range = sunMinutes[most] === sunMinutes[least] ? `${hoursText(sunMinutes[most])} a day all year` : `From ${hoursText(sunMinutes[least])} in ${MONTH_NAMES[least]} to ${hoursText(sunMinutes[most])} in ${MONTH_NAMES[most]}`
-    wrap.append(el('span', 'chartLabel', 'Direct sun around this spot, a day'), s, el('span', 'chartCaption', range))
+    const range =
+      sunMinutes[most] === sunMinutes[least]
+        ? t('garden.sunSame', { hours: hoursText(sunMinutes[most]) })
+        : t('garden.sunRange', { lo: hoursText(sunMinutes[least]), m1: fmtMonth(least), hi: hoursText(sunMinutes[most]), m2: fmtMonth(most) })
+    wrap.append(el('span', 'chartLabel', t('garden.sunLabel')), s, el('span', 'chartCaption', range))
     return wrap
   }
 
   function tempChart(climate: Climate, month: number | null): HTMLElement {
     const H = 44
     const { cells, min, max, zeroShare } = tempStrip(climate)
-    const s = svg(H + 14, `Typical low and high temperature by month: ${cells.map((c) => c.text).join('; ')}`)
+    const s = svg(H + 14, t('garden.tempAria', { list: cells.map((c) => c.text).join('; ') }))
     highlight(s, H + 14, month)
     if (zeroShare !== null) add(s, 'line', { class: 'zeroLine', x1: '0', x2: String(W), y1: String(H - zeroShare * H), y2: String(H - zeroShare * H) })
     cells.forEach((c, i) => {
@@ -134,9 +138,9 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const wrap = el('div', 'gardenChart')
     const cold = cells.some((c) => c.cold)
     wrap.append(
-      el('span', 'chartLabel', 'Typical night to day, °C'),
+      el('span', 'chartLabel', t('garden.tempLabel')),
       s,
-      el('span', 'chartCaption', `${cold ? 'Blue: near freezing. ' : ''}${Math.round(min)} to ${Math.round(max)} °C over the year.`),
+      el('span', 'chartCaption', `${cold ? t('garden.tempCold') : ''}${t('garden.tempRange', { min: fmtNumber(Math.round(min)), max: fmtNumber(Math.round(max)) })}`),
     )
     return wrap
   }
@@ -158,14 +162,14 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const { fit, poor } = splitPlants(ranked)
     const answer = el('div', 'gardenPlants gardenAnswer')
     const box = el('div', 'gardenPlants')
-    const when = input.month === null ? '' : ` in ${MONTH_NAMES[input.month]}`
+    const when = input.month === null ? '' : t('garden.inMonth', { month: fmtMonth(input.month) })
     answer.append(
       el(
         'p',
         'plantsLead',
         fit.length === 0
-          ? `Nothing in the catalogue does well here${when}.`
-          : `${fit.length} of ${ranked.length} plants suit this spot${when}, best first.`,
+          ? t('garden.leadNone', { when })
+          : t('garden.leadFit', { n: fit.length, total: ranked.length, when }),
       ),
     )
     if (fit.length === 0) {
@@ -175,7 +179,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         const line = el('p', 'plantsNext', out.text)
         if (out.switchMonth !== undefined) {
           const month = out.switchMonth
-          const go = Object.assign(el('button', 'link', `Show ${MONTH_NAMES[month]}`), { type: 'button' })
+          const go = Object.assign(el('button', 'link', t('garden.showMonth', { month: fmtMonth(month) })), { type: 'button' })
           go.addEventListener('click', () => options.onMonth(month))
           line.append(' ', go)
         }
@@ -193,7 +197,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         all.addEventListener('toggle', () => {
           allOpen = all.open
         })
-        all.append(el('summary', '', `Show all ${fit.length}`))
+        all.append(el('summary', '', t('garden.showAll', { n: fit.length })))
         const more = el('ul', 'plantList')
         more.append(...rest.map((r) => rowItem(plantRow(r, input.month), true)))
         all.append(more)
@@ -206,7 +210,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       more.addEventListener('toggle', () => {
         poorOpen = more.open
       })
-      more.append(el('summary', '', `Why not others? (${poor.length})`))
+      more.append(el('summary', '', t('garden.whyNot', { n: poor.length })))
       const list = el('ul', 'plantList')
       list.append(...poor.map((r) => rowItem(plantRow(r, input.month), false)))
       more.append(list)
@@ -226,7 +230,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         /* storage can be blocked */
       }
     })
-    d.append(el('summary', '', outdoor ? 'Sun and temperature through the year' : 'Sun through the year'), ...charts)
+    d.append(el('summary', '', t(outdoor ? 'garden.chartsTemp' : 'garden.charts')), ...charts)
     return d
   }
 
@@ -254,8 +258,8 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   function caveat(): HTMLElement {
     const p = el('p', 'cardNote small')
     p.append(
-      'An estimate. ',
-      Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: 'Accuracy and limits' }),
+      t('garden.estimate'),
+      Object.assign(document.createElement('a'), { href: ACCURACY_URL, target: '_blank', rel: 'noreferrer', textContent: t('panels.accuracy') }),
     )
     return p
   }
@@ -271,7 +275,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       }
       close.hidden = false
       const where = el('h4', '', input.place ?? whereText(input.kind, input.neighbourRoof))
-      const toggle = Object.assign(el('button', 'link cardToggle', input.collapsed ? 'Show what grows here' : 'Hide details'), { type: 'button' })
+      const toggle = Object.assign(el('button', 'link cardToggle', t(input.collapsed ? 'garden.showHere' : 'garden.hideDetails')), { type: 'button' })
       toggle.setAttribute('aria-expanded', String(!input.collapsed))
       toggle.addEventListener('click', options.onToggle)
       head.replaceChildren(where, ...(input.collapsed !== null ? [toggle] : []), ...(input.kind === 'indoor' ? [el('p', 'cardNote small', INDOOR_NOTE)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
@@ -281,20 +285,20 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         return
       }
       if (trace.status === 'idle' || trace.status === 'running') {
-        body.replaceChildren(busy('Measuring the sun at this spot…', trace.status === 'running' ? trace.progress : 0))
+        body.replaceChildren(busy(t('garden.measuring'), trace.status === 'running' ? trace.progress : 0))
         return
       }
       if (trace.status === 'error') {
-        body.replaceChildren(problem(trace.message, 'Try again', options.onRetryTrace))
+        body.replaceChildren(problem(trace.message, t('garden.tryAgain'), options.onRetryTrace))
         return
       }
       const charts: HTMLElement[] = [sunChart(trace.sunMinutes, input.month)]
       const parts: HTMLElement[] = []
       const outdoor = input.kind !== 'indoor'
       if (outdoor && input.weather === 'error') {
-        parts.push(...charts, problem('Local temperatures could not be loaded (NASA POWER). Outdoor plants cannot be rated without them.', 'Retry the temperatures', options.onRetryClimate))
+        parts.push(...charts, problem(t('garden.noTemps'), t('garden.retryTemps'), options.onRetryClimate))
       } else if (outdoor && (input.weather !== 'ready' || !input.climate)) {
-        parts.push(...charts, busy('Loading local temperatures…'))
+        parts.push(...charts, busy(t('garden.loadingTemps')))
       } else {
         const { answer, rest } = plants(input, trace.sunMinutes)
         parts.unshift(answer)

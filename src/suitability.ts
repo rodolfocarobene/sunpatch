@@ -1,5 +1,6 @@
 import { DoubleSide, Ray } from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
+import { fmtNumber, t, type Key } from './i18n'
 import { buildingContains, distanceToRing, type Building, type Point } from './osm'
 import type { Panel } from './plan'
 import { DEFAULT_PANEL, FACADE_GAP, GROUND_ELEVATION, ROOF_TILT, azimuthOf, edgeOutward, facing } from './panel'
@@ -244,13 +245,13 @@ export function surfaceEnergy(irradiation: Float32Array, at: number, assumptions
   return { ideal: e.ideal, weather: e.weather, shadingShare: e.shadingShare }
 }
 
-const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west']
-export const compass = (azimuth: number): string => COMPASS[Math.round((((azimuth % 360) + 360) % 360) / 45) % 8]
+const COMPASS: Key[] = ['panels.dirN', 'panels.dirNE', 'panels.dirE', 'panels.dirSE', 'panels.dirS', 'panels.dirSW', 'panels.dirW', 'panels.dirNW']
+export const compass = (azimuth: number): string => t(COMPASS[Math.round((((azimuth % 360) + 360) % 360) / 45) % 8])
 
 /** "Roof, 30° south" / "Facade facing south-west, 7 m up" / "Ground, 30° south". */
 export function surfaceLabel(s: Pick<SurfaceSample, 'kind' | 'azimuth' | 'tilt' | 'y'>): string {
-  if (s.kind === 'facade') return `Facade facing ${compass(s.azimuth)}, ${Math.round(s.y)} m up`
-  return `${s.kind === 'roof' ? 'Roof' : 'Ground'}, ${s.tilt}° ${compass(s.azimuth)}`
+  if (s.kind === 'facade') return t('panels.facade', { dir: compass(s.azimuth), y: Math.round(s.y) })
+  return t(s.kind === 'roof' ? 'panels.roof' : 'panels.ground', { tilt: s.tilt, dir: compass(s.azimuth) })
 }
 
 /** The panel "Place a panel here" adds: the preset of the surface, one module at the spot. */
@@ -293,17 +294,17 @@ export function suitabilityColor(kwh: number, min: number, max: number): [number
   return sunColor(((Math.max(min, kwh) - min) / (max - min)) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
 }
 
-export const round10 = (n: number): string => (Math.round(n / 10) * 10).toLocaleString('en')
+export const round10 = (n: number): string => fmtNumber(Math.round(n / 10) * 10)
 
 /** The legend's range line, "650 \u2026 1,400 kWh a year per kW" (the true worst and best spot, not the rounded ticks). */
-export const rangeText = ([lo, hi]: [number, number]): string => `${round10(lo)} \u2026 ${round10(hi)} kWh a year per kW`
+export const rangeText = ([lo, hi]: [number, number]): string => t('panels.rangeLine', { lo: round10(lo), hi: round10(hi) })
 
 /** The popover's lines, as in the sun map's: the answer first, then what the surface is and what the figure rests on. */
 export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { headline: string; detail: string } {
-  const loss = e.shadingShare > 0 && e.shadingShare < 0.005 ? '<1%' : `${Math.round(e.shadingShare * 100)}%`
-  const basis = e.weather === undefined ? 'clear sky, no weather data' : `with local weather (ideal ${round10(e.ideal)})`
+  const loss = e.shadingShare > 0 && e.shadingShare < 0.005 ? '<1%' : `${fmtNumber(Math.round(e.shadingShare * 100))}%`
+  const basis = e.weather === undefined ? t('panels.suitBasisClear') : t('panels.suitBasisWeather', { ideal: round10(e.ideal) })
   return {
-    headline: `About ${round10(e.weather ?? e.ideal)} kWh a year per kW`,
-    detail: `${surfaceLabel(s)} \u00b7 ${basis} \u00b7 shading loss ${loss}`,
+    headline: t('panels.suitHead', { kwh: round10(e.weather ?? e.ideal) }),
+    detail: t('panels.suitDetail', { surface: surfaceLabel(s), basis, loss }),
   }
 }

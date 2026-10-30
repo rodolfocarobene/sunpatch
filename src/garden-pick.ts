@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 // What a click in the Garden view means: indoors on the apartment floor, outdoors on the ground or on a roof, or a
 // surface where nothing can stand (a facade, a ceiling).
 
@@ -35,6 +37,6 @@ export function classifyHit(hit: SurfaceHit): HitKind | null {
   return hit.y <= GROUND_TOP ? 'ground' : 'roof'
 }
 
-export const FACADE_HINT = 'Pick a floor, ground or roof spot: plants cannot stand on a wall.'
+export const FACADE_HINT = t('garden.facade')
 
-export const CUT_HINT = "That's the cut through the building, not its roof. Untick Hide floors above to pick the roof."
+export const CUT_HINT = t('garden.cut')
