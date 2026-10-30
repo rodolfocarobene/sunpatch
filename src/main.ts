@@ -849,8 +849,9 @@ function setView(next: View) {
   editor.setVisible(next === 'plan')
   sunScene.setActive(scene3d)
   if (scene3d) sunScene.resize()
-  // Opening the scene from the Map or the Plan shows the answer: the apartment, unless the user has orbited since it was framed.
-  if (scene3d && (from === 'map' || from === 'plan')) sunScene.frameOnEntry()
+  // Opening a scene view shows its answer, unless the user has orbited since the camera was framed: the apartment
+  // in 3D and Garden, the whole building in Panels (its map covers the facades and the roof).
+  if (scene3d && from !== next) sunScene.frameOnEntry(next === 'panels' ? 'building' : 'apartment')
   if (next !== 'panels') ui.setSuitability(false) // the map belongs to the Panels view
   ui.setView(next)
   renderTotals()

@@ -79,7 +79,7 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      **Whole floor** resets it to the full footprint.
    - **Wall**: two clicks per interior wall; hold Shift for right angles.
    - **Window**: click on an outline edge. With **Select** you can drag a window along its wall and edit its size.
-   - **Building fix**: draw a shape, choose Add or Cut, and set its heights or use a preset such as
+   - **Fix building**: draw a shape, choose Add or Cut, and set its heights or use a preset such as
      *Balcony slab on this floor*. To change how tall a whole building is, right-click it in 3D instead (below).
    - **Panel** (`P`): click to place a solar panel anywhere, inside or outside the outline. Near a wall it snaps and
      faces outward (vertical); elsewhere it faces south at 30 degrees. Drag to move, drag the white dot to turn,
@@ -91,18 +91,21 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
      turn it.
 3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. The bar at the bottom holds the date (Winter,
    Equinox, Summer and Today chips, or any date), the time slider with its daylight strip, **Play** and where the
-   sun is. Keep **Hide floors above** on to see inside.
+   sun is. Keep **Hide floors above** on to see inside. Opening 3D or Garden frames your apartment (about half the
+   free screen); Panels frames the whole building. Once you have orbited or zoomed, the camera stays where you left
+   it when you switch between 3D, Panels and Garden; picking another building frames it again.
    Tick **Sun map** to colour the floor by hours of direct sun on that date. The legend is one line from 0 h to
    6 h+; *Share of daylight* opens the percentages. Click a spot on the floor to read its hours and times, for
    example *3 h 10 min of direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it.
    Changing the date recomputes the map (a few seconds, in the background); moving the time slider does not.
    The map stays on while you walk.
-   The left panel names the building on one line, for example *Relation 36488 · 9 m · 3 levels*, with its OSM
-   link. **Location and accuracy** is folded away.
+   The left panel names the building on one line, for example *OpenStreetMap ↗ · 9 m · 3 levels* (the link opens
+   the building's page, and its tooltip gives the OSM id). **Details** is folded away: it holds *Mark guessed heights*
+   and the location and accuracy fields. One note covers the sample apartment and how to switch buildings.
    Panels are drawn and cast shadows here too, but the solar controls live in the Panels tab.
 4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
    time do not matter here: everything is a year).
-   - **Panel suitability**: tick it to colour the outside of the building and its surroundings by the yearly energy a
+   - **Panel suitability**: off until you tick it (the Panels tab opens with a line saying so); tick it to colour the outside of the building and its surroundings by the yearly energy a
    panel would make there, in kWh a year for each kW of panels. The colours stretch over the range found around your building, and the legend
    gives that range, for example *650 … 1,400 kWh a year per kW*. The facade is sampled every metre (panels
    vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
@@ -160,7 +163,7 @@ building data.
   a guess are striped in 3D. Wrong heights move shadows by metres, so correct the ones that matter near you
   (right-click a building in 3D). Your own heights are exact only as far as you know them: 3 m a floor is a
   typical value, not a measurement.
-- Roofs are flat, and trees, awnings and most balconies are missing. Use **Building fix** for the ones that matter
+- Roofs are flat, and trees, awnings and most balconies are missing. Use **Fix building** for the ones that matter
   to you.
 - The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to
   about a hand's width. It counts the sun as a point, so the soft edge of a shadow is a sharp line.

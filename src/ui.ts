@@ -11,6 +11,7 @@ import { buildingLine } from './building-line'
 
 const GUIDE_KEY = 'sunpatch.guide'
 const SWITCH_HINT_KEY = 'sunpatch.switchHint'
+const DETAILS_KEY = 'sunpatch.details'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
 
@@ -140,14 +141,10 @@ export function createUI(
     </div>
     <p class="hint" id="mapHint" data-views="map" hidden></p>
     <div data-views="plan 3d" id="notes">
-      <div id="exampleNote" class="noteBox" hidden>
-        <span>This is a sample apartment in Milan. Pick your own building on the Map.</span>
-        <button id="exampleClose" class="closeX" type="button" aria-label="Dismiss note" title="Dismiss">${CLOSE_ICON}</button>
+      <div id="note" class="noteBox" hidden>
+        <div><p id="noteExample"></p><p id="noteHint"></p></div>
+        <button id="noteClose" class="closeX" type="button" aria-label="Dismiss note" title="Dismiss">${CLOSE_ICON}</button>
       </div>
-      <p id="switchHint" class="hint" hidden>
-        <span></span>
-        <button id="switchHintClose" class="closeX" type="button" aria-label="Dismiss hint" title="Dismiss">${CLOSE_ICON}</button>
-      </p>
     </div>
     <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>See it in 3D</button></p>
     <section data-views="3d">
@@ -161,20 +158,23 @@ export function createUI(
             <label class="row" title="Colour the floor by hours of direct sun on this date"><input id="sunMap" type="checkbox"> Sun map <kbd class="walkKey">M</kbd></label>
             <div id="sunMapLegend" hidden></div>
           </div>
-          <div id="guessedBox">
-            <label class="row" title="Stripe the buildings whose height OpenStreetMap does not have (a 9 m default is used)"><input id="guessed" type="checkbox" checked> Mark guessed heights</label>
-            <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>Hatched: height guessed (no data in OpenStreetMap)</p>
-          </div>
         </div>
       </div>
       <details id="location">
-        <summary>Location and accuracy</summary>
-        <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
-        <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
-        <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
+        <summary>Details</summary>
+        <div id="guessedBox">
+          <label class="row" title="Stripe the buildings whose height OpenStreetMap does not have (a 9 m default is used)"><input id="guessed" type="checkbox" checked> Mark guessed heights</label>
+          <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>Hatched: height guessed (no data in OpenStreetMap)</p>
+        </div>
+        <div class="coords">
+          <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
+          <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="${MILAN.lon}"></label>
+          <p class="note">Direct sun only \u00b7 heights from OpenStreetMap. <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">Accuracy and limits</a></p>
+        </div>
       </details>
     </section>
     <section data-views="panels">
+      <p id="panelLead" class="panelLead">Turn on Panel suitability, then click a roof, a facade or the ground to place a panel.</p>
       <div class="field">
         <label class="row" title="Colour the facade, roof and ground by the yearly energy a panel there would make"><input id="suit" type="checkbox"> Panel suitability</label>
         <div id="suitLegend" hidden></div>
@@ -183,7 +183,7 @@ export function createUI(
       <div id="panelList">
         <p id="panelTotals" class="hint" hidden></p>
         <ul id="panelRows" hidden></ul>
-        <p id="panelEmpty" class="hint">No panels yet. Turn on Panel suitability, click a spot and press Place a panel here, or use the Panel tool in <button id="emptyToPlan" class="link" type="button">Plan</button>.</p>
+        <p id="panelEmpty" class="hint">Or draw one with the Panel tool in <button id="emptyToPlan" class="link" type="button">Plan</button>.</p>
       </div>
       <div id="cardSlot"></div>
     </section>
@@ -290,10 +290,7 @@ export function createUI(
     if (row) panelPickListener?.(row.dataset.id!)
   })
   $('planToThree').addEventListener('click', () => onView('3d'))
-  $('exampleClose').addEventListener('click', () => ($('exampleNote').hidden = true))
 
-  // The switching hint is for the first visits: once dismissed it stays away.
-  const switchHint = $('switchHint')
   let editHeightListener: ((at: { x: number; y: number }) => void) | undefined
   $('building').addEventListener('click', (e) => {
     const button = (e.target as HTMLElement).closest<HTMLButtonElement>('button.editHeight')
@@ -308,21 +305,43 @@ export function createUI(
   try {
     hintGone = localStorage.getItem(SWITCH_HINT_KEY) === 'gone'
   } catch { /* storage blocked: the hint shows every time */ }
-  $('switchHintClose').addEventListener('click', () => {
+  // One note for the first visits: the sample-apartment line (this session only) and how to switch buildings
+  // (once dismissed it stays away). One X closes both.
+  let exampleOn = false
+  let exampleGone = false
+  $('noteClose').addEventListener('click', () => {
     hintGone = true
+    exampleGone = true
     try {
       localStorage.setItem(SWITCH_HINT_KEY, 'gone')
     } catch { /* not remembered */ }
-    updateSwitchHint()
+    updateNote()
   })
-  function updateSwitchHint() {
+  function updateNote() {
     const view = panel.dataset.view
-    switchHint.hidden = hintGone || !hasBuilding || (view !== '3d' && view !== 'plan')
-    if (switchHint.hidden) return
+    const example = exampleOn && !exampleGone
+    const hint = !hintGone
+    const note = $('note')
+    note.hidden = !hasBuilding || (view !== '3d' && view !== 'plan') || !(example || hint)
+    if (note.hidden) return
     const parts = (building?.members?.length ?? 1) > 1
-    switchHint.firstElementChild!.textContent =
-      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift-click to add or remove parts${parts ? ' of your building' : ''}. Right-click a building to set its height.`
+    $('noteExample').hidden = !example
+    $('noteExample').textContent = 'Sample apartment in Milan. Pick your own building on the Map.'
+    $('noteHint').hidden = !hint
+    $('noteHint').textContent =
+      view === 'plan' ? 'With Select, click a grey building to switch.' : `Click another building to switch. Shift\u2011click to add or remove parts${parts ? ' of your building' : ''}. Right-click a building to set its height.`
   }
+
+  // Details (guessed heights, location): closed by default; the open state lasts for the session.
+  const details = $<HTMLDetailsElement>('location')
+  try {
+    details.open = sessionStorage.getItem(DETAILS_KEY) === 'open'
+  } catch { /* storage blocked: closed */ }
+  details.addEventListener('toggle', () => {
+    try {
+      sessionStorage.setItem(DETAILS_KEY, details.open ? 'open' : 'closed')
+    } catch { /* not remembered */ }
+  })
 
   // The first-run guide: open by default, its collapsed state is remembered.
   const guide = $<HTMLDetailsElement>('guide')
@@ -459,7 +478,7 @@ export function createUI(
       building = b
       hasBuilding = b !== null
       if (b) renderBuilding(el, b)
-      updateSwitchHint()
+      updateNote()
     },
     setView(view) {
       for (const b of viewButtons) {
@@ -473,7 +492,7 @@ export function createUI(
       panel.dataset.view = view
       dock.hidden = view !== '3d'
       if (view === 'map') updateMapHint()
-      updateSwitchHint()
+      updateNote()
     },
     setBuildingPicked(isPicked) {
       picked = isPicked
@@ -500,7 +519,9 @@ export function createUI(
       walk.hidden = step !== 'see'
     },
     setExample(on) {
-      $('exampleNote').hidden = !on
+      exampleOn = on
+      if (on) exampleGone = false
+      updateNote()
     },
     setRoofHint(show) {
       $('gardenRoofHint').hidden = !show
@@ -567,6 +588,7 @@ export function createUI(
       const rows = $('panelRows')
       rows.hidden = items.length === 0
       $('panelEmpty').hidden = items.length > 0
+      $('panelLead').hidden = items.length > 0
       rows.replaceChildren(
         ...items.map((item) => {
           const li = document.createElement('li')
@@ -663,7 +685,7 @@ function renderBuilding(el: HTMLElement, b: Building) {
   const line = buildingLine(b)
   const row = document.createElement('div')
   row.className = 'buildLine'
-  const id = line.href ? Object.assign(document.createElement('a'), { href: line.href, target: '_blank', rel: 'noreferrer', textContent: line.label, title: 'Open in OpenStreetMap' }) : document.createTextNode(line.label)
+  const id = line.href ? Object.assign(document.createElement('a'), { href: line.href, target: '_blank', rel: 'noreferrer', textContent: line.label, className: 'osmLink', title: `Open ${line.osmId} in OpenStreetMap`, ariaLabel: `${line.label}: ${line.osmId}, opens in a new tab` }) : document.createTextNode(line.label)
   const facts = Object.assign(document.createElement('span'), { textContent: ` \u00b7 ${line.facts.join(' \u00b7 ')}`, title: line.heightNote })
   row.append(id, facts)
   const extra: HTMLElement[] = []

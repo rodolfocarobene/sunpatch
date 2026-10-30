@@ -200,8 +200,8 @@ export interface SunScene {
   onBuildingInView(handler: (inView: boolean) => void): void
   /** Frames the whole selected building (the legend's "Frame the building"). */
   frameSelected(): void
-  /** Frames the apartment when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
-  frameOnEntry(): void
+  /** Frames the apartment (or the whole building) when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
+  frameOnEntry(target: 'apartment' | 'building'): void
   /** How many pixels at the left of the scene the panel covers: the apartment is centred in the rest. */
   setFrameInset(inset: () => number): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
@@ -1398,8 +1398,10 @@ export function createScene(container: HTMLElement): SunScene {
     frameSelected() {
       if (selectedBuilding && !walking) frameBuilding(selectedBuilding)
     },
-    frameOnEntry() {
-      if (selectedBuilding && plan && !walking && !userMoved) frameApartment(selectedBuilding, plan)
+    frameOnEntry(target) {
+      if (!selectedBuilding || walking || userMoved) return
+      if (target === 'apartment' && plan) frameApartment(selectedBuilding, plan)
+      else frameBuilding(selectedBuilding)
     },
     setFrameInset(inset) {
       frameInset = inset
