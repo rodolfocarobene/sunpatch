@@ -283,6 +283,10 @@ The sun map answers "how long is this spot of the floor in direct sun on this da
   height, ground the stand at `GROUND_ELEVATION`.
 - `window.__sunpatch`, `window.__sunpatchCamera` and `window.__sunpatchControls` are exposed in the dev server only, for the visual checks.
 
+## Gardener (data and logic only so far)
+
+`plants.ts` is a catalogue of about 30 common plants with the direct-sun hours they need (least, best, and a scorch limit for shade plants), their temperature range (growth minimum, optimum, maximum, coldest they survive), whether they grow indoors or outdoors, and for annual crops the days to harvest. `garden.ts` rates a plant at a spot for each month: `good`, `ok` or `poor`, from the spot's mean daily direct-sun minutes per month and the temperatures in `Climate` (`weather.ts` now also reads NASA POWER `T2M`, `T2M_MIN` and `T2M_RANGE`; the typical daily minimum and maximum are the monthly mean minus and plus half the mean daily range, and `T2M_MIN` is the coldest value in the 25-year record). The worst finding sets the rating, and `explain` says it in one sentence. Tender plants (survive above -3 degC) are tested for frost against the coldest night on record, hardy ones against the typical night. A plant's summary gives its months, whether it works all year, and for annual crops whether the longest unbroken run of non-poor months is long enough for the days to harvest, with the month to sow. A hardy perennial that is too cold to grow outdoors is "resting" (ok, sun ignored); a perennial is scored over its non-resting months and scores 0 if any month kills it (frost, wrong place). Catalogue figures are typical values from general guidance, not checked plant by plant. `rankPlants` orders plants for a spot; `scoreSpots` scores one plant over many spots. Indoor spots ignore the weather and assume a heated home at 18 to 24 degC all year (`INDOOR_TEMP`); that is an assumption, real rooms differ. Only direct sun is counted, so a plant that lives on bright indirect light is rated by the direct sun alone.
+
 ## Testing
 
 - `npm test` runs the unit tests (pure geometry, parsing, network fallbacks with an injected `fetch`).

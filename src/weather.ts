@@ -1,8 +1,9 @@
-// Monthly clear-sky index from NASA POWER climatology: all-sky over clear-sky irradiance on the horizontal.
+// Monthly clear-sky index and 2 m air temperatures from NASA POWER climatology. The index is all-sky over clear-sky
+// irradiance on the horizontal.
 // One request per place (rounded to 0.1 degrees), kept in memory and in localStorage; it is a 25-year average.
 
 const ENDPOINT = 'https://power.larc.nasa.gov/api/temporal/climatology/point'
-const STORAGE_KEY = 'sunpatch.nasaPower.v1'
+const STORAGE_KEY = 'sunpatch.nasaPower.v2'
 /** Climatology does not change: a month is plenty. */
 export const CACHE_TTL_MS = 30 * 24 * 3600 * 1000
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -10,6 +11,14 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 export interface Climate {
   /** Monthly all-sky / clear-sky ratio, January first, 0..1. */
   clearness: number[]
+  /** Monthly mean 2 m air temperature (POWER T2M), degC. */
+  tMean: number[]
+  /** Typical daily minimum: tMean minus half the mean daily range (POWER T2M_RANGE), degC. */
+  tMin: number[]
+  /** Typical daily maximum: tMean plus half the mean daily range, degC. */
+  tMax: number[]
+  /** Coldest 2 m temperature of the month in the 25-year record (POWER T2M_MIN); it is an extreme, not typical, degC. */
+  tLow: number[]
 }
 
 /** The place rounded to 0.1 degrees, as the cache key and the request. */
@@ -20,7 +29,7 @@ export function climateKey(lat: number, lon: number): { lat: number; lon: number
 }
 
 export const climateUrl = (lat: number, lon: number): string =>
-  `${ENDPOINT}?parameters=ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN&community=RE&longitude=${lon}&latitude=${lat}&format=JSON`
+  `${ENDPOINT}?parameters=ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M,T2M_MIN,T2M_RANGE&community=RE&longitude=${lon}&latitude=${lat}&format=JSON`
 
 /** Reads a NASA POWER climatology response; throws when it lacks a usable month. */
 export function parseClimate(json: unknown): Climate {
@@ -34,8 +43,21 @@ export function parseClimate(json: unknown): Climate {
     if (!(a >= 0) || !(c > 0)) throw new Error('NASA POWER response has a missing month')
     return Math.min(1, a / c)
   })
-  return { clearness }
+  const monthly = (name: string): number[] => {
+    const values = param[name]
+    if (!values) throw new Error(`NASA POWER response has no ${name}`)
+    return MONTHS.map((m) => {
+      const v = values[m]
+      if (!Number.isFinite(v) || v <= -900) throw new Error(`NASA POWER response has a missing month in ${name}`)
+      return v
+    })
+  }
+  const tMean = monthly('T2M')
+  const half = monthly('T2M_RANGE').map((r) => r / 2)
+  return { clearness, tMean, tMin: tMean.map((t, i) => t - half[i]), tMax: tMean.map((t, i) => t + half[i]), tLow: monthly('T2M_MIN') }
 }
+
+const twelveNumbers = (a: unknown): boolean => Array.isArray(a) && a.length === 12 && a.every((v) => Number.isFinite(v))
 
 const memory = new Map<string, Climate>()
 const pending = new Map<string, Promise<Climate>>()
@@ -44,7 +66,7 @@ function stored(key: string): Climate | undefined {
   try {
     const all = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Record<string, { at: number; climate: Climate }>
     const hit = all[key]
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS && hit.climate.clearness?.length === 12) return hit.climate
+    if (hit && Date.now() - hit.at < CACHE_TTL_MS && ['clearness', 'tMean', 'tMin', 'tMax', 'tLow'].every((k) => twelveNumbers((hit.climate as unknown as Record<string, unknown>)?.[k]))) return hit.climate
   } catch {
     // storage unavailable or corrupt: fetch instead
   }
