@@ -58,6 +58,21 @@ describe('kindStats', () => {
   })
 })
 
+describe('why nowhere is suitable', () => {
+  const dark: Scored = { ...poor, why: 'dark' }
+  const hot: Scored = { ...poor, why: 'hot' }
+  it('names the reason most of the failing spots share', () => {
+    const spots: GardenSpot[] = Array.from({ length: 5 }, () => spot('indoor'))
+    expect(kindStats(spots, [dark, dark, dark, hot, poor])[0].why).toBe('dark')
+  })
+  it('names none when the reasons are mixed, missing, or the kind has a usable spot', () => {
+    const spots: GardenSpot[] = Array.from({ length: 4 }, () => spot('indoor'))
+    expect(kindStats(spots, [dark, dark, hot, hot])[0].why).toBeUndefined()
+    expect(kindStats(spots, [poor, poor, poor, poor])[0].why).toBeUndefined()
+    expect(kindStats(spots, [dark, dark, dark, ok])[0].why).toBeUndefined()
+  })
+})
+
 describe('findSummary', () => {
   const centre = { x: 0, z: 0 }
   const stat = (kind: KindStats['kind'], good: number, ok: number, c?: { x: number; z: number }): KindStats => ({ kind, total: 50, good, ok, centre: c, centreOf: good > 0 ? 'good' : 'ok' })
@@ -65,6 +80,10 @@ describe('findSummary', () => {
   it('names the best kinds with a direction and the kinds with nowhere', () => {
     const text = findSummary('basil', null, [stat('indoor', 0, 0), stat('ground', 20, 5, { x: 0, z: 12 }), stat('roof', 8, 0, { x: 1, z: 1 })], centre)
     expect(text).toBe('Best spots for basil: the ground south of the building and the roof. Nowhere suitable indoors.')
+  })
+  it('gives the reason in brackets when it is clear', () => {
+    const text = findSummary('basil', null, [{ ...stat('indoor', 0, 0), why: 'dark' }, stat('ground', 20, 0, { x: 0, z: 12 })], centre)
+    expect(text).toBe('Best spots for basil: the ground south of the building. Nowhere suitable indoors (not enough direct sun).')
   })
   it('mentions the month', () => {
     expect(findSummary('basil', 'December', [stat('roof', 3, 0)], centre)).toBe('Best spots for basil in December: the roof.')
