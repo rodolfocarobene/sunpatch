@@ -48,7 +48,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** Indoor spots ignore the weather; this only satisfies the signature. */
 const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: Array(12).fill(0), tMin: Array(12).fill(0), tMax: Array(12).fill(0), tLow: Array(12).fill(0) }
 
-export function createGardenCard(options: { onMonth: (month: number | null) => void; onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void }): GardenCard {
+export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', 'What grows at the selected spot')
@@ -60,13 +60,6 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
   close.innerHTML = CLOSE_ICON
   close.addEventListener('click', options.onClose)
   const body = el('div', 'cardBody')
-  // The month filter is made once, so it keeps focus while the plants below it change.
-  const filter = el('label', 'monthFilter')
-  const select = el('select')
-  select.append(Object.assign(document.createElement('option'), { value: '', textContent: 'All year' }))
-  MONTH_NAMES.forEach((m, i) => select.append(Object.assign(document.createElement('option'), { value: String(i), textContent: m })))
-  select.addEventListener('change', () => options.onMonth(select.value === '' ? null : Number(select.value)))
-  filter.append('Plants for ', select)
   const results = el('div', 'gardenResults')
   root.append(head, close, body)
   let poorOpen = false
@@ -214,8 +207,6 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
   return {
     el: root,
     set(input) {
-      const keepFocus = document.activeElement === select
-      select.value = input.month === null ? '' : String(input.month)
       if (input.kind === null) {
         head.replaceChildren(el('p', 'cardNote', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
@@ -243,10 +234,9 @@ export function createGardenCard(options: { onMonth: (month: number | null) => v
       } else {
         if (outdoor) parts.push(tempChart(input.climate!, input.month))
         results.replaceChildren(plants(input, trace.sunMinutes))
-        parts.push(filter, results, caveat())
+        parts.push(results, caveat())
       }
       body.replaceChildren(...parts)
-      if (keepFocus) select.focus()
     },
   }
 }

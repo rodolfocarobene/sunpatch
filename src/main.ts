@@ -39,7 +39,7 @@ import { createSunMapJob } from './sunmap-job'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
-import { discSpots, gardenSpots, meanSun } from './garden-spots'
+import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
 import { bestSpot, findSummary, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
@@ -95,7 +95,6 @@ const findPanel = createFindPanel({
 })
 ui.gardenFindSlot.appendChild(findPanel.el)
 const gardenCard = createGardenCard({
-  onMonth: setGardenMonth,
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
@@ -118,8 +117,18 @@ function renderGarden() {
     month: gardenMonth,
   })
   renderFind()
+  renderRoofHint()
 }
 
+/** The roof cannot be picked while the floors above are hidden: say so, but only when the building has a roof to pick. */
+let roofChecked = { id: '', has: false }
+let floorsHidden = true
+let siteDeclared = false // `site` is declared further down; the first renders run before that
+function renderRoofHint() {
+  if (!siteDeclared) return
+  if (site && roofChecked.id !== site.selected.id) roofChecked = { id: site.selected.id, has: roofSpots(site.selected, sunDay?.lat ?? 45).length > 0 }
+  ui.setRoofHint(floorsHidden && !!site && roofChecked.has)
+}
 function retryGardenClimate() {
   gardenClimate = { key: '', status: 'idle' }
   ensureGardenClimate()
@@ -873,6 +882,11 @@ function pick(lat: number, lon: number) {
 
 /** The building being worked on, with the scene data the plan editor needs. */
 let site: { /** The polygons as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
+siteDeclared = true
+ui.onCutaway((hidden) => {
+  floorsHidden = hidden
+  renderRoofHint()
+})
 /** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
 let heights: HeightOverrides = {}
 const sameHeights = (a: HeightOverrides | undefined, b: HeightOverrides | undefined) => JSON.stringify(a ?? {}) === JSON.stringify(b ?? {})
