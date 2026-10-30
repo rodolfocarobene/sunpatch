@@ -170,9 +170,9 @@ function ratingWord(result: PlantResult, months: boolean[]): string {
  */
 export function spotDeadEnd(byYear: PlantResult[], month: number | null): DeadEnd | undefined {
   if (byYear.length === 0) return undefined
-  // A hardy perennial resting through the cold is not a plant that does well there, so it does not point to a month.
-  const fitIn = (m: number) => byYear.filter((r) => r.year[m].rating !== 'poor' && !r.year[m].resting).length
-  const goodIn = (m: number) => byYear.filter((r) => r.year[m].rating === 'good' && !r.year[m].resting).length
+  // Counted as the card lists them (not poor), so the month it points to shows the same number.
+  const fitIn = (m: number) => byYear.filter((r) => r.year[m].rating !== 'poor').length
+  const goodIn = (m: number) => byYear.filter((r) => r.year[m].rating === 'good').length
   const months = MONTH_NAMES.map((_, m) => m).filter((m) => m !== month && fitIn(m) > 0)
   const closest = [...byYear].sort((a, b) => b.score - a.score || a.plant.name.localeCompare(b.plant.name))[0]
   const closestMonths = closest.summary.months
@@ -182,6 +182,6 @@ export function spotDeadEnd(byYear: PlantResult[], month: number | null): DeadEn
     return { text: `In ${MONTH_NAMES[best]}, ${n} ${n === 1 ? 'plant does' : 'plants do'} well here.`, switchMonth: best }
   }
   if (closestMonths.some(Boolean)) return { text: `Closest: ${closest.plant.name}, ${ratingWord(closest, closestMonths)} ${monthsText(closestMonths)}.` }
-  // Nothing is better than poor in any month, so name the plant that comes nearest and what stops it.
-  return { text: `Closest: ${closest.plant.name}, but it is poor in every month. ${reasonText(closest, null)}` }
+  // Every plant is poor in every month: there is no closest option worth naming, so say so.
+  return { text: 'No plant is better than poor here in any month.' }
 }

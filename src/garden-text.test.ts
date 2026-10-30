@@ -114,11 +114,12 @@ describe('spotDeadEnd', () => {
     expect(out.text).toMatch(/^Closest: .+, (Good|OK|OK or good) .+\.$/)
   })
 
-  it('keeps to the closest plant when no other month works', () => {
-    const byYear = rankPlants({ indoor: false, sunMinutes: Array(12).fill(0) }, milan)
+  it('says so plainly when every plant is poor in every month', () => {
+    const arctic = { ...milan, tMean: milan.tMean.map((t) => t - 40), tMin: milan.tMin.map((t) => t - 40), tMax: milan.tMax.map((t) => t - 40), tLow: milan.tLow.map((t) => t - 40) }
+    const byYear = rankPlants({ indoor: false, sunMinutes: Array(12).fill(300) }, arctic)
     const out = spotDeadEnd(byYear, 5)!
     expect(out.switchMonth).toBeUndefined()
-    expect(out.text).toMatch(/^Closest: /)
+    expect(out.text).toBe('No plant is better than poor here in any month.')
   })
 
   it('says nothing without plants', () => {

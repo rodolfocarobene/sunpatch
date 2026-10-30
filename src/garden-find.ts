@@ -173,7 +173,6 @@ export function monthCounts(plant: Plant, spots: SunnySpot[], climate: Temperatu
   const counts: MonthCount[] = Array.from({ length: 12 }, () => ({ good: 0, ok: 0 }))
   for (const s of spots) {
     assess(plant, s, climate).year.forEach((r, m) => {
-      if (r.resting) return // resting through the cold is not doing well
       if (r.rating === 'good') counts[m].good++
       else if (r.rating === 'ok') counts[m].ok++
     })
