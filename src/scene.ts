@@ -59,7 +59,7 @@ import { heatTexels, type Grid } from './sunmap'
 import { along, facing } from './panel'
 import type { SurfaceSample } from './suitability'
 import { POT_HEIGHT } from './garden-spots'
-import { CELL_SIZE, STEP_COLORS, type FindKind, type Step } from './garden-find'
+import { CELL_SIZE, OK_CELL_SCALE, stepColor, type FindKind, type Step } from './garden-find'
 import { hatchedMaterial, hatchStrength } from './hatch'
 import { isGuessed } from './heights'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
@@ -670,12 +670,16 @@ export function createScene(container: HTMLElement): SunScene {
       const colors = new Float32Array(idx.length * 12)
       const index = new Uint32Array(idx.length * 6)
       const c = new Color()
+      const good = new Color().setStyle(stepColor(2), SRGBColorSpace)
+      const ok = new Color().setStyle(stepColor(1), SRGBColorSpace)
       idx.forEach((si, n) => {
         const { x, y, z, cell } = map.spots[si]
-        const h = (cell ?? CELL_SIZE[kind]) / 2 - GARDEN_MAP_GAP / 2
+        const step = map.steps[si]
+        const full = (cell ?? CELL_SIZE[kind]) / 2 - GARDEN_MAP_GAP / 2
+        const h = step === 1 ? full * OK_CELL_SCALE : full
         const top = y - POT_HEIGHT + GARDEN_MAP_LIFT
         positions.set([[-1, -1], [1, -1], [1, 1], [-1, 1]].flatMap(([u, v]) => [x + h * u, top, z + h * v]), n * 12)
-        c.setHex(STEP_COLORS[map.steps[si] as 1 | 2], SRGBColorSpace)
+        c.copy(step === 1 ? ok : good)
         for (let k = 0; k < 4; k++) colors.set([c.r, c.g, c.b], n * 12 + k * 3)
         index.set([0, 1, 2, 0, 2, 3].map((k) => n * 4 + k), n * 6)
       })
