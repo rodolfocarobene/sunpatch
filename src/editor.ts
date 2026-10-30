@@ -199,7 +199,7 @@ export function createPlanEditor(
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
-  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Building fix'], ['panel', 'Panel']] as const) {
+  for (const [t, label] of [['select', 'Select'], ['outline', 'Outline'], ['wall', 'Wall'], ['window', 'Window'], ['fix', 'Fix building'], ['panel', 'Panel']] as const) {
     const b = button(label, `${label} tool (${TOOL_KEYS[t]})`, () => setTool(t))
     b.append(keyHint(TOOL_KEYS[t]))
     toolButtons.set(t, b)
@@ -697,7 +697,7 @@ export function createPlanEditor(
       button('Copy to floor below', 'Duplicate shifted down by one floor height', () => copy(-1)),
     )
     return [
-      Object.assign(document.createElement('h4'), { textContent: 'Building fix' }),
+      Object.assign(document.createElement('h4'), { textContent: 'Fix building' }),
       field('Kind', kind),
       field('Bottom (m)', numberInput(e.bottom, 0.1, -50, (v) => heights(v, e.top))),
       field('Top (m)', numberInput(e.top, 0.1, -50, (v) => heights(e.bottom, v))),

@@ -7,7 +7,8 @@ const base: Building = { id: 'relation/36488', outer: [], holes: [], minHeight: 
 describe('buildingLine', () => {
   it('names the object, its height and levels', () => {
     const line = buildingLine(base)
-    expect(line.label).toBe('Relation 36488')
+    expect(line.label).toBe('OpenStreetMap')
+    expect(line.osmId).toBe('Relation 36488')
     expect(line.href).toBe('https://www.openstreetmap.org/relation/36488')
     expect(line.facts).toEqual(['9 m', '3 levels'])
     expect(line.title).toBeNull()
@@ -29,5 +30,6 @@ describe('buildingLine', () => {
     const line = buildingLine({ ...base, id: 'tile/9', heightSource: 'tile' })
     expect(line.label).toBe('Map-tile outline')
     expect(line.href).toBeNull()
+    expect(line.osmId).toBeNull()
   })
 })

@@ -45,6 +45,7 @@ import {
 } from 'three'
 import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { fitDistance, freeAspect, metresPerPixel } from './frame'
 import { apartmentGeometry } from './apartment'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
@@ -68,10 +69,10 @@ import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
 const DATA_EXTENT = { ground: 700, shadow: 280, sunDistance: 500 }
 // Warm plaster and stone; amber is kept for the apartment outline and the sun patches.
-const SELECTED_COLOR = 0xdac8a6
+const SELECTED_COLOR = 0xe3d3b3
 // Added volume (plan edits): a lighter shade of the building colour, so a fix reads as a fix.
 const ADDED_COLOR = 0xecd6aa
-const OTHER_COLOR = 0xc9c1b4
+const OTHER_COLOR = 0xd8d1c5
 const FLOOR_COLOR = 0xc9a77a
 const WALL_COLOR = 0xf7eddd
 const CEILING_COLOR = 0xd0def2
@@ -79,7 +80,7 @@ const EDGE_COLOR = 0x2b2b30
 const EDGE_OPACITY = 0.75
 const EDGE_ANGLE_DEG = 25
 const GLASS_COLOR = 0x9ecfe8
-const GROUND_COLOR = 0x8a9880
+const GROUND_COLOR = 0xa3b197
 // The app's --accent and --accent-strong: the apartment outline along its wall tops, and its ghost when the floors above are shown.
 const OUTLINE_COLOR = 0xf5a623
 const OUTLINE_GHOST_COLOR = 0xb45f06
@@ -151,7 +152,7 @@ export interface SunScene {
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
   setBuildings(buildings: Building[], selected: Building | string, options?: { keepCamera?: boolean }): void
   /** Replaces the selected building by the building with this apartment carved out and the plan edits applied; null restores it. */
-  setPlan(plan: Plan | null, options?: { close?: boolean; keepView?: boolean }): void
+  setPlan(plan: Plan | null, options?: { keepView?: boolean }): void
   /** Replaces the trees (local metres, same origin as the buildings); an empty list removes them. */
   setTrees(trees: Tree[]): void
   /** Hides the part of the selected building above the apartment's ceiling from the camera (it still casts shadows). */
@@ -199,6 +200,10 @@ export interface SunScene {
   onBuildingInView(handler: (inView: boolean) => void): void
   /** Frames the whole selected building (the legend's "Frame the building"). */
   frameSelected(): void
+  /** Frames the apartment (or the whole building) when a view with the 3D scene opens, unless the user has moved the camera since it was last framed. */
+  frameOnEntry(target: 'apartment' | 'building'): void
+  /** How many pixels at the left of the scene the panel covers: the apartment is centred in the rest. */
+  setFrameInset(inset: () => number): void
   /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
   setProbe(at: { x: number; z: number } | null): void
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
@@ -308,7 +313,13 @@ export function createScene(container: HTMLElement): SunScene {
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.maxPolarAngle = Math.PI / 2 - 0.02
 
+  // The camera has not been moved by the user since the last time the scene framed it.
+  let userMoved = false
+  controls.addEventListener('start', () => (userMoved = true))
+  let frameInset = () => 0
+
   function frame(position: Vector3, target: Vector3) {
+    userMoved = false
     camera.position.copy(position)
     controls.target.copy(target)
     controls.update()
@@ -960,9 +971,10 @@ export function createScene(container: HTMLElement): SunScene {
     )
   }
 
-  // From above at ~45 degrees, on the side opposite the windows so they are seen from inside.
-  function frameApartment(b: Building, p: Plan, tight: boolean) {
-    const { c, radius } = apartmentBounds(b, p, tight)
+  // From above at ~45 degrees, on the side opposite the windows so they are seen from inside. The apartment fills
+  // about half of the part of the screen the left panel leaves free, and sits in the middle of it.
+  function frameApartment(b: Building, p: Plan) {
+    const { c, radius } = apartmentBounds(b, p, true)
     const out = new Vector3()
     for (const w of p.windows) {
       const ring = w.ring === 0 ? p.outline.outer : p.outline.holes[w.ring - 1]
@@ -974,8 +986,15 @@ export function createScene(container: HTMLElement): SunScene {
     }
     const side = out.lengthSq() > 1e-6 ? out.normalize().negate() : new Vector3(0, 0, 1)
     const target = new Vector3(c.x, floorBase(b, p) + 1, c.z)
-    const dist = radius * (tight ? 4.5 : 3) + 6
-    frame(target.clone().addScaledVector(side, dist * 0.7).setY(target.y + dist * 0.7), target)
+    const width = container.clientWidth || window.innerWidth
+    const height = container.clientHeight || window.innerHeight
+    const inset = Math.min(frameInset(), width / 2)
+    const dist = fitDistance(radius, ORBIT_FOV, freeAspect(width, height, inset))
+    const position = target.clone().addScaledVector(side, dist * 0.7).setY(target.y + dist * 0.7)
+    // Slide both along the screen's right so the target lands in the middle of the free area.
+    const right = new Vector3().crossVectors(target.clone().sub(position), camera.up).setY(0).normalize()
+    const slide = right.multiplyScalar((inset / 2) * metresPerPixel(dist, ORBIT_FOV, height))
+    frame(position.sub(slide), target.sub(slide))
   }
 
   function setBuildings(next: Building[], choice: Building | string, { keepCamera = false } = {}) {
@@ -988,7 +1007,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (selectedBuilding && !keepCamera) frameBuilding(selectedBuilding)
   }
 
-  function setPlan(next: Plan | null, { close = false, keepView = false } = {}) {
+  function setPlan(next: Plan | null, { keepView = false } = {}) {
     const selected = selectedBuilding
     const accepted = next && selected && next.buildingId === selected.id ? next : null
     const first = accepted && !plan
@@ -997,7 +1016,7 @@ export function createScene(container: HTMLElement): SunScene {
     if (accepted && selected && first && !keepView) {
       cutaway = true
       applyCutaway()
-      frameApartment(selected, accepted, close)
+      frameApartment(selected, accepted)
     }
   }
 
@@ -1378,6 +1397,14 @@ export function createScene(container: HTMLElement): SunScene {
     },
     frameSelected() {
       if (selectedBuilding && !walking) frameBuilding(selectedBuilding)
+    },
+    frameOnEntry(target) {
+      if (!selectedBuilding || walking || userMoved) return
+      if (target === 'apartment' && plan) frameApartment(selectedBuilding, plan)
+      else frameBuilding(selectedBuilding)
+    },
+    setFrameInset(inset) {
+      frameInset = inset
     },
     setSuitabilityMark(index) {
       suitIndex = index
