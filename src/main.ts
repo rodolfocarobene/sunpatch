@@ -84,8 +84,11 @@ let sunTimer: number | undefined
 // Garden: a click on the floor, the ground or a roof traces that one point over the year in a worker and the card says
 // what grows there. Outdoor spots also need the local temperatures (NASA POWER, cached by weather.ts).
 const gardenJob = createGardenJob()
+/** With a plant picked the plant map answers first, so the spot card folds to its header until the user opens it or picks another spot. */
+let gardenCardOpen = true
 const setGardenMonth = (m: number | null) => {
   gardenMonth = m
+  if (findPlant) gardenCardOpen = false
   renderGarden()
 }
 const findJob = createGardenJob() // the plant map's whole-area trace; the clicked spot has the job above, so neither stops the other
@@ -103,6 +106,10 @@ const gardenCard = createGardenCard({
   onRetryTrace: () => requestGarden(true),
   onClose: () => clearGardenSpot(),
   onMonth: setGardenMonth,
+  onToggle: () => {
+    gardenCardOpen = !gardenCardOpen
+    renderGarden()
+  },
 })
 ui.gardenSlot.appendChild(gardenCard.el)
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
@@ -122,6 +129,7 @@ function renderGarden() {
     weather: gardenClimate.status,
     climate: gardenClimate.climate,
     month: gardenMonth,
+    collapsed: findPlant ? !gardenCardOpen : null,
   })
   renderFind()
   renderRoofHint()
@@ -153,6 +161,7 @@ let findPainted = ''
 function setFindPlant(plant: Plant | undefined) {
   findPlant = plant
   findPainted = ''
+  gardenCardOpen = plant === undefined
   if (!plant) {
     findJob.stop()
     findResult = undefined
@@ -265,7 +274,7 @@ function showBestSpot() {
   const i = bestSpot(findResult.spots, shownScores(), gardenMonth)
   if (i === undefined) return
   const s = findResult.spots[i]
-  selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z)
+  selectGardenSpot(s.kind as PickedKind, s.x, surfaceY(s), s.z, false)
 }
 
 renderGarden() // the hint, until a spot is picked
@@ -339,8 +348,9 @@ sunScene.onGardenClick((hit) => {
 })
 
 /** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
-function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number) {
+function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number, openCard = true) {
   gardenHint = undefined
+  if (openCard) gardenCardOpen = true
   // A roof outside the picked building's footprints belongs to a neighbour.
   const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
   gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }

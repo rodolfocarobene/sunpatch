@@ -431,7 +431,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #gardenRoofHint { margin: -4px 0 0 25px; color: var(--muted); font-size: var(--text-xs); text-wrap: pretty; }
 #gardenSlot { display: flex; flex-direction: column; }
 #gardenSlot .gardenCard { position: relative; padding-top: 10px; border-top: 1px solid var(--line); }
-#gardenSlot .gardenCard .cardClose { top: 6px; right: 0; }
+/* The header and the close button are two columns, so a long place name wraps instead of running under the button. */
+#gardenSlot .gardenCard { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+#gardenSlot .gardenCard .gardenHead { grid-column: 1; grid-row: 1; }
+#gardenSlot .gardenCard .gardenHead h4 { padding-right: 0; text-wrap: balance; }
+#gardenSlot .gardenCard .cardClose { position: static; grid-column: 2; grid-row: 1; margin: -2px -4px 0 0; }
+#gardenSlot .gardenCard .cardBody { grid-column: 1 / -1; }
+.gardenCard .cardToggle { align-self: flex-start; }
 #gardenSlot .gardenCard:has(.gardenPrompt) { padding-top: 0; border-top: 0; }
 .gardenCard .gardenHead { display: flex; flex-direction: column; gap: 4px; }
 .gardenCard .gardenHead .cardNote { text-wrap: pretty; }
@@ -495,8 +501,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* OK cells are drawn smaller on the map: the swatch is inset the same way. */
 .findPanel .legendSwatch.ok { background: var(--rate-ok); background-clip: content-box; padding: 2px; border-radius: 0; }
 .findPanel .legendSwatch.none { border: 1px dashed var(--muted); }
-.findPanel .findSummary { margin: 0; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
-.findPanel .findNext { margin: 0; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findSummary { margin: 0; font-size: var(--text-sm); font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+.findPanel .findNext { margin: 0; font-size: var(--text-sm); line-height: 1.4; text-wrap: pretty; }
+.findPanel .cardNote { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; text-wrap: pretty; }
 .findPanel .findCounts { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .findPanel .findCounts strong { color: var(--text); font-weight: 650; }
 .findPanel .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }

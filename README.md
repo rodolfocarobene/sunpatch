@@ -188,7 +188,8 @@ building data.
   around, not a measurement.
 - Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
   and approximates diffuse light without shading it; the plant catalogue holds typical values for a common
-  variety, and Garden needs the local climate from NASA POWER for outdoor spots.
+  variety, and Garden needs the local climate from NASA POWER for outdoor spots. Garden traces the direct sun in
+  3D on the 21st of each month and uses NASA POWER's typical temperatures (averages, not a forecast).
 - Distant terrain (hills, mountains) is not modelled yet, so very low sun near sunrise and sunset may be
   reported as reaching you when a ridge would block it.
 - The public Overpass servers are sometimes busy. When they fail you keep the map-tile buildings, which have
