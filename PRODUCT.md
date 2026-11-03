@@ -19,7 +19,7 @@ Shadow tools like Shadowmap and SunTrace3D stop at the facade; Sunpatch models t
 ## Operating Context
 - Used on desktop (mouse and keyboard): plan drawing, 3D orbit and first-person walking. Phone support for the app is out of scope; the landing page is responsive.
 - Typical session: search address, click building, sketch outline and windows, scrub time on a few key dates (winter/summer solstice).
-- Depends on free public services (OpenFreeMap tiles, Nominatim, Overpass) that can be slow or busy.
+- Depends on free public services (OpenFreeMap tiles, Nominatim, Overpass, NASA POWER, and Wikipedia/Wikimedia for the Garden plant card) that can be slow or busy.
 
 ## Capabilities and Constraints
 - Direct sun only; diffuse light is a stand-in. Flat roofs, no terrain yet, heights from OSM (can be wrong). Building fixes (add/cut prisms) patch missing geometry.

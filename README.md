@@ -281,6 +281,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 - Weather: monthly clear-sky index (panel energy) and air temperatures (Garden tab) from [NASA POWER](https://power.larc.nasa.gov/) climatology
   (25-year averages). One request per place, rounded to 0.1 degrees, cached in the browser for a month, and made
   only once a panel exists, the suitability map is on, or an outdoor Garden spot is picked. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
+- Plant card (Garden tab): when it opens, the app asks [Wikipedia](https://www.wikipedia.org/) (REST summary, in the app language) for the plant's
+  article summary and picture, and [Wikimedia Commons](https://commons.wikimedia.org/) for the picture's author and licence. Only the plant's article title is sent,
+  never a location. The text is CC BY-SA and the picture keeps its own licence; the card shows both credits with links. Answers are cached for the session, and if
+  Wikipedia cannot be reached the card still shows the app's own facts and the care links. Test fixtures are in `fixtures/wiki/`.
 
 ## License
 
