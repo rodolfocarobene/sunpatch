@@ -237,6 +237,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel.walking #walk, #panel.walking .legendMore { display: none; }
 #panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
 #panel.walking .walkKey { display: inline-block; }
+#tips summary { cursor: pointer; color: var(--muted); }
+#tips[open] summary { margin-bottom: 6px; }
+#tips ul { margin: 0; padding-left: 18px; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
+#tips kbd { padding: 0 5px; font: inherit; border: 1px solid var(--line); border-radius: 4px; }
 #location summary { cursor: pointer; color: var(--muted); }
 #location[open] summary { margin-bottom: 8px; }
 #location[open] { display: flex; flex-direction: column; }

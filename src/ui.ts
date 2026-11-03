@@ -17,6 +17,7 @@ import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighbo
 const GUIDE_KEY = 'sunpatch.guide'
 const SWITCH_HINT_KEY = 'sunpatch.switchHint'
 const DETAILS_KEY = 'sunpatch.details'
+const TIPS_KEY = 'sunpatch.tips'
 const NEIGHBORHOOD_KEY = 'sunpatch.neighborhood'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
@@ -191,6 +192,12 @@ export function createUI(
           <input id="shareField" type="text" readonly hidden aria-label="${t('shell.shareField')}">
         </div>
       </div>
+      <details id="tips">
+        <summary>${t('shell.tips')}</summary>
+        <ul>${touchOnly()
+          ? `<li>${t('shell.tipTouchHeight')}</li>`
+          : `<li>${t('shell.tipParts')}</li><li>${t('shell.tipRuler')}</li><li>${t('shell.tipType')}</li><li><kbd>R</kbd> ${t('shell.tipKey')}</li>`}</ul>
+      </details>
       <details id="location">
         <summary>${t('shell.details')}</summary>
         <div id="guessedBox">
@@ -398,7 +405,6 @@ export function createUI(
   })
   let hintGone = false
   let hasBuilding = false
-  let building: Building | null = null
   try {
     hintGone = localStorage.getItem(SWITCH_HINT_KEY) === 'gone'
   } catch { /* storage blocked: the hint shows every time */ }
@@ -421,12 +427,11 @@ export function createUI(
     const note = $('note')
     note.hidden = !hasBuilding || (view !== '3d' && view !== 'plan') || !(example || hint)
     if (note.hidden) return
-    const parts = (building?.members?.length ?? 1) > 1
     $('noteExample').hidden = !example
     $('noteExample').textContent = t('shell.noteExample')
-    $('noteHint').hidden = !hint
-    $('noteHint').textContent =
-      view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
+    // The sample sentence is the whole note on the sample; the hint takes its place otherwise.
+    $('noteHint').hidden = !hint || (example && view === '3d')
+    $('noteHint').textContent = view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t('shell.note3d')
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
@@ -437,6 +442,17 @@ export function createUI(
   details.addEventListener('toggle', () => {
     try {
       sessionStorage.setItem(DETAILS_KEY, details.open ? 'open' : 'closed')
+    } catch { /* not remembered */ }
+  })
+
+  // Tips (3D interaction hints): closed by default; the open state lasts for the session.
+  const tips = $<HTMLDetailsElement>('tips')
+  try {
+    tips.open = sessionStorage.getItem(TIPS_KEY) === 'open'
+  } catch { /* storage blocked: closed */ }
+  tips.addEventListener('toggle', () => {
+    try {
+      sessionStorage.setItem(TIPS_KEY, tips.open ? 'open' : 'closed')
     } catch { /* not remembered */ }
   })
 
@@ -577,7 +593,6 @@ export function createUI(
     setBuildingInfo(b) {
       const el = $('building')
       el.hidden = !b
-      building = b
       hasBuilding = b !== null
       if (b) renderBuilding(el, b)
       updateNote()
