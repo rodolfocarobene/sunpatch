@@ -1,0 +1,15 @@
+{
+  "type": "standard",
+  "title": "Basil",
+  "extract": "Basil (Ocimum basilicum) is a tender plant of the mint family, grown for its fragrant leaves. It likes warmth, plenty of sun and regular water.",
+  "thumbnail": {
+    "source": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Basil.jpg/320px-Basil.jpg",
+    "width": 320,
+    "height": 240
+  },
+  "content_urls": {
+    "desktop": {
+      "page": "https://en.wikipedia.org/wiki/Basil"
+    }
+  }
+}
