@@ -23,6 +23,7 @@ import {
 import type { Segment, Snap } from './editor-geom'
 import { isClick } from './click'
 import { fmt1Fixed, t, type Key } from './i18n'
+import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
@@ -60,6 +61,9 @@ const HELP: Record<Tool, Key> = {
   fix: 'editor.helpFix',
   panel: 'editor.helpPanel',
 }
+const HELP_TOUCH: Partial<Record<Tool, Key>> = { wall: 'editor.helpWallTouch', fix: 'editor.helpFixTouch', panel: 'editor.helpPanelTouch' }
+/** The help line of a tool; a touch screen has no Shift or right-click, so those tools get their own wording. */
+const helpKey = (tool: Tool): Key => (touchOnly() && HELP_TOUCH[tool]) || HELP[tool]
 // One short line under the tools for the tools without options, so that row is never an empty gap.
 const TOOL_HINT: Partial<Record<Tool, Key>> = {
   select: 'editor.hintSelect',
@@ -1166,7 +1170,7 @@ export function createPlanEditor(
     if (!measure()) return
     if (needsFit) fit()
     drawScene(svg, { building, neighbors, plan, view, selection, draft, hover: hoverId })
-    statusText.textContent = hoverId ? t('editor.hoverSwitch') : (message?.text ?? t(HELP[tool]))
+    statusText.textContent = hoverId ? t('editor.hoverSwitch') : (message?.text ?? t(helpKey(tool)))
     statusLine.dataset.kind = message?.kind ?? 'info'
     updateFloorBox()
     updateProps()

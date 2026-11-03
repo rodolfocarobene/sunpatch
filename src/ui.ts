@@ -1,6 +1,7 @@
 import SunCalc from 'suncalc'
 import { createLangSwitch } from './lang-switch'
 import { fmt1Fixed, fmtNumber, fmtTime, t, type Key } from './i18n'
+import { touchOnly } from './touch'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
@@ -330,6 +331,7 @@ export function createUI(
   const suitLegend = $('suitLegend')
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
+    $('panelLead').textContent = t(suit.checked ? 'shell.panelLeadOn' : 'shell.panelLead') // the lead only asks for what is still to do
     suitLegend.hidden = !suit.checked
     suitListener?.(suit.checked)
   }
@@ -384,7 +386,7 @@ export function createUI(
     $('noteExample').textContent = t('shell.noteExample')
     $('noteHint').hidden = !hint
     $('noteHint').textContent =
-      view === 'plan' ? t('shell.notePlan') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
+      view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
@@ -786,10 +788,11 @@ function renderBuilding(el: HTMLElement, b: Building) {
   if (line.source) note.append(Object.assign(document.createElement('span'), { className: line.guess ? 'guess' : '', textContent: line.source }), ' ')
   note.append(Object.assign(document.createElement('button'), { type: 'button', className: 'link editHeight', textContent: t('bld.editHeight'), title: t('bld.editHeightTitle') }))
   extra.push(note)
-  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: t('bld.capped') }))
+  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: t(touchOnly() ? 'bld.cappedTouch' : 'bld.capped') }))
   // The Map view says how to grow the selection; 3D and Plan have the dismissible switching hint instead.
   const parts = b.members?.length ?? 1
-  extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: t(parts > 1 ? 'bld.addParts' : 'bld.addNeighbour') }))
+  // Adding parts is a Shift-click: a touch screen has none, so it gets no hint for it.
+  if (!touchOnly()) extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: t(parts > 1 ? 'bld.addParts' : 'bld.addNeighbour') }))
   el.replaceChildren(...(line.title ? [Object.assign(document.createElement('strong'), { textContent: line.title })] : []), row, ...extra)
 }
 

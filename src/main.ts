@@ -61,6 +61,7 @@ import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
 import { fmtMonth, onBeforeLangSwitch, t } from './i18n'
+import { touchOnly } from './touch'
 import { saveSession, takeSession } from './session'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -136,6 +137,7 @@ const gardenJob = createGardenJob()
 let gardenCardOpen = true
 const setGardenMonth = (m: number | null) => {
   gardenMonth = m
+  gardenHint = undefined
   if (findPlant) gardenCardOpen = false
   renderGarden()
 }
@@ -208,6 +210,7 @@ let findPainted = ''
 
 function setFindPlant(plant: Plant | undefined) {
   findPlant = plant
+  gardenHint = undefined // a note about the last click is not about this
   findPainted = ''
   gardenCardOpen = plant === undefined
   if (!plant) {
@@ -1059,6 +1062,7 @@ let site: { /** Every polygon the data has around the origin, however far. */ fu
 siteDeclared = true
 ui.onCutaway((hidden) => {
   floorsHidden = hidden
+  gardenHint = undefined // the roof note asked for exactly this
   renderGarden() // the roof counts of the plant map follow
 })
 /** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
@@ -1269,7 +1273,7 @@ function setHeight(id: string, override: HeightOverride | null) {
   }
   setPlan(updated, true)
   if (!exampleMode) savePlan(updated)
-  chip.done(override ? t('shell.heightSet') : t('shell.heightReset'))
+  chip.done(override ? t(touchOnly() ? 'shell.heightSetTouch' : 'shell.heightSet') : t('shell.heightReset'))
 }
 
 /** keepView leaves the camera where it is; otherwise the first plan of a building is framed. */
