@@ -135,11 +135,22 @@ deal with it:
   shading and suitability caches, which key on `sceneVersion`, are invalid and rerun; suitability samples come from
   `site.buildings`). If the selected building's height changed, the plan's `floorHeight` is reset to the new
   `defaultFloorHeight` and `floor` clamped to the new level count, which is what the cutaway ("Hide floors above") reads.
-  Overrides are saved with the plan; an edit with no plan yet creates the default plan for the selected building (as
+  Overrides are kept in the height store (below), not in saved plans; an edit with no plan yet creates the default plan for the selected building (as
   the Panels view does), without moving the camera. In `show()` the working set is the saved plan's overrides over the
   ones already in memory, pruned to polygons that exist in the new data (`keepKnown`), so edits made around one building
   carry to the next building picked nearby. Overrides are keyed by polygon id, so a map-tile preview edit does not carry
   to the OSM data (different ids).
+- **Height store** (`height-store.ts`): before it, overrides lived only in `plan.heights`, so they existed only with a saved
+  plan of one building and a neighbour's height set under one apartment was invisible to another. Now `sunpatch.heights`
+  (localStorage) holds `{ v, items: { [polygonId]: { o: override, t: editedAtMs } } }`; every scene that has the polygon applies
+  it. Expiry is 30 days from the last *edit* (reading does not refresh it: a hard cap keeps stale corrections from
+  outliving later OSM fixes, and avoids a write per load); `load` prunes expired or invalid entries. `sunpatch.heightsKeep`
+  is the one-time answer (`keep` or `session`, asked by `keep-chip.ts` on the first edit): until answered, and in `session`,
+  edits go to sessionStorage; `setMode` moves the data to match. `savePlan` no longer writes `heights`; older saved plans are
+  migrated on load (`resolveHeights`: ids the store lacks are imported into localStorage, stamped now; the store wins since plans
+  had no timestamps) and re-saved without them; `Reset all` also strips `heights` from every saved plan. A share link still
+  carries `plan.heights`: a shared copy (`sharedMode`) shows them over the store, never writes them (`setHeight` skips the store), and
+  "Save as mine" calls `store.put`. Details shows the state and Reset all (confirm, clear, rebuild the scene).
 - **Gesture**: right-click a building (without dragging, which pans) opens the Height box; the selected building also has
   an Edit height button on its info line. Plain click, shift-click, floor click and double-click are taken; Alt-click is
   often grabbed by window managers.
