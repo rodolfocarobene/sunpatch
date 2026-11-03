@@ -90,7 +90,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* The strip spans the thumb's centre travel (thumb width 16px), so a minute lines up with the thumb. */
 #timeBar .timeTrack { position: relative; flex: 1; min-width: 0; height: 22px; }
 .dayStrip { position: absolute; left: 8px; right: 8px; top: 8px; height: 6px; border-radius: 3px; border: 1px solid var(--line); box-sizing: content-box; margin-top: -1px; }
-.sunBand { position: absolute; left: 8px; right: 8px; top: 17px; height: 3px; border-radius: 2px; opacity: 0.9; pointer-events: none; }
+/* Inlaid in the day strip, centred in its height so the strip's border still frames it. */
+.sunBand { position: absolute; left: 8px; right: 8px; top: 9px; height: 4px; border-radius: 2px; pointer-events: none; }
+#bandKey { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); }
+#bandKey i { width: 14px; height: 4px; border-radius: 2px; background: var(--accent-strong); }
 .timeRange { position: absolute; inset: 0; width: 100%; height: 22px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
 .timeRange::-webkit-slider-runnable-track { height: 22px; background: transparent; }
 .timeRange::-moz-range-track { height: 22px; background: transparent; }
@@ -620,7 +623,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   #timeBar #play { min-width: 64px; }
   #timeBar .timeTrack { height: 36px; }
   .dayStrip { left: 12px; right: 12px; top: 15px; }
-  .sunBand { left: 12px; right: 12px; top: 24px; }
+  .sunBand { left: 12px; right: 12px; top: 16px; }
   .timeRange, .timeRange::-webkit-slider-runnable-track { height: 36px; }
   .timeRange::-moz-range-track { height: 36px; }
   .timeRange::-webkit-slider-thumb { width: 24px; height: 32px; }

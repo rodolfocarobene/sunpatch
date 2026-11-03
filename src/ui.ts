@@ -7,7 +7,8 @@ import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
-import { headlineText, sunBandGradient, type DayHeadline } from './headline'
+import { headlineText, sunBandGradient, timeText, type DayHeadline } from './headline'
+import type { Interval } from './sunmap'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 import { rangeText } from './suitability'
@@ -258,11 +259,12 @@ export function createUI(
       <div class="barRow">
         <div class="timeTrack">
           <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
-          <div id="sunBand" class="sunBand" aria-hidden="true"></div>
+          <div id="sunBand" class="sunBand" hidden></div>
           <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="${t('sun.time')}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
         <span id="timeLabel" title="${t('sun.tzTitle')}"></span>
       </div>
+      <div id="bandKey" hidden><i aria-hidden="true"></i>${t('sun.bandKey')}</div>
     </div>`
   document.body.appendChild(dock)
   // One way back to a good view in every scene view, in the same corner: it frames what the view is about.
@@ -341,11 +343,26 @@ export function createUI(
   const legend = $('sunMapLegend')
   const headline = $('sunHeadline')
   let headlineStatus: HeadlineStatus | null = null
+  /** The sun-inside stripe inlaid in the day strip, its legend, and the ranges as text for screen readers. */
+  function paintBand(runs: Interval[]) {
+    const none = !runs.length
+    sunBand.hidden = none
+    $('bandKey').hidden = none
+    sunBand.style.background = sunBandGradient(runs, DAY_MAX)
+    if (none) {
+      sunBand.removeAttribute('role')
+      sunBand.removeAttribute('aria-label')
+      return
+    }
+    const ranges = runs.map((r) => t('sun.bandRange', { from: timeText(r.from), to: timeText(r.to) })).join(', ')
+    sunBand.setAttribute('role', 'img')
+    sunBand.setAttribute('aria-label', t('sun.bandAria', { ranges }))
+  }
   /** Paints the headline and the sun band on the time slider; runs again when the time moves, as the detail line follows it. */
   function renderHeadline() {
     const status = headlineStatus
     headline.hidden = status === null
-    sunBand.style.background = status?.kind === 'ready' ? sunBandGradient(status.headline.runs, DAY_MAX) : ''
+    paintBand(status?.kind === 'ready' ? status.headline.runs : [])
     if (!status) return headline.replaceChildren()
     if (status.kind === 'noWindows') {
       const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
@@ -511,7 +528,7 @@ export function createUI(
     if (headlineStatus?.kind === 'ready') {
       // The detail line follows the time; another date's band waits for its own answer.
       if (dateValue(headlineStatus.day) === date.value) renderHeadline()
-      else sunBand.style.background = ''
+      else paintBand([])
     }
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = fmtTime(times.sunrise)
