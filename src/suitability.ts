@@ -6,7 +6,7 @@ import type { Panel } from './plan'
 import { DEFAULT_PANEL, FACADE_GAP, GROUND_ELEVATION, ROOF_TILT, azimuthOf, edgeOutward, facing } from './panel'
 import { clearSky, diffuseOnPlane, panelEnergy, DEFAULT_ASSUMPTIONS, type Assumptions, type EnergyIrradiation } from './solar'
 import { DAYS_IN_MONTH, type YearSlots } from './panel-shade'
-import { FULL_SUN_MINUTES, sunColor } from './sunmap'
+import { FULL_SUN_MINUTES, SUN_STOPS, sunColor } from './sunmap'
 
 // "Where should I put panels?": candidate surfaces around the selected building (facade, roof, ground), each sampled
 // on a grid and given the same annual energy per kWp as a panel card. This file holds the sample generation, the
@@ -300,14 +300,27 @@ export function rampScale(values: ArrayLike<number>): { min: number; max: number
   return { min, max, ticks, observed: [lo, hi], clamped: lo < min || hi > max }
 }
 
-/** sRGB (0..1) of the sun-map ramp for a figure: `min` kWh/kWp/yr is its dark end, `max` its light end. */
+/**
+ * The Panels ramp is the sun map's, stopped at amber (0.7 of it) instead of the pale yellow: lit by the 3D sun, pale
+ * roofs washed out into one colour, and the best spots must still stand apart. Brighter is still better.
+ */
+export const SUIT_RAMP_TOP = 0.7
+
+/** sRGB (0..1) of the Panels ramp for a figure: `min` kWh/kWp/yr is its dark end, `max` its amber end. */
 export function suitabilityColor(kwh: number, min: number, max: number): [number, number, number] {
-  return sunColor(((Math.min(max, Math.max(min, kwh)) - min) / (max - min)) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
+  return sunColor(((Math.min(max, Math.max(min, kwh)) - min) / (max - min)) * SUIT_RAMP_TOP * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
+}
+
+/** CSS gradient of the Panels ramp for its legend bar: the sun map's stops up to `SUIT_RAMP_TOP`, stretched over the bar. */
+export function suitabilityGradient(): string {
+  const hex = (m: number) => `rgb(${sunColor(m * FULL_SUN_MINUTES).join(', ')})`
+  const stops = SUN_STOPS.filter(([t]) => t < SUIT_RAMP_TOP).map(([t, c]) => `${c} ${((t / SUIT_RAMP_TOP) * 100).toFixed(1)}%`)
+  return `linear-gradient(to right, ${stops.join(', ')}, ${hex(SUIT_RAMP_TOP)} 100%)`
 }
 
 export const round10 = (n: number): string => fmtNumber(Math.round(n / 10) * 10)
 
-/** The legend's range line, "650 \u2026 1,400 kWh a year per kW" (the true worst and best spot, not the rounded ticks). */
+/** The legend's range line, "650\u20131,400 kWh a year per kW" (the true worst and best spot, not the rounded ticks). */
 export const rangeText = ([lo, hi]: [number, number]): string => t('panels.rangeLine', { lo: round10(lo), hi: round10(hi) })
 
 /** The popover's lines, as in the sun map's: the answer first, then what the surface is and what the figure rests on. */

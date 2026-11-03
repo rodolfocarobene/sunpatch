@@ -2,7 +2,7 @@ import { rankPlants, type PlantResult } from './garden'
 import { fmtMonth, fmtNumber, t } from './i18n'
 import type { PickedKind } from './garden-pick'
 import {
-  INDOOR_NOTE, NO_SPOT_HINT, monthLabel, RATING_LABEL, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
+  INDOOR_NOTE, NO_SPOT_HINT, monthLabel, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
 } from './garden-text'
 import { ACCURACY_URL } from './panel-card'
 import type { Climate } from './weather'
@@ -148,7 +148,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   function rowItem(row: PlantRow, withGrowing: boolean): HTMLElement {
     const li = el('li', 'plantRow')
     const top = el('div', 'plantTop')
-    top.append(el('strong', '', row.name), el('span', 'plantKind', row.kind), el('span', `rate ${row.rating}`, RATING_LABEL[row.rating]))
+    top.append(el('strong', '', row.name), el('span', 'plantKind', row.kind), el('span', `rate ${row.rating}`, row.label))
     li.append(top)
     if (withGrowing) li.append(el('span', 'plantGrowing', row.growing))
     li.append(el('span', 'plantReason', row.reason))

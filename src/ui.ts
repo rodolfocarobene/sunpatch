@@ -7,16 +7,18 @@ import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
-import { headlineText, sunBandGradient, type DayHeadline } from './headline'
+import { headlineText, sunBandGradient, timeText, type DayHeadline } from './headline'
+import type { Interval } from './sunmap'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
-import { rangeText } from './suitability'
+import { rangeText, suitabilityGradient } from './suitability'
 import { buildingLine } from './building-line'
 import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
 
 const GUIDE_KEY = 'sunpatch.guide'
 const SWITCH_HINT_KEY = 'sunpatch.switchHint'
 const DETAILS_KEY = 'sunpatch.details'
+const TIPS_KEY = 'sunpatch.tips'
 const NEIGHBORHOOD_KEY = 'sunpatch.neighborhood'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
@@ -62,6 +64,8 @@ export interface UI {
   /** Shows the sample-apartment note (Plan and 3D views) until it is dismissed. */
   setExample(on: boolean): void
   /** Shows the cutaway toggle and the Share button while an apartment plan is in the 3D scene. */
+  /** A shared copy is on screen: the Share box hides. */
+  setShared(on: boolean): void
   setPlanActive(active: boolean): void
   /** The Share button was pressed: the caller builds the link and answers through `setShareResult`. */
   onShare(listener: () => void): void
@@ -186,11 +190,18 @@ export function createUI(
           </div>
         </div>
         <div id="shareBox" class="field" hidden>
-          <button id="shareBtn" class="link" type="button" title="${t('shell.shareTitle')}">${t('shell.share')}</button>
+          <button id="shareBtn" type="button" title="${t('shell.shareTitle')}">${t('shell.share')}</button>
           <p id="shareNote" class="legendNote">${t('shell.shareNote')}</p>
+          <p id="shareStatus" class="legendNote" role="status" hidden></p>
           <input id="shareField" type="text" readonly hidden aria-label="${t('shell.shareField')}">
         </div>
       </div>
+      <details id="tips">
+        <summary>${t('shell.tips')}</summary>
+        <ul>${touchOnly()
+          ? `<li>${t('shell.tipTouchHeight')}</li>`
+          : `<li>${t('shell.tipParts')}</li><li>${t('shell.tipRuler')}</li><li>${t('shell.tipType')}</li><li><kbd>R</kbd> ${t('shell.tipKey')}</li>`}</ul>
+      </details>
       <details id="location">
         <summary>${t('shell.details')}</summary>
         <div id="guessedBox">
@@ -251,11 +262,12 @@ export function createUI(
       <div class="barRow">
         <div class="timeTrack">
           <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
-          <div id="sunBand" class="sunBand" aria-hidden="true"></div>
+          <div id="sunBand" class="sunBand" hidden></div>
           <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="${t('sun.time')}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
         <span id="timeLabel" title="${t('sun.tzTitle')}"></span>
       </div>
+      <div id="bandKey" hidden><i aria-hidden="true"></i>${t('sun.bandKey')}</div>
     </div>`
   document.body.appendChild(dock)
   // One way back to a good view in every scene view, in the same corner: it frames what the view is about.
@@ -334,11 +346,26 @@ export function createUI(
   const legend = $('sunMapLegend')
   const headline = $('sunHeadline')
   let headlineStatus: HeadlineStatus | null = null
+  /** The sun-inside stripe inlaid in the day strip, its legend, and the ranges as text for screen readers. */
+  function paintBand(runs: Interval[]) {
+    const none = !runs.length
+    sunBand.hidden = none
+    $('bandKey').hidden = none
+    sunBand.style.background = sunBandGradient(runs, DAY_MAX)
+    if (none) {
+      sunBand.removeAttribute('role')
+      sunBand.removeAttribute('aria-label')
+      return
+    }
+    const ranges = runs.map((r) => t('sun.bandRange', { from: timeText(r.from), to: timeText(r.to) })).join(', ')
+    sunBand.setAttribute('role', 'img')
+    sunBand.setAttribute('aria-label', t('sun.bandAria', { ranges }))
+  }
   /** Paints the headline and the sun band on the time slider; runs again when the time moves, as the detail line follows it. */
   function renderHeadline() {
     const status = headlineStatus
     headline.hidden = status === null
-    sunBand.style.background = status?.kind === 'ready' ? sunBandGradient(status.headline.runs, DAY_MAX) : ''
+    paintBand(status?.kind === 'ready' ? status.headline.runs : [])
     if (!status) return headline.replaceChildren()
     if (status.kind === 'noWindows') {
       const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
@@ -398,7 +425,8 @@ export function createUI(
   })
   let hintGone = false
   let hasBuilding = false
-  let building: Building | null = null
+  let planActive = false
+  let shared = false
   try {
     hintGone = localStorage.getItem(SWITCH_HINT_KEY) === 'gone'
   } catch { /* storage blocked: the hint shows every time */ }
@@ -421,12 +449,11 @@ export function createUI(
     const note = $('note')
     note.hidden = !hasBuilding || (view !== '3d' && view !== 'plan') || !(example || hint)
     if (note.hidden) return
-    const parts = (building?.members?.length ?? 1) > 1
     $('noteExample').hidden = !example
     $('noteExample').textContent = t('shell.noteExample')
-    $('noteHint').hidden = !hint
-    $('noteHint').textContent =
-      view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
+    // The sample sentence is the whole note on the sample; the hint takes its place otherwise.
+    $('noteHint').hidden = !hint || (example && view === '3d')
+    $('noteHint').textContent = view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t('shell.note3d')
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
@@ -437,6 +464,17 @@ export function createUI(
   details.addEventListener('toggle', () => {
     try {
       sessionStorage.setItem(DETAILS_KEY, details.open ? 'open' : 'closed')
+    } catch { /* not remembered */ }
+  })
+
+  // Tips (3D interaction hints): closed by default; the open state lasts for the session.
+  const tips = $<HTMLDetailsElement>('tips')
+  try {
+    tips.open = sessionStorage.getItem(TIPS_KEY) === 'open'
+  } catch { /* storage blocked: closed */ }
+  tips.addEventListener('toggle', () => {
+    try {
+      sessionStorage.setItem(TIPS_KEY, tips.open ? 'open' : 'closed')
     } catch { /* not remembered */ }
   })
 
@@ -495,7 +533,7 @@ export function createUI(
     if (headlineStatus?.kind === 'ready') {
       // The detail line follows the time; another date's band waits for its own answer.
       if (dateValue(headlineStatus.day) === date.value) renderHeadline()
-      else sunBand.style.background = ''
+      else paintBand([])
     }
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = fmtTime(times.sunrise)
@@ -577,7 +615,6 @@ export function createUI(
     setBuildingInfo(b) {
       const el = $('building')
       el.hidden = !b
-      building = b
       hasBuilding = b !== null
       if (b) renderBuilding(el, b)
       updateNote()
@@ -635,7 +672,9 @@ export function createUI(
     },
     setShareResult(text, link) {
       const field = $<HTMLInputElement>('shareField')
-      $('shareNote').textContent = text ?? t('shell.shareNote')
+      const status = $('shareStatus')
+      status.textContent = text ?? ''
+      status.hidden = text === null
       field.hidden = link === undefined
       if (link !== undefined) {
         field.value = link
@@ -643,8 +682,13 @@ export function createUI(
         field.select()
       }
     },
+    setShared(on) {
+      shared = on
+      $('shareBox').hidden = !planActive || shared
+    },
     setPlanActive(active) {
-      $('shareBox').hidden = !active
+      planActive = active
+      $('shareBox').hidden = !active || shared
       $('aptShow').hidden = !active
       if (active) applyCutaway()
     },
@@ -814,7 +858,7 @@ function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number):
     (updatingPct === undefined
       ? `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>`
       : `<span class="legendHead" role="status">${t('sun.suitUpdating')}\u2026 ${updatingPct}%</span>`) +
-    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${sunGradient()}"></div>` +
+    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${suitabilityGradient()}"></div>` +
     `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
     `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`

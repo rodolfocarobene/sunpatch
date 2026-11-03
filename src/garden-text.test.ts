@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/nasa-power-milan.json'
 import { assess, rankPlants } from './garden'
-import { hoursText, INDOOR_NOTE, monthsText, plantRow, reasonText, representativeMonth, splitPlants, spotDeadEnd, topPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
+import { hoursText, INDOOR_NOTE, monthsText, plantRow, ratingLabel, reasonText, representativeMonth, splitPlants, spotDeadEnd, topPlants, sunStrip, tempStrip, WHERE, whereText } from './garden-text'
 import { plantById } from './plants'
 import { parseClimate } from './weather'
 
@@ -136,5 +136,24 @@ describe('topPlants', () => {
   it('has no rest for a short list', () => {
     expect(topPlants(plants(2)).rest).toEqual([])
     expect(topPlants([])).toEqual({ shown: [], rest: [] })
+  })
+
+  it('says "Low light" on an OK pill that is only held back by sun, and plain OK otherwise', () => {
+    const shade = { ...plantById('mint')!, sun: { min: 0, ideal: 1 } }
+    const dark = { indoor: true, sunMinutes: Array(12).fill(0) }
+    const r = assess(shade, dark, milan)
+    expect(r.rating).toBe('ok')
+    expect(ratingLabel(r, null)).toBe('Low light')
+    expect(ratingLabel(r, 0)).toBe('Low light')
+    expect(plantRow(r, null).reason).toContain('short of sun')
+    const lettuce = assess(plantById('lettuce')!, sunnyWindow, milan)
+    if (lettuce.rating === 'good') expect(ratingLabel(lettuce, null)).toBe('Good')
+  })
+
+  it('names the weakest month when no month is chosen', () => {
+    const shade = { ...plantById('mint')!, sun: { min: 0, ideal: 1 } }
+    const r = assess(shade, { indoor: true, sunMinutes: Array(12).fill(0) }, milan)
+    expect(reasonText(r, null)).toMatch(/^Weakest month: workable in \w+, but short of sun/)
+    expect(reasonText(r, 5)).toMatch(/^Workable in June/)
   })
 })

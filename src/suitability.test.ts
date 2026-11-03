@@ -8,7 +8,7 @@ import { buildBvh, collectOccluders } from './sunmap-trace'
 import { defaultPlan } from './plan'
 import {
   GROUND_MARGIN, GROUND_REACH, IRRADIATION_STRIDE, SUITABILITY_SLOT_MINUTES, facadeSamples, groundSamples, panelFor, rayInputs, roofSamples,
-  percentile, rampScale, rangeText, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
+  percentile, rampScale, rangeText, suitabilityColor, suitabilityGradient, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
 } from './suitability'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -220,7 +220,7 @@ describe('legend and popover text', () => {
   })
 
   it('writes the observed range for the legend', () => {
-    expect(rangeText([648, 1396])).toBe('650 \u2026 1,400 kWh a year per kW')
+    expect(rangeText([648, 1396])).toBe('650\u20131,400 kWh a year per kW')
   })
 
   it('colours the low end dark and the top light, like the sun map', () => {
@@ -230,6 +230,13 @@ describe('legend and popover text', () => {
     // Spots 100 kWh apart near the top differ clearly once the scale is stretched (the fixed 0..max scale blurred them).
     const d = suitabilityColor(1300, 1250, 1350).map((c, i) => Math.abs(c - suitabilityColor(1250, 1250, 1350)[i]))
     expect(Math.max(...d) * 255).toBeGreaterThan(60)
+  })
+
+  it('stops the Panels ramp at amber and draws its legend bar to match', () => {
+    const top = suitabilityColor(1400, 650, 1400).map((c) => Math.round(c * 255))
+    expect(top).not.toEqual([255, 240, 191])
+    expect(suitabilityGradient()).toMatch(/^linear-gradient\(to right, #34405a 0\.0%.*, rgb\(\d+, \d+, \d+\) 100%\)$/)
+    expect(suitabilityGradient()).toContain(`rgb(${top.join(', ')}) 100%`)
   })
 
   it('says the figure with weather, the ideal and the shading loss, or labels the clear-sky fallback', () => {
