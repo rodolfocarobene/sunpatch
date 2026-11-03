@@ -48,13 +48,13 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 #mapView, #mapCanvas { position: fixed; inset: 0; }
 
 /* Controls, styled once for every box in the chrome. */
-#panel button, #timeBar button, #search button, #statusChip button, #walkHud button, .editor-box button, .maplibregl-popup-content button {
+#panel button, #timeBar button, #search button, #statusChip button, #keepChip button, #walkHud button, .editor-box button, .maplibregl-popup-content button {
   font: inherit; padding: 5px 10px; cursor: pointer;
   color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
-#panel button:hover:not(:disabled), #timeBar button:hover, #search button:hover, #statusChip button:hover, #walkHud button:hover,
+#panel button:hover:not(:disabled), #timeBar button:hover, #search button:hover, #statusChip button:hover, #keepChip button:hover, #walkHud button:hover,
 .editor-box button:hover:not(:disabled):not([aria-pressed='true']), .maplibregl-popup-content button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
-#panel button:active:not(:disabled), #timeBar button:active, #search button:active, #statusChip button:active, #walkHud button:active,
+#panel button:active:not(:disabled), #timeBar button:active, #search button:active, #statusChip button:active, #keepChip button:active, #walkHud button:active,
 .editor-box button:active:not(:disabled), .maplibregl-popup-content button:active { background: var(--line); }
 #panel button:disabled, .editor-box button:disabled { color: var(--disabled); cursor: default; }
 #panel button.primary, .maplibregl-popup-content button {
@@ -201,7 +201,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #suitPopover .suitPlace:hover { background: #e89a14; border-color: var(--accent-strong); }
 #suitPopover .suitPlace:active { background: #d98d0c; }
 /* Building heights: the guessed-height legend, the Edit height line, the right-click box and the hover note. */
-#aptShow, #guessedBox, #hoodBox { display: flex; flex-direction: column; gap: 4px; }
+#aptShow, #guessedBox, #hoodBox, #heightsBox { display: flex; flex-direction: column; gap: 4px; }
 #panel label.hoodRow { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); }
 #hood { font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
 #hoodLine:empty { display: none; }
@@ -214,7 +214,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #building .heightNote { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; font-size: var(--text-xs); color: var(--muted); }
 #building .heightNote .guess { color: var(--warn); }
 #panel:is([data-view='map'], [data-view='plan']) #building .editHeight { display: none; }
-#panel.walking :is(#guessedBox, #hoodBox) { display: none; }
+#panel.walking :is(#guessedBox, #hoodBox, #heightsBox) { display: none; }
+#heightsLine { flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+#heightsLine [hidden] { display: none; }
 #heightPopover {
   position: fixed; z-index: 12; width: 272px; box-sizing: border-box; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; font-size: var(--text-sm); line-height: 1.4;
@@ -305,6 +307,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #statusChip[data-kind='failed'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
 #statusChip { max-width: min(420px, 60vw); }
 #statusChip button { padding: 2px 8px; }
+#keepChip {
+  position: absolute; top: 56px; right: 12px; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: var(--box-pad); border-radius: var(--radius-box); font-size: var(--text-sm); max-width: min(420px, 60vw);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+#keepChip[hidden] { display: none; }
+#keepChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
 /* Share links: the "viewing a shared plan" bar and the damaged-link notice, over every tab. */
@@ -648,6 +657,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   #reframe { top: 12px; bottom: auto; left: 12px; right: auto; }
   #mapStatus { bottom: calc(var(--sheet-h, 0px) + 12px); max-width: calc(100% - 24px); }
   #statusChip { top: 12px; right: 12px; max-width: calc(100% - 140px); }
+  #keepChip { top: 56px; right: 12px; max-width: calc(100% - 140px); }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: var(--sheet-h, 0px); }
 }
 @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {

@@ -81,6 +81,10 @@ export interface UI {
   onNeighborhood(listener: (size: NeighborhoodId) => void): void
   /** The line under the size menu ("214 buildings within 350 m"); null clears it. */
   setNeighborhoodLine(text: string | null): void
+  /** The "Height changes" line in Details: how they are kept and how many are stored; its Change and Reset all buttons call back. */
+  setHeightsLine(line: { keep: 'keep' | 'session' | undefined; count: number }): void
+  onHeightsChange(listener: () => void): void
+  onHeightsReset(listener: () => void): void
   /** The selected building's Edit height button: hears where the button is on screen. */
   onEditHeight(listener: (at: { x: number; y: number }) => void): void
   /** The "Sun map" switch (off by default): hear about changes. */
@@ -213,6 +217,11 @@ export function createUI(
           <label class="hoodRow" title="${t('shell.hoodTitle')}">${t('shell.hood')}
             <select id="hood">${NEIGHBORHOODS.map((n) => `<option value="${n.id}">${t(n.label)} (${n.radiusM} m)</option>`).join('')}</select></label>
           <p id="hoodLine" class="legendNote" role="status"></p>
+        </div>
+        <div id="heightsBox">
+          <p id="heightsLine" class="legendNote" role="status"><span id="heightsText"></span><span aria-hidden="true">·</span>
+            <button id="heightsChange" type="button" class="link">${t('shell.heightsChange')}</button><span aria-hidden="true">·</span>
+            <button id="heightsReset" type="button" class="link"></button></p>
         </div>
         <div class="coords">
           <label>${t('shell.lat')} <input id="lat" type="number" step="0.0001" min="-90" max="90" value="${MILAN.lat}"></label>
@@ -718,6 +727,19 @@ export function createUI(
     },
     setNeighborhoodLine(text) {
       $('hoodLine').textContent = text ?? ''
+    },
+    setHeightsLine({ keep, count }) {
+      $('heightsText').textContent = `${t('shell.heightsLabel')} ${t(keep === 'keep' ? 'shell.heightsKept' : keep === 'session' ? 'shell.heightsSession' : 'shell.heightsUnset')}`
+      const reset = $<HTMLButtonElement>('heightsReset')
+      reset.textContent = t('shell.heightsReset', { n: count })
+      reset.hidden = count === 0
+      reset.previousElementSibling!.toggleAttribute('hidden', count === 0)
+    },
+    onHeightsChange(fn) {
+      $('heightsChange').addEventListener('click', fn)
+    },
+    onHeightsReset(fn) {
+      $('heightsReset').addEventListener('click', fn)
     },
     onEditHeight(fn) {
       editHeightListener = fn
