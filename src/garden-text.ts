@@ -134,13 +134,30 @@ export function reasonText(result: PlantResult, month: number | null): string {
     const n = summary.runMonths
     return t('garden.tooShort', { n, name: plantName(plant), days: plant.days })
   }
-  return explain(plant, year[representativeMonth(result)])
+  const m = year[representativeMonth(result)]
+  const text = explain(plant, m)
+  if (m.issues.some((i) => i.kind === 'place')) return text
+  // Over a year the sentence is about one month: say which, so "All year" never reads as a verdict on January alone.
+  return t(result.rating === 'good' ? 'garden.bestMonth' : 'garden.weakestMonth', { text: text.charAt(0).toLowerCase() + text.slice(1) })
+}
+
+/**
+ * The pill's word. An OK that is only held back by too little sun says so ("Low light"), so the pill and the sentence
+ * never disagree: the model keeps it OK because the plant lives on that sun, it just does not do its best.
+ */
+export function ratingLabel(result: PlantResult, month: number | null): string {
+  if (result.rating !== 'ok') return RATING_LABEL[result.rating]
+  const m = result.year[month ?? representativeMonth(result)]
+  const issue = m.issues.find((i) => i.severe) ?? m.issues[0]
+  return issue?.kind === 'dark' && !issue.severe ? t('garden.rateLowLight') : RATING_LABEL.ok
 }
 
 export interface PlantRow {
   name: string
   kind: string
   rating: Rating
+  /** The pill's word: the rating, or "Low light" for an OK held back by sun alone. */
+  label: string
   /** "Grows all year", "Grows Mar to Oct" ... and, for annual crops that fit, " · Sow in April". */
   growing: string
   reason: string
@@ -151,7 +168,7 @@ export function plantRow(result: PlantResult, month: number | null): PlantRow {
   const sow = plant.life === 'annual' && summary.sowMonth !== undefined ? t('garden.sow', { month: fmtMonth(summary.sowMonth) }) : ''
   const months = monthsText(summary.months)
   const growing = months === NO_MONTH ? t('garden.growsNowhere') : `${t('garden.grows', { months })}${sow}`
-  return { name: upFirst(plantName(plant)), kind: t(KIND_LABEL[plant.kind]), rating: result.rating, growing, reason: reasonText(result, month) }
+  return { name: upFirst(plantName(plant)), kind: t(KIND_LABEL[plant.kind]), rating: result.rating, label: ratingLabel(result, month), growing, reason: reasonText(result, month) }
 }
 
 /** Ranked results split for the card: the ones worth growing, and the poor ones kept behind "Why not others?". */
