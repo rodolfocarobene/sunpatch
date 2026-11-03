@@ -99,11 +99,36 @@ export function spotPoints(spots: GardenSpot[]): Float32Array {
 export interface SunnySpot extends GardenSpot {
   /** Mean daily direct-sun minutes per month, January first. */
   sunMinutes: number[]
+  /** Indoor spots: the overcast daylight factor in % (dayfactor.ts) at the spot's work-plane height; not set outdoors. */
+  daylight?: number
 }
 
-/** The spots joined with their traced minutes (twelve numbers per spot, see traceMonthly). */
-export const withSun = (spots: GardenSpot[], minutes: Float32Array): SunnySpot[] =>
-  spots.map((s, i) => ({ ...s, sunMinutes: Array.from(minutes.subarray(i * 12, i * 12 + 12)) }))
+/**
+ * The spots joined with their traced minutes (twelve numbers per spot, see traceMonthly) and, for the indoor ones in
+ * order, their daylight factor (`daylight` has one value per indoor spot; leave it out for none).
+ */
+export function withSun(spots: GardenSpot[], minutes: Float32Array, daylight?: ArrayLike<number>): SunnySpot[] {
+  let indoor = 0
+  return spots.map((s, i) => {
+    const out: SunnySpot = { ...s, sunMinutes: Array.from(minutes.subarray(i * 12, i * 12 + 12)) }
+    if (s.indoor && daylight) out.daylight = daylight[indoor++]
+    return out
+  })
+}
+
+/** The indoor spots' floor positions (x, z each) for the daylight trace, and the floor height they stand on. */
+export function indoorPoints(spots: GardenSpot[]): { points: Float32Array; floorY: number } {
+  const indoor = spots.filter((s) => s.indoor)
+  const points = new Float32Array(indoor.length * 2)
+  indoor.forEach((s, i) => points.set([s.x, s.z], i * 2))
+  return { points, floorY: indoor.length ? indoor[0].y - POT_HEIGHT : 0 }
+}
+
+/** The mean daylight factor of a disc of indoor spots; undefined when none was measured. */
+export function meanDaylight(spots: SunnySpot[]): number | undefined {
+  const ds = spots.map((s) => s.daylight).filter((d): d is number => d !== undefined)
+  return ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : undefined
+}
 
 /** The mean of the spots' monthly sun: one strip for a disc of points. */
 export const meanSun = (spots: SunnySpot[]): number[] =>

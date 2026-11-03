@@ -13,7 +13,7 @@ export type WorkerIn =
   | { kind: 'trace'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array }
   | { kind: 'shade'; id: number; key: number; panel: Panel; slots: YearSlots }
   | { kind: 'suit'; id: number; key: number; inputs: Float32Array; slots: YearSlots; step: number }
-  | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number }
+  | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number; day?: { points: Float32Array; floorY: number; samples: number } }
   | { kind: 'year'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array; counts: number[] }
 
 export type WorkerOut =
@@ -21,7 +21,7 @@ export type WorkerOut =
   | { kind: 'done'; id: number; lit: Uint8Array; ms: number; bvhMs: number }
   | { kind: 'shaded'; id: number; shade: PanelShade; bvhMs: number }
   | { kind: 'suited'; id: number; irradiation: Float32Array; ms: number; bvhMs: number }
-  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number }
+  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array }
   | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
   | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number }
   | { kind: 'error'; id: number; message: string }
@@ -118,28 +118,42 @@ function suit(m: Extract<WorkerIn, { kind: 'suit' }>) {
   turn()
 }
 
-/** The garden analysis in chunks, reporting progress; a newer 'garden' request (or scene) stops this one. */
+/**
+ * The garden analysis in chunks, reporting progress; a newer 'garden' request (or scene) stops this one. With `day`, the
+ * daylight (SC + ERC) of the indoor points follows the sun minutes, in the same run.
+ */
 function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
   gardenId = m.id
   const total = m.points.length / 3
   const out = new Float32Array(total * 12)
+  const dayTotal = m.day ? m.day.points.length / 2 : 0
+  const direct = new Float32Array(dayTotal)
   const started = performance.now()
   let at = 0
+  let dayAt = 0
   const turn = () => {
     if (gardenId !== m.id) return
     try {
       if (!bvh || bvhKey !== m.key) throw new Error('scene changed')
-      const to = Math.min(total, at + GARDEN_CHUNK)
-      out.set(traceMonthly(bvh, m.points, m.slots, m.step, at, to), at * 12)
-      at = to
+      if (at < total) {
+        const to = Math.min(total, at + GARDEN_CHUNK)
+        out.set(traceMonthly(bvh, m.points, m.slots, m.step, at, to), at * 12)
+        at = to
+      } else if (m.day) {
+        if (!glassBvh || glassKey !== m.key) throw new Error('scene changed')
+        const to = Math.min(dayTotal, dayAt + DAYLIGHT_CHUNK)
+        traceDaylight(bvh, glassBvh, m.day.points, m.day.floorY, m.day.samples, dayAt, to, direct)
+        dayAt = to
+      }
     } catch (err) {
       reply({ kind: 'error', id: m.id, message: (err as Error).message })
       return
     }
-    if (at < total) {
-      reply({ kind: 'progress', id: m.id, done: at / total })
+    if (at < total || dayAt < dayTotal) {
+      reply({ kind: 'progress', id: m.id, done: (at + dayAt) / (total + dayTotal) })
       setTimeout(turn, 0)
-    } else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
+    } else if (m.day) reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs, direct }, [out.buffer, direct.buffer])
+    else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
   }
   turn()
 }

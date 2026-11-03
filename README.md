@@ -39,7 +39,9 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 - **Garden**: click a spot (your apartment floor, a balcony, the ground or a roof) and see the direct sun it gets
   each month and which plants of a built-in catalogue of about 70 would grow there, month by month, with a reason
   for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
-  not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C.
+  not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C. Houseplants that live on indirect
+  light are also rated by the estimated daylight factor at the spot (a rough estimate, see Daylight below), so a pothos
+  by a north window is no longer "low light" just because it gets no direct sun.
 - **Headline answer**: under the building line the 3D tab says when direct sun reaches the apartment floor on the chosen
   date, e.g. "Sun inside on 21 Dec: 10:20–13:35 · 3 h 15 min", with the time when most of the floor is lit. It follows
   the date and presets of the sun bar.

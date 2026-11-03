@@ -1,6 +1,8 @@
 import { t } from './i18n'
 import { yearSlots } from './panel-shade'
-import { spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
+import { HEMISPHERE_SAMPLES, internalReflected, roomSurfaces } from './dayfactor'
+import { trianglesArea } from './dayfactor-trace'
+import { indoorPoints, spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
 import type { Plan } from './plan'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
@@ -26,6 +28,11 @@ export interface GardenRequest {
   spots(): GardenSpot[]
   /** Triangles of every occluder; only called when the worker does not hold this scene yet. */
   occluders(): Float32Array
+  /**
+   * Triangles of the window panes. When given, the indoor spots also get their daylight factor (traced in the same worker
+   * run, cached with the rest); only called when there are indoor spots and the worker does not hold this scene's glass yet.
+   */
+  glass?(): Float32Array
 }
 
 export interface GardenResult {
@@ -62,10 +69,11 @@ export function createGardenJob(): GardenJob {
   const cache = new Map<string, GardenResult>()
   let worker: Worker | undefined
   let workerScene = -1
+  let workerGlass = -1
   let listener: ((state: GardenState) => void) | undefined
   let timer: number | undefined
   let latest: GardenRequest | undefined
-  let running: { id: number; key: string; spots: GardenSpot[] } | undefined
+  let running: { id: number; key: string; spots: GardenSpot[]; irc: number; noGlass: boolean } | undefined
   let nextId = 0
 
   const emit = (state: GardenState) => listener?.(state)
@@ -78,6 +86,7 @@ export function createGardenJob(): GardenJob {
       running = undefined
       worker = undefined
       workerScene = -1
+      workerGlass = -1
       emit({ status: 'error', message: t('garden.jobError') })
     }
     return worker
@@ -91,10 +100,13 @@ export function createGardenJob(): GardenJob {
     running = undefined
     if (m.kind === 'error') {
       workerScene = -1 // the next request sends the scene again
+      workerGlass = -1
       if (m.message !== 'scene changed') emit({ status: 'error', message: m.message })
     } else {
       console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms)`)
-      const result = { spots: withSun(job.spots, m.minutes), ms: m.ms, bvhMs: m.bvhMs }
+      const dark = job.noGlass ? job.spots.filter((s) => s.indoor).map(() => 0) : undefined // no windows: no daylight
+      const daylight = m.direct ? Array.from(m.direct, (d) => d + job.irc) : dark
+      const result = { spots: withSun(job.spots, m.minutes, daylight), ms: m.ms, bvhMs: m.bvhMs }
       cache.set(job.key, result)
       if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
       if (!latest || gardenKey(latest) === job.key) emit({ status: 'done', result })
@@ -108,6 +120,7 @@ export function createGardenJob(): GardenJob {
     worker?.terminate()
     worker = undefined
     workerScene = -1
+    workerGlass = -1
   }
 
   function run(req: GardenRequest) {
@@ -126,10 +139,27 @@ export function createGardenJob(): GardenJob {
       const spots = req.spots()
       const step = req.slotMinutes ?? GARDEN_SLOT_MINUTES
       const id = ++nextId
-      running = { id, key, spots }
+      // Daylight of the indoor spots: SC + ERC are traced in the worker, IRC is a closed formula added when the result arrives.
+      const indoor = indoorPoints(spots)
+      let day: Extract<WorkerIn, { kind: 'garden' }>['day']
+      let irc = 0
+      let noGlass = false
+      if (req.glass && indoor.points.length > 0 && req.plan) {
+        const glass = req.glass()
+        irc = internalReflected(trianglesArea(glass), roomSurfaces(req.plan))
+        if (glass.length === 0) noGlass = true // no windows: no daylight, and the worker has nothing to trace
+        else {
+          if (workerGlass !== req.sceneVersion) {
+            w.postMessage({ kind: 'glass', key: req.sceneVersion, triangles: glass } satisfies WorkerIn, { transfer: [glass.buffer] })
+            workerGlass = req.sceneVersion
+          }
+          day = { points: indoor.points, floorY: indoor.floorY, samples: HEMISPHERE_SAMPLES }
+        }
+      }
+      running = { id, key, spots, irc, noGlass }
       w.postMessage({
         kind: 'garden', id, key: req.sceneVersion, points: spotPoints(spots),
-        slots: yearSlots(req.lat, req.lon, req.year, step), step,
+        slots: yearSlots(req.lat, req.lon, req.year, step), step, day,
       } satisfies WorkerIn)
     } catch (err) {
       running = undefined
