@@ -1,6 +1,6 @@
 import SunCalc from 'suncalc'
 import { createLangSwitch } from './lang-switch'
-import { fmt1Fixed, fmtNumber, fmtTime, t, type Key } from './i18n'
+import { fmt1Fixed, fmtNumber, fmtTime, t, upFirst, type Key } from './i18n'
 import { touchOnly } from './touch'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
@@ -11,6 +11,7 @@ import { headlineText, sunBandGradient, timeText, type DayHeadline } from './hea
 import type { Interval } from './sunmap'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
+import { BANDS, bandOf, daylightGradient, type Band } from './dayfactor'
 import { panelTicks, rangeText, suitabilityGradient } from './suitability'
 import { buildingLine } from './building-line'
 import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
@@ -30,6 +31,11 @@ export type View = 'map' | 'plan' | '3d' | 'panels' | 'garden'
 export type SunMapStatus =
   | { kind: 'computing'; progress: number }
   | { kind: 'ready'; daylightMinutes: number; day: Date }
+  | { kind: 'error'; message: string }
+
+export type DaylightStatus =
+  | { kind: 'computing'; progress: number }
+  | { kind: 'ready'; mean: number; dimShare: number }
   | { kind: 'error'; message: string }
 
 /** The headline sentence under the building line (3D tab). */
@@ -94,6 +100,9 @@ export interface UI {
   toggleSunMap(): void
   /** Fills the legend under the switch: progress while computing, the scale for the day, or an error. */
   setSunMapStatus(status: SunMapStatus): void
+  onDaylight(listener: (on: boolean) => void): void
+  setDaylight(on: boolean): void
+  setDaylightStatus(status: DaylightStatus): void
   /** The one-line answer above the apartment tools: when the sun gets in on the shown date. */
   setHeadline(status: HeadlineStatus | null): void
   /** The "Panel suitability" switch (off by default): hear about changes, set it, and fill the legend under it. */
@@ -192,6 +201,8 @@ export function createUI(
             <label class="row"><input id="cutaway" type="checkbox" checked> ${t('shell.cutaway')} <kbd class="walkKey">H</kbd></label>
             <label class="row" title="${t('shell.sunMapTitle')}"><input id="sunMap" type="checkbox"> ${t('shell.sunMap')} <kbd class="walkKey">M</kbd></label>
             <div id="sunMapLegend" hidden></div>
+            <label class="row" title="${t('shell.daylightTitle')}"><input id="daylight" type="checkbox"> ${t('shell.daylight')}</label>
+            <div id="daylightLegend" hidden></div>
           </div>
         </div>
         <div id="shareBox" class="field" hidden>
@@ -402,6 +413,14 @@ export function createUI(
     sunMapListener?.(sunMap.checked)
   }
   sunMap.addEventListener('change', applySunMap)
+  const daylightBox = $<HTMLInputElement>('daylight')
+  const daylightLegend = $('daylightLegend')
+  let daylightListener: ((on: boolean) => void) | undefined
+  const applyDaylight = () => {
+    daylightLegend.hidden = !daylightBox.checked
+    daylightListener?.(daylightBox.checked)
+  }
+  daylightBox.addEventListener('change', applyDaylight)
   const suit = $<HTMLInputElement>('suit')
   const suitLegend = $('suitLegend')
   let lastSuitReady: Extract<SuitabilityStatus, { kind: 'ready' }> | undefined
@@ -760,6 +779,17 @@ export function createUI(
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
     },
+    onDaylight(fn) {
+      daylightListener = fn
+    },
+    setDaylight(on) {
+      if (daylightBox.checked === on) return
+      daylightBox.checked = on
+      applyDaylight()
+    },
+    setDaylightStatus(status) {
+      daylightLegend.innerHTML = daylightLegendHtml(status)
+    },
     onSuitability(fn) {
       suitListener = fn
     },
@@ -864,6 +894,27 @@ function legendHtml(status: SunMapStatus): string {
     `<div class="legendTicks">${hours.map((h) => `<span>${h === 6 ? '6 h+' : `${h} h`}</span>`).join('')}</div>` +
     `<div class="legendTicks muted">${hours.map((h) => `<span>${share(h)}</span>`).join('')}</div>` +
     `<span class="legendHint">${t('sun.mapShareHint', { duration: duration(daylightMinutes) })}</span></details>`
+  )
+}
+
+/** The words of the four daylight bands, lower case ("dim", "fair", "bright", "very bright"). */
+export const bandWord = (band: Band) => t(({ dim: 'sun.dayDim', fair: 'sun.dayFair', bright: 'sun.dayBright', veryBright: 'sun.dayVeryBright' } as const)[band])
+export const bandRange = (band: Band) => t(({ dim: 'sun.dayDimRange', fair: 'sun.dayFairRange', bright: 'sun.dayBrightRange', veryBright: 'sun.dayVeryBrightRange' } as const)[band])
+
+/** The daylight legend: the cool ramp in four labelled bands, the average and the dim share, and what the estimate assumes. */
+function daylightLegendHtml(status: DaylightStatus): string {
+  if (status.kind === 'computing') {
+    const pct = Math.round(status.progress * 100)
+    return `<span class="legendHead" role="status">${t('sun.dayComputing')}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
+  }
+  if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
+  const summary = t('sun.daySummary', { df: fmt1Fixed(status.mean), band: bandWord(bandOf(status.mean)), dim: Math.round(status.dimShare * 100) })
+  return (
+    `<span class="legendHead" title="${t('shell.daylightTitle')}">${t('sun.dayHead')}</span>` +
+    `<div class="legendBar" style="background:${daylightGradient()}"></div>` +
+    `<div class="legendBands">${BANDS.map((b) => `<span><strong>${upFirst(bandWord(b))}</strong>${bandRange(b)}</span>`).join('')}</div>` +
+    `<span class="legendSummary">${summary}</span>` +
+    `<span class="legendHint">${t('sun.dayNote')} <a href="${ACCURACY_URL}" target="_blank" rel="noreferrer">${t('shell.accuracy')}</a></span>`
   )
 }
 

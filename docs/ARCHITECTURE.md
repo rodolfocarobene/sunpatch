@@ -26,6 +26,8 @@ Plan view ──► editor.ts (SVG) ──► Plan (plan.ts, autosaved) ──�
 time/date ──► ui.ts ──► sun.ts sunDirection ──► scene.update
 Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts ──► Web Worker (sunmap.worker.ts, BVH rays)
                                                   └──► scene.setSunMap (floor overlay) + popover on click
+Daylight switch / scene change ──► main.ts ──► dayfactor-job.ts ──► Web Worker (message `daylight`, same BVH + a glass BVH)
+                                                  └──► scene.setSunMap (same overlay, cool ramp) + popover on click
 ```
 
 `src/main.ts` owns the app state (current view, picked site, current plan) and wires the modules together.
@@ -67,7 +69,8 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `garden-pick.ts`, `garden-text.ts`, `garden-card.ts` | The Garden tab: what a click means (floor, ground, roof or nothing), the card's words and month strips (pure), and the card itself. |
 | `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures (shown per standard panel, 0.4 kW; per kW under Details), the worker job that runs it progressively, the click popover. |
 | `year.ts`, `year-job.ts`, `year-card.ts` | "Through the year" chart in the 3D tab: the 21st of each month, bar fractions, the summary sentence (pure); its own worker job (the `year` worker message traces 12 days on the 0.5 m headline grid, asking every 3rd 5-minute slot and the ones between only where the answer changes, `countSparse` in `sunmap-trace.ts`; only while the disclosure is open, cached per scene, floor, place and year, cancelled by a scene change); the disclosure with its bar buttons. |
-| `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
+| `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals (or, for the daylight layer, two lines of text). |
+| `dayfactor.ts`, `dayfactor-trace.ts`, `dayfactor-job.ts` | Daylight (estimate) layer: constants, CIE overcast weights, hemisphere directions, BRE internally reflected component, bands, cool colour ramp (pure); window-pane triangles and the SC + ERC ray tracing; the worker job that caches per scene version and cancels on a scene change. See "Daylight estimate". |
 
 ## The selection model
 
@@ -215,6 +218,44 @@ A `Plan` (see `src/plan.ts`) describes one apartment on one floor:
 - 3D hover: with the pointer over an unselected building (one raycast per animation frame, none while a button is
   down or in walk mode) the cursor becomes a pointer and the polygon gets a faint amber tint and edges.
 - Interior brightness from bounced light is approximated with an emissive term proportional to daylight.
+
+## Daylight estimate
+
+A second floor layer, drawn on the sun map's overlay (so the two are exclusive; switching one on switches the other
+off) and kept out of every direct-sun number: the headline, the year chart and the sun map never read it. The 3D tab's
+Show group has the "Daylight (estimate)" toggle; its legend shows the four bands, the average and the dim share
+("Average daylight factor 2.1 % (bright); 40 % of the floor is dim.") and the assumptions with the Accuracy link. It does
+not depend on date or time, so the cache key is the scene version, the grid cell and the sample count.
+
+The model is the BRE split-flux daylight factor under a CIE overcast sky, DF = SC + ERC + IRC, in % of the horizontal
+illuminance outdoors on open ground:
+
+- **Rays** (`dayfactor-trace.ts`, `traceDaylight`): from the floor sample at the work plane (0.85 m above the floor, the
+  standard desk height), `HEMISPHERE_SAMPLES` = 384 cosine-distributed upward directions (a spiral of equal-area rings,
+  turned a golden angle per point so it does not stripe). A ray first meets the window glass BVH (the panes are not
+  shadow casters, so the worker keeps a second, tiny BVH built from `facadeWalls(...).glass`, message `glass`); only
+  rays that cross a pane go on to the occluder BVH. Nothing beyond the pane: sky. Something beyond: obstruction.
+  Something before the pane (the ceiling, an interior wall, the reveal): the ray is lost.
+- **SC**: for cosine samples the CIE overcast weight is `3 (1 + 2 sin a) / 7` (L = Lz (1 + 2 sin a) / 3, horizontal
+  illuminance 7 pi / 9 Lz), so an unobstructed point averages 1 (tested). SC = 100 x glazing x mean weight of the sky rays.
+- **ERC**: an obstruction's luminance is `EXTERNAL_REFLECTANCE` = 0.2 of the average sky luminance, so each
+  obstructed-through-window ray adds 0.2 x glazing (the common simple rule; no ground term, rays never go below the
+  horizon and the glass is above the work plane).
+- **Glazing**: transmittance 0.7 and frame/dirt 0.8, factor 0.56, applied to SC, ERC and IRC.
+- **IRC** (`internalReflected`): `0.85 W / (A (1 - R)) (C R_fw + 5 R_cw)`, constant over the apartment. W is the glass area
+  from the pane triangles, A the floor and ceiling (outline minus holes) plus outer and courtyard walls x floor height;
+  R the area-weighted mean reflectance (floor 0.3, walls 0.5, ceiling 0.7); R_fw the floor with the lower half of the
+  walls, R_cw the ceiling with the upper half. C is 39, the unobstructed value, always: C falls with the obstruction angle
+  but the angle is not measured, so IRC is a little high for a facade with a tall neighbour. The 0.85 in the formula
+  already allows for glazing, so applying the 0.56 as well is a deliberate (slightly low) choice.
+- **Grid and cost**: 0.5 m cells (`DAYLIGHT_CELL`), 40 points per worker turn with progress, a newer request or a new
+  scene version stops the run (`dayfactor-job.ts` aborts its own worker; the worker also refuses a scene key it does not
+  hold). The Milan example's 427 points take about 1.0 to 2.0 s end to end in headless Chromium on 4 cores (rays 250 to
+  600 ms, BVH about 50 ms).
+- **Bands** (`bandOf`): under 1 % dim, 1-2 % fair, 2-5 % bright (well daylit), over 5 % very bright. The colour ramp
+  gives each band a quarter, so the band edges sit at fixed places (0, 1, 2, 5, 8 % and above).
+- **Limits**: the apartment is one room to IRC; furniture, curtains and the thickness of reveals beyond the facade wall are
+  not modelled; the answer is a rough ranking, not a compliance figure.
 
 ## Sun map
 

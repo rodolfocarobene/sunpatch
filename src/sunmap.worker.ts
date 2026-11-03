@@ -2,11 +2,14 @@ import type { MeshBVH } from 'three-mesh-bvh'
 import type { Panel } from './plan'
 import { shadePanel, type PanelShade, type YearSlots } from './panel-shade'
 import { traceMonthly } from './garden-trace'
+import { traceDaylight } from './dayfactor-trace'
 import { buildBvh, litSlots, traceSun } from './sunmap-trace'
 import { IRRADIATION_STRIDE, traceSamples } from './suitability'
 
 export type WorkerIn =
   | { kind: 'scene'; key: number; triangles: Float32Array }
+  | { kind: 'glass'; key: number; triangles: Float32Array }
+  | { kind: 'daylight'; id: number; key: number; points: Float32Array; floorY: number; samples: number }
   | { kind: 'trace'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array }
   | { kind: 'shade'; id: number; key: number; panel: Panel; slots: YearSlots }
   | { kind: 'suit'; id: number; key: number; inputs: Float32Array; slots: YearSlots; step: number }
@@ -20,12 +23,16 @@ export type WorkerOut =
   | { kind: 'suited'; id: number; irradiation: Float32Array; ms: number; bvhMs: number }
   | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number }
   | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
+  | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number }
   | { kind: 'error'; id: number; message: string }
 
 // The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
 let bvh: MeshBVH | undefined
 let bvhKey = -1
 let bvhMs = 0
+// The window panes, for the daylight estimate only (they are not shadow casters, so they are not in `bvh`).
+let glassBvh: MeshBVH | undefined
+let glassKey = -1
 
 /** Samples traced per turn of the suitability map and the garden analysis; between turns the worker can take a newer request. */
 const SUIT_CHUNK = 400
@@ -33,6 +40,9 @@ const GARDEN_CHUNK = 100
 let suitId = -1
 let gardenId = -1
 let yearId = -1
+let daylightId = -1
+/** Points per turn of the daylight estimate. */
+const DAYLIGHT_CHUNK = 40
 /** The year chart asks every 3rd 5-minute slot and the ones between only where the answer changes. */
 const YEAR_STRIDE = 3
 
@@ -47,6 +57,11 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     bvhKey = m.key
     return
   }
+  if (m.kind === 'glass') {
+    glassBvh = m.triangles.length ? buildBvh(m.triangles) : undefined
+    glassKey = m.key
+    return
+  }
   try {
     if (!bvh || bvhKey !== m.key) throw new Error('scene not loaded')
     if (m.kind === 'suit') {
@@ -55,6 +70,10 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     }
     if (m.kind === 'garden') {
       garden(m)
+      return
+    }
+    if (m.kind === 'daylight') {
+      daylight(m)
       return
     }
     if (m.kind === 'year') {
@@ -146,6 +165,32 @@ function year(m: Extract<WorkerIn, { kind: 'year' }>) {
       reply({ kind: 'progress', id: m.id, done: lit.length / m.counts.length })
       setTimeout(turn, 0)
     } else reply({ kind: 'yeared', id: m.id, lit, ms: performance.now() - started, bvhMs })
+  }
+  turn()
+}
+
+/** The daylight estimate (SC + ERC per point) in chunks, reporting progress; a newer 'daylight' request (or scene) stops it. */
+function daylight(m: Extract<WorkerIn, { kind: 'daylight' }>) {
+  daylightId = m.id
+  const total = m.points.length / 2
+  const out = new Float32Array(total)
+  const started = performance.now()
+  let at = 0
+  const turn = () => {
+    if (daylightId !== m.id) return
+    try {
+      if (!bvh || bvhKey !== m.key || glassKey !== m.key) throw new Error('scene changed')
+      const to = Math.min(total, at + DAYLIGHT_CHUNK)
+      if (glassBvh) traceDaylight(bvh, glassBvh, m.points, m.floorY, m.samples, at, to, out)
+      at = to
+    } catch (err) {
+      reply({ kind: 'error', id: m.id, message: (err as Error).message })
+      return
+    }
+    if (at < total) {
+      reply({ kind: 'progress', id: m.id, done: at / total })
+      setTimeout(turn, 0)
+    } else reply({ kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs }, [out.buffer])
   }
   turn()
 }

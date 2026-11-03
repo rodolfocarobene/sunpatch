@@ -22,7 +22,7 @@ Shadow tools like Shadowmap and SunTrace3D stop at the facade; Sunpatch models t
 - Depends on free public services (OpenFreeMap tiles, Nominatim, Overpass, NASA POWER, and Wikipedia/Wikimedia for the Garden plant card) that can be slow or busy.
 
 ## Capabilities and Constraints
-- Direct sun only; diffuse light is a stand-in. Flat roofs, no terrain yet, heights from OSM (can be wrong). Building fixes (add/cut prisms) patch missing geometry.
+- Direct sun is the core and the only thing the headline and the Sun map say. A separate, clearly labelled "Daylight (estimate)" layer gives an overcast-sky daylight factor (BRE split-flux, typical reflectances); it is never mixed into the direct-sun numbers, and diffuse light in the 3D view is still a stand-in. Flat roofs, no terrain yet, heights from OSM (can be wrong). Building fixes (add/cut prisms) patch missing geometry.
 - Plans live in the browser's localStorage; export/import JSON.
 - Static site on GitHub Pages (`/` landing, `/app/` app), TypeScript + Vite + three.js + MapLibre, no UI framework.
 

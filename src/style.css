@@ -155,17 +155,22 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #aptTools { display: flex; flex-direction: column; gap: 10px; }
 #panel .groupHead { margin: 0 0 2px; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
 /* Sun map legend: the colour ramp with hours and share of daylight, under its switch. */
-#sunMapLegend, #suitLegend { display: flex; flex-direction: column; gap: 4px; padding: var(--box-pad); font-size: var(--text-sm); background: var(--bg-band); border-radius: var(--radius-control); }
-#sunMapLegend .legendHead, #suitLegend .legendHead { font-weight: 600; }
-#sunMapLegend .legendBar, #suitLegend .legendBar { height: 10px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; margin-top: 2px; }
-#sunMapLegend .legendBar.busy, #suitLegend .legendBar.busy { background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
+#sunMapLegend, #suitLegend, #daylightLegend { display: flex; flex-direction: column; gap: 4px; padding: var(--box-pad); font-size: var(--text-sm); background: var(--bg-band); border-radius: var(--radius-control); }
+#sunMapLegend .legendHead, #suitLegend .legendHead, #daylightLegend .legendHead { font-weight: 600; }
+#sunMapLegend .legendBar, #suitLegend .legendBar, #daylightLegend .legendBar { height: 10px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; margin-top: 2px; }
+#sunMapLegend .legendBar.busy, #suitLegend .legendBar.busy, #daylightLegend .legendBar.busy { background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
 #sunMapLegend .legendTicks, #suitLegend .legendTicks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
 #sunMapLegend .legendTicks.muted, #suitLegend .legendTicks.muted { color: var(--muted); font-size: var(--text-xs); }
 #sunMapLegend .legendLine { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 #sunMapLegend .legendLine .legendBar { flex: 1; margin-top: 0; }
 #sunMapLegend .legendMore summary { cursor: pointer; color: var(--muted); font-size: var(--text-xs); }
 #sunMapLegend .legendMore[open] { display: flex; flex-direction: column; gap: 4px; }
-#sunMapLegend .legendHint, #suitLegend .legendHint { margin-top: 4px; color: var(--muted); font-size: var(--text-xs); }
+#sunMapLegend .legendHint, #suitLegend .legendHint, #daylightLegend .legendHint { margin-top: 4px; color: var(--muted); font-size: var(--text-xs); }
+#daylightLegend .legendBands { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+#daylightLegend .legendBands span { display: flex; flex-direction: column; }
+#daylightLegend .legendBands strong { font-weight: 600; }
+#daylightLegend .legendSummary { margin-top: 2px; }
+#daylightLegend .legendHint a { color: inherit; }
 #suitLegend .legendTicks.scaled { position: relative; height: 1.3em; }
 #suitLegend .legendTicks.scaled span { position: absolute; top: 0; transform: translateX(-50%); }
 #suitLegend .legendUnit { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -178,6 +183,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #spotPopover .spotHead, #suitPopover .spotHead { padding-right: 20px; font-size: 14px; font-variant-numeric: tabular-nums; }
 #spotPopover .spotDetail, #suitPopover .spotDetail { color: var(--muted); font-variant-numeric: tabular-nums; }
+#spotPopover [hidden] { display: none; }
 #spotPopover .spotDetail span { white-space: nowrap; }
 #spotPopover .spotClose, #suitPopover .spotClose {
   position: absolute; top: 6px; right: 6px; padding: 4px; line-height: 0; cursor: pointer;
