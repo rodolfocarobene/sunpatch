@@ -541,14 +541,19 @@ function renderTotals() {
   const indoor = new Set(panels.filter((p) => site && panelInside(p, site.selected)).map((p) => p.id))
   const items = panels.map((p, i) => {
     const e = energies.get(p.id)
-    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : e ? t('panels.perYear', { kwh: formatKwh(figure(e)) }) : t('panels.analysing')
-    return { id: p.id, label: t('panels.rowLabel', { n: i + 1 }), detail }
+    // A figure from before the last change stays up, marked, until the new one is in.
+    const stale = e !== undefined && !indoor.has(p.id) && !totals.fresh(p.id)
+    const figureText = e ? t('panels.perYear', { kwh: formatKwh(figure(e)) }) : t('panels.analysing')
+    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : stale ? t('panels.staleFigure', { figure: figureText }) : figureText
+    return { id: p.id, label: t('panels.rowLabel', { n: i + 1 }), detail, stale }
   })
   let total: string | null = null
-  if (panels.length > 0 && !totals.busy() && energies.size === panels.length) {
+  // One panel's total is its own row and card verdict again: the sum is only said when there is something to add up.
+  if (panels.length > 1 && energies.size === panels.length) {
     total = totalsLine(panels.map((p) => ({ kwh: figure(energies.get(p.id)!), inside: indoor.has(p.id) })), climate !== undefined)
+    if (totals.busy()) total = t('panels.staleFigure', { figure: total })
   }
-  ui.setPanelList({ items, selected: selectedPanel, total })
+  ui.setPanelList({ items, selected: selectedPanel, total, totalStale: totals.busy() })
 }
 
 function requestTotals() {

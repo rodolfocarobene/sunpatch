@@ -437,6 +437,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .panelCard .assumeFields input { width: 56px; margin-left: auto; }
 #panelList { display: flex; flex-direction: column; gap: 8px; }
 #panelTotals { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+#suitLegend .stale { opacity: 0.55; }
+#panelTotals.stale, #panelRows .stale { opacity: 0.65; }
 #panelRows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 #panel #panelRows button { display: flex; justify-content: space-between; gap: 8px; width: 100%; font-size: var(--text-sm); text-align: left; font-variant-numeric: tabular-nums; }
 #panel #panelRows button[aria-pressed='true'], #panel #panelRows button[aria-pressed='true']:hover { background: var(--text); border-color: var(--text); color: var(--surface); }

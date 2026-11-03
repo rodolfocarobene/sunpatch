@@ -43,9 +43,10 @@ export type SuitabilityStatus =
   | { kind: 'error'; message: string }
 
 export interface PanelList {
-  items: { id: string; label: string; detail: string }[]
+  items: { id: string; label: string; detail: string; /** Last answer, being redone. */ stale?: boolean }[]
   selected: string | null
   total: string | null
+  totalStale?: boolean
 }
 
 export interface UI {
@@ -357,10 +358,12 @@ export function createUI(
   sunMap.addEventListener('change', applySunMap)
   const suit = $<HTMLInputElement>('suit')
   const suitLegend = $('suitLegend')
+  let lastSuitReady: Extract<SuitabilityStatus, { kind: 'ready' }> | undefined
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
     $('panelLead').textContent = t(suit.checked ? 'shell.panelLeadOn' : 'shell.panelLead') // the lead only asks for what is still to do
     suitLegend.hidden = !suit.checked
+    if (!suit.checked) lastSuitReady = undefined
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
@@ -676,7 +679,10 @@ export function createUI(
       applySuit()
     },
     setSuitabilityStatus(status) {
-      suitLegend.innerHTML = suitabilityLegendHtml(status)
+      if (status.kind === 'ready') lastSuitReady = status
+      // An update keeps the old ramp and numbers on view (the map under them stays too), marked and with its progress.
+      suitLegend.innerHTML =
+        status.kind === 'computing' && status.updating && lastSuitReady ? suitabilityLegendHtml(lastSuitReady, Math.round(status.progress * 100)) : suitabilityLegendHtml(status)
     },
     onReframe(fn) {
       reframeListener = fn
@@ -690,8 +696,9 @@ export function createUI(
         reframe.classList.remove('done')
       }, 1400)
     },
-    setPanelList({ items, selected, total }) {
+    setPanelList({ items, selected, total, totalStale }) {
       const totalEl = $('panelTotals')
+      totalEl.classList.toggle('stale', totalStale === true)
       totalEl.hidden = total === null
       totalEl.textContent = total ?? ''
       const rows = $('panelRows')
@@ -704,7 +711,7 @@ export function createUI(
           const b = Object.assign(document.createElement('button'), { type: 'button' })
           b.dataset.id = item.id
           b.setAttribute('aria-pressed', String(item.id === selected))
-          b.append(Object.assign(document.createElement('span'), { textContent: item.label }), Object.assign(document.createElement('span'), { textContent: item.detail }))
+          b.append(Object.assign(document.createElement('span'), { textContent: item.label }), Object.assign(document.createElement('span'), { textContent: item.detail, className: item.stale ? 'stale' : '' }))
           li.append(b)
           return li
         }),
@@ -771,7 +778,7 @@ function legendHtml(status: SunMapStatus): string {
 }
 
 /** The suitability legend: the ramp in kWh a year per kW of panels, and what the colours assume. */
-function suitabilityLegendHtml(status: SuitabilityStatus): string {
+function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
     const head = t(status.updating ? 'sun.suitUpdating' : 'sun.suitComputing')
@@ -781,9 +788,11 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
   const at = (v: number) => (((v - status.min) / (status.max - status.min)) * 100).toFixed(1)
   const tick = (v: number) => `<span style="left:${at(v)}%">${fmtNumber(v)}</span>`
   return (
-    `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>` +
-    `<div class="legendBar" style="background:${sunGradient()}"></div>` +
-    `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
+    (updatingPct === undefined
+      ? `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>`
+      : `<span class="legendHead" role="status">${t('sun.suitUpdating')}\u2026 ${updatingPct}%</span>`) +
+    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${sunGradient()}"></div>` +
+    `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
     `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`
   )
