@@ -534,6 +534,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
     scroll-behavior: auto !important;
   }
 }
+#app canvas:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
 /* The height ruler in 3D: a thin vertical track with a tick per floor, standing at a roof corner; the handle sits at the roof. */
 #heightRuler { position: fixed; z-index: 10; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 #heightRuler .hrTrack { position: absolute; left: -1px; width: 2px; background: var(--accent-strong); opacity: 0.75; border-radius: 1px; }

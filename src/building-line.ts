@@ -69,8 +69,8 @@ export function buildingName(b: Building): string {
 }
 
 /** The hover note on a building in 3D: its name or id, its height with where that came from, and how to change it. */
-export function hoverLines(b: Building, ruler = false): string[] {
+export function hoverLines(b: Building, ruler: boolean | 'keys' = false, height = b.height): string[] {
   const line = buildingLine(b)
-  const height = [`${fmt1(b.height)} m`, line.source].filter(Boolean).join(' \u00b7 ')
-  return [line.title ?? t('bld.neighbour'), height, ruler ? t('bld.hoverRuler') : t('bld.hoverEdit')]
+  const shown = [`${fmt1(height)} m`, height === b.height ? line.source : ''].filter(Boolean).join(' \u00b7 ')
+  return [line.title ?? t('bld.neighbour'), shown, ruler === 'keys' ? t('bld.hoverKeys') : ruler ? t('bld.hoverRuler') : t('bld.hoverEdit')]
 }

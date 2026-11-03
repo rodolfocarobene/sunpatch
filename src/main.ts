@@ -26,7 +26,7 @@ import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
-import { createHeightRuler } from './height-ruler'
+import { createHeightRuler, cycleOrder, nextInCycle } from './height-ruler'
 import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
@@ -83,6 +83,32 @@ const heightRuler = createHeightRuler(document.body, {
   },
   onPreview: (id, height) => sunScene.previewHeight(id, height),
   onCommit: (id, override) => setHeight(id, override),
+  // The keyboard side of the ruler: the note beside the handle follows the height it shows.
+  onNote(id, height) {
+    const building = site?.buildings.find((b) => b.id === id)
+    const handle = document.querySelector('#heightRuler .hrHandle')
+    if (height === null || !building || !handle) return hoverTip.hide()
+    const r = handle.getBoundingClientRect()
+    hoverTip.show(hoverLines(building, 'keys', height), { x: r.right + 24, y: r.top })
+  },
+  returnFocus: () => sceneCanvas.focus({ preventScroll: true }),
+})
+// The 3D canvas takes focus, so the keyboard reaches the ruler: R steps it through the buildings (selected first, then the nearest).
+const sceneCanvas = app.querySelector('canvas')!
+sceneCanvas.tabIndex = 0
+sceneCanvas.setAttribute('aria-label', t('shell.canvasAria'))
+sceneCanvas.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyR' || e.ctrlKey || e.metaKey || e.altKey || view !== '3d' || walking || heightPopover.isOpen || !site) return
+  e.preventDefault()
+  const order = cycleOrder(site.buildings, site.selected.id)
+  const rect = sceneCanvas.getBoundingClientRect()
+  const centre = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  let id = nextInCycle(order, heightRuler.currentId)
+  for (let tries = 0; id !== undefined && tries < order.length; tries++) {
+    const building = site.buildings.find((b) => b.id === id)
+    if (building && heightRuler.open(building, centre)) return
+    id = nextInCycle(order, id)
+  }
 })
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false

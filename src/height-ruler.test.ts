@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heightFromDrag, keyHeight, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
+import { heightFromDrag, keyHeight, cycleOrder, nextInCycle, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
 import type { Building } from './osm'
 
 const building = { id: 'way/1', minHeight: 0, height: 9, heightSource: 'default', outer: [], holes: [], tags: {} } as unknown as Building
@@ -69,5 +69,25 @@ describe('keyHeight', () => {
     expect(keyHeight(9, 0, 1, true)).toBe(9.5)
     expect(keyHeight(9, 0, -1, true)).toBe(8.5)
     expect(keyHeight(0.5, 0, -1, true)).toBe(0.5)
+  })
+})
+
+describe('cycleOrder', () => {
+  const sq = (id: string, x: number): Building =>
+    ({ ...building, id, outer: [{ x, z: 0 }, { x: x + 10, z: 0 }, { x: x + 10, z: 10 }, { x, z: 10 }] }) as Building
+  const all = [sq('far', 200), sq('sel', 0), sq('near', 30), sq('mid', 80)]
+  it('starts with the selected building, then the nearest first', () => {
+    expect(cycleOrder(all, 'sel')).toEqual(['sel', 'near', 'mid', 'far'])
+  })
+  it('keeps the input order without a selection', () => {
+    expect(cycleOrder(all, undefined)).toEqual(['far', 'sel', 'near', 'mid'])
+  })
+  it('wraps round', () => {
+    const order = ['a', 'b', 'c']
+    expect(nextInCycle(order, undefined)).toBe('a')
+    expect(nextInCycle(order, 'a')).toBe('b')
+    expect(nextInCycle(order, 'c')).toBe('a')
+    expect(nextInCycle(order, 'gone')).toBe('a')
+    expect(nextInCycle([], 'a')).toBeUndefined()
   })
 })

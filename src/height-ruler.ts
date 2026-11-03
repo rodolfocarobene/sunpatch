@@ -1,5 +1,5 @@
 import { FLOOR_M, MAX_FLOORS, MAX_HEIGHT_M, overrideFor, type HeightOverride } from './heights'
-import type { Building } from './osm'
+import { ringCentroid, type Building } from './osm'
 import { buildingName } from './building-line'
 import { fmt1, t } from './i18n'
 
@@ -48,6 +48,27 @@ export function overrideFromRuler(b: Building, height: number): HeightOverride {
   return Math.abs(floors - Math.round(floors)) < 1e-6 ? overrideFor(b, Math.round(floors), 'floors') : overrideFor(b, height, 'm')
 }
 
+/** The order the R key walks the buildings in: the selected one, then the others nearest first (from the selected one's centre). Ties keep the input order. */
+export function cycleOrder(buildings: Building[], selectedId: string | undefined): string[] {
+  const from = buildings.find((b) => b.id === selectedId)
+  if (!from) return buildings.map((b) => b.id)
+  const c = ringCentroid(from.outer)
+  const dist = (b: Building) => {
+    const q = ringCentroid(b.outer)
+    return Math.hypot(q.x - c.x, q.z - c.z)
+  }
+  const rest = buildings.filter((b) => b.id !== from.id).map((b, i) => ({ id: b.id, d: dist(b), i }))
+  rest.sort((a, b) => a.d - b.d || a.i - b.i)
+  return [from.id, ...rest.map((r) => r.id)]
+}
+
+/** The building after `current` in `order`, wrapping round; the first when `current` is not in it or unset. */
+export function nextInCycle(order: string[], current: string | undefined): string | undefined {
+  if (!order.length) return undefined
+  const at = current === undefined ? -1 : order.indexOf(current)
+  return order[(at + 1) % order.length]
+}
+
 /** Where the ruler stands on screen (pixels): the roof corner nearest the camera, its base, and the size of a metre there. */
 export interface RulerAnchor {
   x: number
@@ -62,11 +83,19 @@ export interface HeightRulerHandlers {
   /** Shows the building at `height` without rebuilding anything; null puts it back. */
   onPreview(id: string, height: number | null): void
   onCommit(id: string, override: HeightOverride): void
+  /** The handle is focused or previewing `height` for the building (the hover note follows it); null when it is not. */
+  onNote?(id: string, height: number | null): void
+  /** Esc on the handle: focus goes back to the 3D canvas. */
+  returnFocus?(): void
 }
 
 export interface HeightRuler {
   /** The pointer is over this building: stand the ruler on it. */
   follow(b: Building, at: { x: number; y: number }): void
+  /** Keyboard: stand the ruler on this building, at `at` (screen pixels), with its handle focused. False when it cannot be drawn there. */
+  open(b: Building, at: { x: number; y: number }): boolean
+  /** The building the ruler stands on now, if shown. */
+  readonly currentId: string | undefined
   /** The pointer left the building: the ruler goes after a short grace (time to reach it), unless it is being used. */
   release(): void
   hide(): void
@@ -164,6 +193,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     clearTimeout(timer)
     clearTimeout(switchTimer)
     if (drag && target) handlers.onPreview(target.id, null)
+    if (target) handlers.onNote?.(target.id, null)
     drag = undefined
     box.hidden = true
     box.classList.remove('active')
@@ -180,13 +210,14 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     handlers.onPreview(id, null)
     if (height === building.height) return layout(building.height)
     handlers.onCommit(id, overrideFromRuler(building, height))
-    show(id)
+    if (show(id) && focused()) handlers.onNote?.(id, target!.building.height)
   }
   function cancelKeyed() {
     if (keyed === undefined || !target) return
     keyed = undefined
     handlers.onPreview(target.id, null)
     layout(target.building.height)
+    handlers.onNote?.(target.id, target.building.height)
   }
   handle.addEventListener('keydown', (e) => {
     if (!target || drag) return
@@ -196,17 +227,23 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
       keyed = keyHeight(keyed ?? target.building.height, target.building.minHeight, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey)
       place(keyed)
       handlers.onPreview(target.id, keyed)
+      handlers.onNote?.(target.id, keyed)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       commitKeyed()
-    } else if (e.key === 'Escape' && keyed !== undefined) {
+    } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
-      cancelKeyed()
+      if (keyed !== undefined) cancelKeyed()
+      else handlers.returnFocus?.()
     }
+  })
+  handle.addEventListener('focus', () => {
+    if (target) handlers.onNote?.(target.id, keyed ?? target.building.height)
   })
   handle.addEventListener('blur', () => {
     commitKeyed()
+    if (target) handlers.onNote?.(target.id, null)
     if (!inside && !drag && !box.hidden) timer = window.setTimeout(hide, GRACE_MS)
   })
   const focused = () => handle.matches(':focus')
@@ -294,6 +331,18 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
       if (drag || inside || box.hidden || focused()) return
       clearTimeout(timer)
       timer = window.setTimeout(hide, GRACE_MS)
+    },
+    open(b, at) {
+      clearTimeout(timer)
+      clearTimeout(switchTimer)
+      if (drag) return false
+      pointer = at
+      if (!show(b.id)) return false
+      handle.focus({ preventScroll: true })
+      return true
+    },
+    get currentId() {
+      return box.hidden ? undefined : target?.id
     },
     hide,
     get dragging() {
