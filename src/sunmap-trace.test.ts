@@ -4,7 +4,7 @@ import { apartmentGeometry, facadeWall } from './apartment'
 import type { Building, Point } from './osm'
 import { floorBase, type Plan, type Window } from './plan'
 import { floorGrid, sunSlots } from './sunmap'
-import { buildBvh, collectOccluders, seesSun, traceSun } from './sunmap-trace'
+import { buildBvh, collectOccluders, countSparse, seesSun, traceSun } from './sunmap-trace'
 
 const unit = (x: number, y: number, z: number) => {
   const l = Math.hypot(x, y, z)
@@ -113,5 +113,25 @@ describe('the window opening lets the sun through', () => {
     const lit = traceSun(roof, points, 3, slots.dirs)
     expect(lit.length).toBe(grid.count * slots.starts.length)
     expect(lit.every((v) => v === 0)).toBe(true)
+  })
+})
+
+describe('countSparse', () => {
+  const lit = (from: number, to: number) => (i: number) => i >= from && i < to
+  it('matches the full count for stretches longer than the stride', () => {
+    for (const [a, b] of [[10, 40], [0, 50], [7, 8 + 3], [33, 60]]) {
+      const asked: number[] = []
+      const test = (i: number) => (asked.push(i), lit(a, b)(i))
+      expect(countSparse(60, 3, test)).toBe(Math.max(0, Math.min(60, b) - a))
+      expect(new Set(asked).size).toBe(asked.length)
+    }
+  })
+  it('asks far fewer slots in a long shaded stretch', () => {
+    let asked = 0
+    countSparse(150, 3, () => (asked++, false))
+    expect(asked).toBeLessThanOrEqual(51)
+  })
+  it('handles no slots', () => {
+    expect(countSparse(0, 3, () => true)).toBe(0)
   })
 })

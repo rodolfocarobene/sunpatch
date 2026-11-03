@@ -179,6 +179,7 @@ export function createUI(
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
       <div id="sunHeadline" hidden role="status"></div>
+      <div id="yearSlot"></div>
       <div id="aptTools">
         <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">

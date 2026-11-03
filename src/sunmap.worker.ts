@@ -2,7 +2,7 @@ import type { MeshBVH } from 'three-mesh-bvh'
 import type { Panel } from './plan'
 import { shadePanel, type PanelShade, type YearSlots } from './panel-shade'
 import { traceMonthly } from './garden-trace'
-import { buildBvh, traceSun } from './sunmap-trace'
+import { buildBvh, litSlots, traceSun } from './sunmap-trace'
 import { IRRADIATION_STRIDE, traceSamples } from './suitability'
 
 export type WorkerIn =
@@ -11,6 +11,7 @@ export type WorkerIn =
   | { kind: 'shade'; id: number; key: number; panel: Panel; slots: YearSlots }
   | { kind: 'suit'; id: number; key: number; inputs: Float32Array; slots: YearSlots; step: number }
   | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number }
+  | { kind: 'year'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array; counts: number[] }
 
 export type WorkerOut =
   | { kind: 'progress'; id: number; done: number }
@@ -18,6 +19,7 @@ export type WorkerOut =
   | { kind: 'shaded'; id: number; shade: PanelShade; bvhMs: number }
   | { kind: 'suited'; id: number; irradiation: Float32Array; ms: number; bvhMs: number }
   | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number }
+  | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
   | { kind: 'error'; id: number; message: string }
 
 // The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
@@ -30,6 +32,9 @@ const SUIT_CHUNK = 400
 const GARDEN_CHUNK = 100
 let suitId = -1
 let gardenId = -1
+let yearId = -1
+/** The year chart asks every 3rd 5-minute slot and the ones between only where the answer changes. */
+const YEAR_STRIDE = 3
 
 const reply = (message: WorkerOut, transfer: Transferable[] = []) => self.postMessage(message, { transfer })
 
@@ -50,6 +55,10 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     }
     if (m.kind === 'garden') {
       garden(m)
+      return
+    }
+    if (m.kind === 'year') {
+      year(m)
       return
     }
     if (m.kind === 'shade') {
@@ -112,6 +121,31 @@ function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
       reply({ kind: 'progress', id: m.id, done: at / total })
       setTimeout(turn, 0)
     } else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
+  }
+  turn()
+}
+
+/** The year chart: for each of the days, how many slots have any sample lit; one day per turn, reporting progress. A newer 'year' request stops it. */
+function year(m: Extract<WorkerIn, { kind: 'year' }>) {
+  yearId = m.id
+  const lit: number[] = []
+  const started = performance.now()
+  let slot = 0
+  const turn = () => {
+    if (yearId !== m.id) return
+    try {
+      if (!bvh || bvhKey !== m.key) throw new Error('scene changed')
+      const n = m.counts[lit.length]
+      lit.push(litSlots(bvh, m.points, m.floorY, m.dirs.subarray(slot * 3, (slot + n) * 3), YEAR_STRIDE))
+      slot += n
+    } catch (err) {
+      reply({ kind: 'error', id: m.id, message: (err as Error).message })
+      return
+    }
+    if (lit.length < m.counts.length) {
+      reply({ kind: 'progress', id: m.id, done: lit.length / m.counts.length })
+      setTimeout(turn, 0)
+    } else reply({ kind: 'yeared', id: m.id, lit, ms: performance.now() - started, bvhMs })
   }
   turn()
 }
