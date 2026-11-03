@@ -576,6 +576,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
     font-size: var(--text-xs); color: var(--muted); background: transparent; border: 0; border-radius: 14px 14px 0 0;
   }
   #panel #sheetGrip:hover:not(:disabled), #panel #sheetGrip:active:not(:disabled) { background: transparent; color: var(--text); }
+  /* The label stays "Options" whatever is folded; the chevron says which way the sheet goes. */
+  #sheetGrip .gripLabel::after { content: ''; display: inline-block; width: 5px; height: 5px; margin-left: 6px; border: solid currentColor; border-width: 1.5px 0 0 1.5px; transform: translateY(-1px) rotate(45deg); }
+  #sheetGrip[aria-expanded='true'] .gripLabel::after { transform: translateY(-3px) rotate(225deg); }
   #sheetGrip .gripBar { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
   #panel #sheetGrip:hover .gripBar { background: var(--accent-strong); }
   #panel #views { order: -1; flex: none; }

@@ -131,7 +131,7 @@ export function createUI(
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
-    <button id="sheetGrip" type="button" aria-controls="panel" aria-expanded="true"><span class="gripBar" aria-hidden="true"></span><span class="gripLabel">${t('shell.sheetHide')}</span></button>
+    <button id="sheetGrip" type="button" aria-controls="panel" aria-expanded="true"><span class="gripBar" aria-hidden="true"></span><span class="gripLabel">${t('shell.sheetOptions')}</span></button>
     <div id="panelTop">
       <a id="about" href="../" title="${t('shell.aboutTitle')}">&larr; ${t('shell.back')}</a>
     </div>
@@ -278,7 +278,6 @@ export function createUI(
   const setSheet = (open: boolean) => {
     panel.dataset.sheet = open ? 'open' : 'closed'
     grip.setAttribute('aria-expanded', String(open))
-    grip.querySelector('.gripLabel')!.textContent = t(open ? 'shell.sheetHide' : 'shell.sheetShow')
   }
   setSheet(true)
   grip.addEventListener('click', () => setSheet(panel.dataset.sheet !== 'open'))
