@@ -46,6 +46,11 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 - **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
   slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
   day's daylight and the times, drawn on a day strip like the time slider's.
+- **Daylight (estimate)**: a separate layer, never mixed into the sun numbers. Tick it and the floor is coloured by an
+  estimated daylight factor (the share of the light outdoors under an overcast sky that reaches that spot, direct sun
+  excluded) from dark slate to pale blue, in four bands: dim (under 1 %), fair (1-2 %), bright (2-5 %), very
+  bright (over 5 %). Click a spot for its value. It is a textbook estimate with typical reflectances (floor 30 %,
+  walls 50 %, ceiling 70 %), exclusive with **Sun map**.
 - **Walk inside** in first person at eye height, see the sun disc through the windows and step the time while you
   look around.
 - Plans are saved in the browser automatically and can be exported and imported as JSON.
@@ -128,6 +133,9 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    example *3 h 10 min of direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it.
    Changing the date recomputes the map (a few seconds, in the background); moving the time slider does not.
    The map stays on while you walk.
+   Tick **Daylight (estimate)** instead for the overcast-sky daylight factor: the legend gives the four bands, the
+   average over the floor and the share that is dim, and a click on the floor shows the value at that spot. It does not
+   depend on the date or time, so it only recomputes when the building, plan or edits change (about a second).
    The left panel names the building on one line, for example *OpenStreetMap ↗ · 9 m · 3 levels* (the link opens
    the building's page, and its tooltip gives the OSM id). **Details** is folded away: it holds *Mark guessed heights*,
    the *Neighbourhood* size (Small 150 m, Medium 300 m, Large 500 m, remembered in the browser, with a count such as
@@ -206,8 +214,13 @@ building data.
   round crown. A tree casts the same solid shadow all year, with or without leaves.
 - The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to
   about a hand's width. It counts the sun as a point, so the soft edge of a shadow is a sharp line.
-- Only direct sunlight is simulated. The general brightness of the rooms is a simple stand-in for light bouncing
-  around, not a measurement.
+- The sun map and the headline are direct sunlight only. The general brightness of the rooms in the 3D view is a
+  simple stand-in for light bouncing around, not a measurement. The separate **Daylight (estimate)** layer is the
+  BRE split-flux daylight factor under a CIE overcast sky: sky seen through the windows, a flat 20 % reflectance for
+  neighbours seen through them, and one internal-reflection value for the whole apartment (interior walls are not
+  rooms to it). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
+  surfaces beyond the three default reflectances. Treat it as a rough ranking of spots, good to a factor of about
+  two.
 - Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
   and approximates diffuse light without shading it; the plant catalogue holds typical values for a common
   variety, and Garden needs the local climate from NASA POWER for outdoor spots. Garden traces the direct sun in
@@ -237,6 +250,10 @@ building data.
    from sunrise to sunset. A ray counts as lit when it reaches the sky past every shadow caster in the scene (a
    BVH from [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) in a Web Worker); window glass lets it
    through.
+7. **Daylight estimate**: from each floor point (every 50 cm, 85 cm above the floor) 384 rays go up in a
+   cosine-weighted spread; those that pass a window pane count as sky weighted by the CIE overcast luminance, or as
+   an obstruction at 20 % of the average sky luminance if something stands in the way, and the internally reflected
+   light comes from the BRE split-flux formula. Window transmittance 0.7, frame and dirt 0.8.
 
 More detail for contributors is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
