@@ -75,7 +75,7 @@ export async function decodeShare(hash: string): Promise<{ share: Shared } | { e
   if (dot < 0 || !/^\d+u?$/.test(tag) || hash.length > MAX_HASH) return { error: 'broken' }
   if (parseInt(tag, 10) !== SHARE_VERSION) return { error: 'version' }
   try {
-    let bytes = fromBase64Url(body.slice(dot + 1))
+    let bytes: Uint8Array = fromBase64Url(body.slice(dot + 1))
     if (!tag.endsWith('u')) {
       if (!canCompress()) return { error: 'broken' }
       bytes = await run(bytes, new DecompressionStream('deflate-raw'))

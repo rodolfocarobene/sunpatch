@@ -63,6 +63,9 @@ import { createWalkHud } from './walk'
 import { fmtMonth, onBeforeLangSwitch, t } from './i18n'
 import { touchOnly } from './touch'
 import { saveSession, takeSession } from './session'
+import { decodeShare, encodeShare, shareUrl } from './share'
+import { createSharedChip } from './shared-chip'
+import { validatePlan } from './editor-geom'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
 const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
@@ -695,7 +698,7 @@ function placeHere() {
   suitKeep = true
   setPlan({ ...plan, panels: [...plan.panels, panel] })
   suitKeep = false
-  if (!exampleMode) savePlan(plan!)
+  if (!ephemeral()) savePlan(plan!)
   selectPanel(panel.id)
 }
 
@@ -879,15 +882,30 @@ ui.onChange((when, sun, strip, place) => {
 const restored = takeSession()
 let restoreView: View | undefined
 onBeforeLangSwitch(() => {
-  if (plan && !exampleMode) savePlan(plan)
+  if (plan && !ephemeral()) savePlan(plan)
   if (!last || !sunDay) return
-  saveSession({ lat: last.clicked.lat, lon: last.clicked.lon, view, date: dateValue(sunDay.when), minutes: minutesOfDay(sunDay.when), example: exampleMode })
+  saveSession({
+    lat: last.clicked.lat, lon: last.clicked.lon, view, date: dateValue(sunDay.when), minutes: minutesOfDay(sunDay.when), example: exampleMode,
+    // A shared copy is saved nowhere else: the reload carries it.
+    ...(sharedMode && plan && { shared: plan }),
+  })
 })
 const mapView = createMapView(document.body, restored ?? MILAN, pick, ui.searchSlot)
 // ?example=milan: a bundled sample apartment; its edits are never saved, so a stored plan of the same building stays safe.
-let exampleMode = new URLSearchParams(location.search).get('example') === 'milan' && (!restored || restored.example === true)
+// A share link (#s=...) is read once and taken out of the address bar, so a reload does not reopen it over later edits.
+const shareHash = location.hash.startsWith('#s=') ? location.hash : ''
+if (shareHash) history.replaceState(null, '', location.pathname + location.search)
+let exampleMode = !shareHash && new URLSearchParams(location.search).get('example') === 'milan' && (!restored || restored.example === true)
+/**
+ * The plan on screen came from a share link: it is shown like the example (never saved, the recipient's own plan for the
+ * building untouched) until "Save as mine". `sharedPlan` is what the building load applies, and is dropped when the load ends.
+ */
+let sharedMode = false
+let sharedPlan: Plan | undefined
+const ephemeral = () => exampleMode || sharedMode
+const sharedChip = createSharedChip(document.body)
 const editor = createPlanEditor(document.body, setPlan, {
-  autosave: () => !exampleMode,
+  autosave: () => !ephemeral(),
   onSwitch: (id, at) => switchTo(id, at),
   panelSummary: planSummary,
   onPanelSelect: selectPanel,
@@ -923,24 +941,91 @@ const chip = createStatusChip(app, () => last && void refine(last, current))
 // Starts on the map: there is nothing to show in 3D until a building is picked.
 let view: View = 'map'
 setView('map')
-if (exampleMode) void openExample()
-else if (restored) {
+const restoredChecked = restored?.shared ? validatePlan(restored.shared) : undefined
+const restoredShare = restoredChecked && 'plan' in restoredChecked ? restoredChecked.plan : undefined
+if (shareHash && !restored) void openShare(shareHash)
+else if (exampleMode) {
+  if (restoredShare) void openExample(restoredShare, restored ?? undefined)
+  else void openExample()
+} else if (restored) {
   ui.setWhen(restored.date, restored.minutes)
   restoreView = restored.view
-  pick(restored.lat, restored.lon)
+  if (restoredShare) sharedPlan = restoredShare
+  pick(restored.lat, restored.lon, true)
 } else mapView.focusSearch() // the search is the first thing to do on the map
 
-async function openExample() {
+/** Opens a share link: the building at its point with the shared plan, on its date, time and tab; a bad link just says so. */
+async function openShare(hash: string) {
+  const result = await decodeShare(hash)
+  if ('error' in result) {
+    sharedChip.notice(t(result.error === 'version' ? 'shell.shareNewer' : 'shell.shareBroken'))
+    mapView.focusSearch()
+    return
+  }
+  const { share } = result
+  ui.setWhen(share.date, share.minutes)
+  if (share.example) {
+    exampleMode = true
+    await openExample(share.plan, share)
+    return
+  }
+  restoreView = share.view
+  sharedPlan = share.plan
+  pick(share.lat, share.lon, true)
+}
+
+/** Save as mine: the shared plan becomes the recipient's own for this building (asking before replacing one). */
+function saveShared() {
+  if (!plan || !site || !sharedMode) return
+  const mine = loadSavedPlan(plan.buildingId)
+  if (mine && !confirm(t('shell.sharedSaveFirst'))) return
+  savePlan(plan)
+  sharedMode = false
+  exampleMode = false
+  ui.setExample(false)
+  sharedChip.notice(t('shell.sharedSaved'))
+}
+
+ui.onShare(() => void shareLink())
+
+async function shareLink() {
+  if (!plan || !last || !sunDay) return
+  const hash = await encodeShare({
+    lat: last.clicked.lat, lon: last.clicked.lon, view, date: dateValue(sunDay.when), minutes: minutesOfDay(sunDay.when), plan,
+    ...(exampleMode && { example: true }),
+  })
+  const url = shareUrl(hash)
+  try {
+    if (touchOnly() && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ url })
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return // the user closed the sheet
+        throw err
+      }
+    } else await navigator.clipboard.writeText(url)
+    ui.setShareResult(t('shell.shareCopied'))
+    window.setTimeout(() => ui.setShareResult(null), 5000)
+  } catch {
+    ui.setShareResult(t('shell.shareManual'), url) // no clipboard access: the link, selected, for the user to copy
+  }
+}
+
+async function openExample(over?: Plan, shared?: { date: string; minutes: number; view: View }) {
   const { buildings, selected, origin, plan: examplePlan, elements, near } = await loadExample()
   loaded = { elements, center: near, radius: EXAMPLE_RADIUS_M }
   last = { clicked: near, origin } // a point inside the example building: Undo after switching away comes back to it
   show(buildings, selected, origin, false)
   placeTrees(elements, origin, site!.buildings)
-  setPlan(examplePlan)
-  ui.setWhen(EXAMPLE_WHEN.date, EXAMPLE_WHEN.minutes)
-  ui.setExample(true)
-  setView('3d')
-  if (restored) {
+  if (over) {
+    setPlan(rebasePlan({ ...over, buildingId: selected.id, ...(selected.sources && { selection: selected.sources }) }, origin))
+    sharedMode = true
+    sharedChip.showShared(saveShared)
+  } else setPlan(examplePlan)
+  ui.setWhen(shared?.date ?? EXAMPLE_WHEN.date, shared?.minutes ?? EXAMPLE_WHEN.minutes)
+  ui.setExample(!over)
+  setView(shared?.view ?? '3d')
+  if (restored && !shared) {
     ui.setWhen(restored.date, restored.minutes)
     setView(restored.view)
   }
@@ -1021,6 +1106,7 @@ interface SwitchUndo {
   at: { lat: number; lon: number }
   plan: Plan | undefined
   exampleMode: boolean
+  sharedMode: boolean
   view: View
 }
 const switchUndo = createUndoSlot<SwitchUndo>()
@@ -1031,8 +1117,9 @@ const switchedTo = (b: Building) => {
   return name ? t('shell.switchedTo', { name }) : t('shell.switchedPlain')
 }
 
-function pick(lat: number, lon: number) {
+function pick(lat: number, lon: number, fromShare = false) {
   exampleMode = false // from here on it is the user's own building: plans load and save as usual
+  if (!fromShare) endShared()
   ui.setExample(false)
   edited = false
   keepSelection = false
@@ -1083,7 +1170,7 @@ function show(full: Building[], picked: Building, origin: Origin, keepCamera: bo
   const raw = withinRadius(full, hoodRadius, picked.sources ?? [picked.id])
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
-  const saved = carried || exampleMode ? null : savedPlanFor(picked)
+  const saved = carried ? null : planFor(picked)
   heights = keepKnown({ ...heights, ...(carried ? plan!.heights : saved?.heights) }, raw) ?? {}
   const buildings = applyHeights(raw, heights)
   const selected = reselect(buildings, picked)
@@ -1092,6 +1179,10 @@ function show(full: Building[], picked: Building, origin: Origin, keepCamera: bo
   ui.setNeighborhoodLine(neighborhoodLine(countBuildings(buildings), hoodRadius))
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
   else setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
+  if (saved && sharedPlan && !carried) {
+    sharedMode = true
+    sharedChip.showShared(saveShared)
+  }
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
   ui.setBuildingPicked(true)
@@ -1134,7 +1225,7 @@ ui.onNeighborhood(setNeighborhood)
 function choose(buildings: Building[], origin: Origin, clicked: { lat: number; lon: number }): Building | undefined {
   const at = project(clicked.lat, clicked.lon, origin)
   const flooded = selectBuilding(buildings, at)
-  const saved = flooded && !exampleMode ? savedPlanFor(flooded) : null
+  const saved = flooded ? planFor(flooded) : null
   if (!flooded || !saved?.selection) return flooded
   return restoreSelection(buildings, at, { id: saved.originalId, ids: saved.selection }) ?? flooded
 }
@@ -1146,9 +1237,9 @@ function choose(buildings: Building[], origin: Origin, clicked: { lat: number; l
  */
 function switchTo(polygonId: string, at: Point, undoable = false) {
   if (!site) return
-  const before: SwitchUndo | undefined = undoable && last ? { at: last.clicked, plan, exampleMode, view } : undefined
+  const before: SwitchUndo | undefined = undoable && last ? { at: last.clicked, plan, exampleMode, sharedMode, view } : undefined
   // Plans autosave on every edit; this also covers one carried over from the tile preview.
-  if (plan && !exampleMode) savePlan(plan)
+  if (plan && !ephemeral()) savePlan(plan)
   const ll = unproject(at, site.origin)
   const data = loaded
   const [dx, dz] = data ? [project(ll.lat, ll.lon, data.center).x, project(ll.lat, ll.lon, data.center).z] : [Infinity, 0]
@@ -1165,6 +1256,7 @@ function switchTo(polygonId: string, at: Point, undoable = false) {
   const flooded = selectBuilding(site.buildings, at)
   if (!flooded || (site.selected.sources ?? [site.selected.id]).includes(polygonId) || !site.buildings.some((b) => b.id === polygonId)) return
   exampleMode = false
+  endShared()
   ui.setExample(false)
   edited = false
   pending?.abort()
@@ -1198,6 +1290,11 @@ function undoSwitch() {
     ui.setExample(true)
     setPlan(rebasePlan(back.plan, site.origin), true)
   }
+  if (back.sharedMode && back.plan && site) {
+    sharedMode = true
+    setPlan(rebasePlan(back.plan, site.origin), true)
+    sharedChip.showShared(saveShared)
+  }
   if (back.view !== view) setView(back.view)
   chip.done(t('shell.switchedBack'))
 }
@@ -1212,7 +1309,20 @@ function togglePartAt(polygonId: string) {
   }
   edited = true
   show(site.raw, result.selected, site.origin, true)
-  if (plan && !exampleMode) savePlan(plan)
+  if (plan && !ephemeral()) savePlan(plan)
+}
+
+/** The plan to open on a building: the one a share link brought while it loads, else the user's saved one (never the example's). */
+function planFor(b: Building): (Plan & { originalId: string }) | null {
+  if (sharedPlan) return { ...sharedPlan, buildingId: b.id, originalId: sharedPlan.buildingId }
+  return exampleMode ? null : savedPlanFor(b)
+}
+
+/** The user left the shared copy (another building, another pick): back to plans that save as usual. */
+function endShared() {
+  sharedPlan = undefined
+  sharedMode = false
+  sharedChip.hide()
 }
 
 /** A plan saved on the building, or on any polygon that is now merged into it (older plans used the clicked one). */
@@ -1277,7 +1387,7 @@ function setHeight(id: string, override: HeightOverride | null) {
     updated = { ...updated, floorHeight: defaultFloorHeight(now), floor: Math.min(updated.floor, levelCount(now) - 1) }
   }
   setPlan(updated, true)
-  if (!exampleMode) savePlan(updated)
+  if (!ephemeral()) savePlan(updated)
   chip.done(override ? t(touchOnly() ? 'shell.heightSetTouch' : 'shell.heightSet') : t('shell.heightReset'))
 }
 
@@ -1337,6 +1447,9 @@ async function refine({ clicked, origin }: Pick, token: number) {
     if (hasPreview) chip.failed(t('shell.chipFailed'))
     else mapView.setStatus((err as Error).message, 'error')
   } finally {
-    if (token === current) mapView.setLoading(false)
+    if (token === current) {
+      mapView.setLoading(false)
+      sharedPlan = undefined // the load is over: the shared plan is the plan on screen now, not a source for other buildings
+    }
   }
 }

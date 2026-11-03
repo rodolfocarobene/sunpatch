@@ -285,6 +285,21 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #statusChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
 
+/* Share links: the "viewing a shared plan" bar and the damaged-link notice, over every tab. */
+#sharedChip {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 12; display: flex; align-items: center; gap: 8px;
+  max-width: min(560px, calc(100vw - 32px)); padding: var(--box-pad); border-radius: var(--radius-box); font-size: var(--text-sm);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+#sharedChip[hidden] { display: none; }
+#sharedChip[data-kind='notice'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+#sharedChip button {
+  font: inherit; padding: 2px 8px; cursor: pointer; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
+}
+#sharedChip button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
+#sharedChip button.closeX { padding: 0 6px; font-size: var(--text-base, 1rem); line-height: 1.4; color: var(--muted); background: transparent; border-color: transparent; }
+#shareField { width: 100%; box-sizing: border-box; font-size: var(--text-xs); }
+
 /* "Frame the view": the one way back to a good camera, bottom right in 3D, Panels and Garden (not while walking). */
 #reframe {
   position: fixed; bottom: 16px; right: 16px; z-index: 10; padding: 6px 12px; font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer;
