@@ -23,6 +23,7 @@ import {
 import type { Segment, Snap } from './editor-geom'
 import { isClick } from './click'
 import { fmt1Fixed, t, type Key } from './i18n'
+import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
 import { isWalkable, yawOf } from './walk-geom'
@@ -60,6 +61,9 @@ const HELP: Record<Tool, Key> = {
   fix: 'editor.helpFix',
   panel: 'editor.helpPanel',
 }
+const HELP_TOUCH: Partial<Record<Tool, Key>> = { wall: 'editor.helpWallTouch', fix: 'editor.helpFixTouch', panel: 'editor.helpPanelTouch' }
+/** The help line of a tool; a touch screen has no Shift or right-click, so those tools get their own wording. */
+const helpKey = (tool: Tool): Key => (touchOnly() && HELP_TOUCH[tool]) || HELP[tool]
 // One short line under the tools for the tools without options, so that row is never an empty gap.
 const TOOL_HINT: Partial<Record<Tool, Key>> = {
   select: 'editor.hintSelect',
@@ -204,12 +208,25 @@ export function createPlanEditor(
   const keyHint = (key: string): HTMLElement =>
     Object.assign(document.createElement('span'), { className: 'key', textContent: key, ariaHidden: 'true' })
 
+  // A phone shows the short form (CSS swaps them); the long one is what a screen reader and the desktop get.
+  const shortLabel = (long: string, short: string): DocumentFragment => {
+    const frag = document.createDocumentFragment()
+    frag.append(
+      Object.assign(document.createElement('span'), { className: 'long', textContent: long }),
+      Object.assign(document.createElement('span'), { className: 'short', textContent: short, ariaHidden: 'true' }),
+    )
+    return frag
+  }
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
   for (const name of ['select', 'outline', 'wall', 'window', 'fix', 'panel'] as const) {
     const label = t(TOOL_NAME[name])
     const b = button(label, t('editor.toolTitle', { name: label, key: TOOL_KEYS[name] }), () => setTool(name))
+    if (name === 'fix') {
+      b.replaceChildren(shortLabel(label, t('editor.toolFixShort')))
+      b.setAttribute('aria-label', label)
+    }
     b.append(keyHint(TOOL_KEYS[name]))
     toolButtons.set(name, b)
     toolRow.appendChild(b)
@@ -268,8 +285,23 @@ export function createPlanEditor(
     button(t('editor.importJson'), t('editor.importJsonTitle'), () => fileInput.click()),
     fileInput,
   )
+  // On a phone the tools and Undo/Delete/Fit share one scrolling row (CSS); on a desktop this wrapper adds no box.
+  const toolScroll = document.createElement('div')
+  toolScroll.className = 'editor-scroll'
+  const moreButton = button(t('editor.more'), t('editor.moreTitle'), () => {
+    const open = toolbar.dataset.more !== 'open'
+    if (open) toolbar.dataset.more = 'open'
+    else delete toolbar.dataset.more
+    moreButton.setAttribute('aria-expanded', String(open))
+  })
+  moreButton.className = 'editor-more'
+  moreButton.setAttribute('aria-expanded', 'false')
+  toolScroll.append(toolRow, editRow)
+  const topRow = document.createElement('div')
+  topRow.className = 'editor-toprow'
+  topRow.append(toolScroll, moreButton)
   toolbar.append(
-    cluster(t('editor.clusterTools'), toolRow, editRow, optionsRow),
+    cluster(t('editor.clusterTools'), topRow, optionsRow),
     cluster(t('editor.clusterFloor'), floorFields, wholeFloorRow),
     cluster(t('editor.clusterFile'), fileRow),
   )
@@ -1138,7 +1170,7 @@ export function createPlanEditor(
     if (!measure()) return
     if (needsFit) fit()
     drawScene(svg, { building, neighbors, plan, view, selection, draft, hover: hoverId })
-    statusText.textContent = hoverId ? t('editor.hoverSwitch') : (message?.text ?? t(HELP[tool]))
+    statusText.textContent = hoverId ? t('editor.hoverSwitch') : (message?.text ?? t(helpKey(tool)))
     statusLine.dataset.kind = message?.kind ?? 'info'
     updateFloorBox()
     updateProps()

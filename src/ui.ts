@@ -1,12 +1,13 @@
 import SunCalc from 'suncalc'
 import { createLangSwitch } from './lang-switch'
 import { fmt1Fixed, fmtNumber, fmtTime, t, type Key } from './i18n'
+import { touchOnly } from './touch'
 import type { Building } from './osm'
 import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
-import { headlineText, type DayHeadline } from './headline'
+import { headlineText, sunBandGradient, type DayHeadline } from './headline'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 import { rangeText } from './suitability'
@@ -38,13 +39,14 @@ export type HeadlineStatus =
 
 export type SuitabilityStatus =
   | { kind: 'computing'; progress: number; updating?: boolean }
-  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; weather: boolean; count: number }
+  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; clamped: boolean; weather: boolean; count: number }
   | { kind: 'error'; message: string }
 
 export interface PanelList {
-  items: { id: string; label: string; detail: string }[]
+  items: { id: string; label: string; detail: string; /** Last answer, being redone. */ stale?: boolean }[]
   selected: string | null
   total: string | null
+  totalStale?: boolean
 }
 
 export interface UI {
@@ -131,7 +133,7 @@ export function createUI(
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
-    <button id="sheetGrip" type="button" aria-controls="panel" aria-expanded="true"><span class="gripBar" aria-hidden="true"></span><span class="gripLabel">${t('shell.sheetHide')}</span></button>
+    <button id="sheetGrip" type="button" aria-controls="panel" aria-expanded="true"><span class="gripBar" aria-hidden="true"></span><span class="gripLabel">${t('shell.sheetOptions')}</span></button>
     <div id="panelTop">
       <a id="about" href="../" title="${t('shell.aboutTitle')}">&larr; ${t('shell.back')}</a>
     </div>
@@ -240,6 +242,7 @@ export function createUI(
       <div class="barRow">
         <div class="timeTrack">
           <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
+          <div id="sunBand" class="sunBand" aria-hidden="true"></div>
           <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="${t('sun.time')}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
         <span id="timeLabel" title="${t('sun.tzTitle')}"></span>
@@ -267,6 +270,7 @@ export function createUI(
   const summary = $('sunSummary')
   const presetBox = $('presets')
   const strip = $('dayStrip')
+  const sunBand = $('sunBand')
   presetBox.addEventListener('click', (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-date]')
     if (!chip) return
@@ -278,7 +282,6 @@ export function createUI(
   const setSheet = (open: boolean) => {
     panel.dataset.sheet = open ? 'open' : 'closed'
     grip.setAttribute('aria-expanded', String(open))
-    grip.querySelector('.gripLabel')!.textContent = t(open ? 'shell.sheetHide' : 'shell.sheetShow')
   }
   setSheet(true)
   grip.addEventListener('click', () => setSheet(panel.dataset.sheet !== 'open'))
@@ -321,6 +324,32 @@ export function createUI(
   const sunMap = $<HTMLInputElement>('sunMap')
   const legend = $('sunMapLegend')
   const headline = $('sunHeadline')
+  let headlineStatus: HeadlineStatus | null = null
+  /** Paints the headline and the sun band on the time slider; runs again when the time moves, as the detail line follows it. */
+  function renderHeadline() {
+    const status = headlineStatus
+    headline.hidden = status === null
+    sunBand.style.background = status?.kind === 'ready' ? sunBandGradient(status.headline.runs, DAY_MAX) : ''
+    if (!status) return headline.replaceChildren()
+    if (status.kind === 'noWindows') {
+      const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
+      toPlan.addEventListener('click', () => onView('plan'))
+      headline.replaceChildren(t('sun.headNoWindowsBefore'), toPlan, t('sun.headNoWindowsAfter'))
+      headline.className = 'quiet'
+    } else if (status.kind === 'working') {
+      headline.replaceChildren(t('sun.headWorking'))
+      headline.className = 'quiet'
+    } else if (status.kind === 'error') {
+      headline.replaceChildren(t('sun.mapError'))
+      headline.className = 'quiet'
+    } else {
+      const { text, detail } = headlineText(status.headline, status.day, Number(time.value))
+      const parts = [Object.assign(document.createElement('strong'), { textContent: text })]
+      if (detail) parts.push(Object.assign(document.createElement('span'), { textContent: detail }))
+      headline.replaceChildren(...parts)
+      headline.className = ''
+    }
+  }
   let sunMapListener: ((on: boolean) => void) | undefined
   const applySunMap = () => {
     legend.hidden = !sunMap.checked
@@ -329,9 +358,12 @@ export function createUI(
   sunMap.addEventListener('change', applySunMap)
   const suit = $<HTMLInputElement>('suit')
   const suitLegend = $('suitLegend')
+  let lastSuitReady: Extract<SuitabilityStatus, { kind: 'ready' }> | undefined
   let suitListener: ((on: boolean) => void) | undefined
   const applySuit = () => {
+    $('panelLead').textContent = t(suit.checked ? 'shell.panelLeadOn' : 'shell.panelLead') // the lead only asks for what is still to do
     suitLegend.hidden = !suit.checked
+    if (!suit.checked) lastSuitReady = undefined
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
@@ -385,7 +417,7 @@ export function createUI(
     $('noteExample').textContent = t('shell.noteExample')
     $('noteHint').hidden = !hint
     $('noteHint').textContent =
-      view === 'plan' ? t('shell.notePlan') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
+      view === 'plan' ? t('shell.notePlan') : touchOnly() ? t('shell.note3dTouch') : t(parts ? 'shell.note3dParts' : 'shell.note3d')
   }
 
   // Details (guessed heights, location): closed by default; the open state lasts for the session.
@@ -451,6 +483,11 @@ export function createUI(
     const sun = sunDirection(when, la, lo)
     onSun(sun)
     listener?.(when, sun, strip.style.background, { lat: la, lon: lo })
+    if (headlineStatus?.kind === 'ready') {
+      // The detail line follows the time; another date's band waits for its own answer.
+      if (dateValue(headlineStatus.day) === date.value) renderHeadline()
+      else sunBand.style.background = ''
+    }
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = fmtTime(times.sunrise)
     const set = fmtTime(times.sunset)
@@ -627,26 +664,8 @@ export function createUI(
       applySunMap()
     },
     setHeadline(status) {
-      headline.hidden = status === null
-      if (!status) return headline.replaceChildren()
-      if (status.kind === 'noWindows') {
-        const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
-        toPlan.addEventListener('click', () => onView('plan'))
-        headline.replaceChildren(t('sun.headNoWindowsBefore'), toPlan, t('sun.headNoWindowsAfter'))
-        headline.className = 'quiet'
-      } else if (status.kind === 'working') {
-        headline.replaceChildren(t('sun.headWorking'))
-        headline.className = 'quiet'
-      } else if (status.kind === 'error') {
-        headline.replaceChildren(t('sun.mapError'))
-        headline.className = 'quiet'
-      } else {
-        const { text, detail } = headlineText(status.headline, status.day)
-        const parts = [Object.assign(document.createElement('strong'), { textContent: text })]
-        if (detail) parts.push(Object.assign(document.createElement('span'), { textContent: detail }))
-        headline.replaceChildren(...parts)
-        headline.className = ''
-      }
+      headlineStatus = status
+      renderHeadline()
     },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
@@ -660,7 +679,10 @@ export function createUI(
       applySuit()
     },
     setSuitabilityStatus(status) {
-      suitLegend.innerHTML = suitabilityLegendHtml(status)
+      if (status.kind === 'ready') lastSuitReady = status
+      // An update keeps the old ramp and numbers on view (the map under them stays too), marked and with its progress.
+      suitLegend.innerHTML =
+        status.kind === 'computing' && status.updating && lastSuitReady ? suitabilityLegendHtml(lastSuitReady, Math.round(status.progress * 100)) : suitabilityLegendHtml(status)
     },
     onReframe(fn) {
       reframeListener = fn
@@ -674,8 +696,9 @@ export function createUI(
         reframe.classList.remove('done')
       }, 1400)
     },
-    setPanelList({ items, selected, total }) {
+    setPanelList({ items, selected, total, totalStale }) {
       const totalEl = $('panelTotals')
+      totalEl.classList.toggle('stale', totalStale === true)
       totalEl.hidden = total === null
       totalEl.textContent = total ?? ''
       const rows = $('panelRows')
@@ -688,7 +711,7 @@ export function createUI(
           const b = Object.assign(document.createElement('button'), { type: 'button' })
           b.dataset.id = item.id
           b.setAttribute('aria-pressed', String(item.id === selected))
-          b.append(Object.assign(document.createElement('span'), { textContent: item.label }), Object.assign(document.createElement('span'), { textContent: item.detail }))
+          b.append(Object.assign(document.createElement('span'), { textContent: item.label }), Object.assign(document.createElement('span'), { textContent: item.detail, className: item.stale ? 'stale' : '' }))
           li.append(b)
           return li
         }),
@@ -755,7 +778,7 @@ function legendHtml(status: SunMapStatus): string {
 }
 
 /** The suitability legend: the ramp in kWh a year per kW of panels, and what the colours assume. */
-function suitabilityLegendHtml(status: SuitabilityStatus): string {
+function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
     const head = t(status.updating ? 'sun.suitUpdating' : 'sun.suitComputing')
@@ -765,11 +788,13 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
   const at = (v: number) => (((v - status.min) / (status.max - status.min)) * 100).toFixed(1)
   const tick = (v: number) => `<span style="left:${at(v)}%">${fmtNumber(v)}</span>`
   return (
-    `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>` +
-    `<div class="legendBar" style="background:${sunGradient()}"></div>` +
-    `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
+    (updatingPct === undefined
+      ? `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>`
+      : `<span class="legendHead" role="status">${t('sun.suitUpdating')}\u2026 ${updatingPct}%</span>`) +
+    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${sunGradient()}"></div>` +
+    `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
-    `<span class="legendHint">${t('sun.suitHint', { n: status.count })}</span>`
+    `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`
   )
 }
 
@@ -787,10 +812,11 @@ function renderBuilding(el: HTMLElement, b: Building) {
   if (line.source) note.append(Object.assign(document.createElement('span'), { className: line.guess ? 'guess' : '', textContent: line.source }), ' ')
   note.append(Object.assign(document.createElement('button'), { type: 'button', className: 'link editHeight', textContent: t('bld.editHeight'), title: t('bld.editHeightTitle') }))
   extra.push(note)
-  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: t('bld.capped') }))
+  if (b.capped) extra.push(Object.assign(document.createElement('span'), { className: 'hint', textContent: t(touchOnly() ? 'bld.cappedTouch' : 'bld.capped') }))
   // The Map view says how to grow the selection; 3D and Plan have the dismissible switching hint instead.
   const parts = b.members?.length ?? 1
-  extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: t(parts > 1 ? 'bld.addParts' : 'bld.addNeighbour') }))
+  // Adding parts is a Shift-click: a touch screen has none, so it gets no hint for it.
+  if (!touchOnly()) extra.push(Object.assign(document.createElement('span'), { className: 'hint mapOnly', textContent: t(parts > 1 ? 'bld.addParts' : 'bld.addNeighbour') }))
   el.replaceChildren(...(line.title ? [Object.assign(document.createElement('strong'), { textContent: line.title })] : []), row, ...extra)
 }
 

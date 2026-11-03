@@ -26,7 +26,7 @@ import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
-import { createHeightRuler } from './height-ruler'
+import { createHeightRuler, cycleOrder, nextInCycle } from './height-ruler'
 import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
@@ -61,6 +61,7 @@ import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
 import { fmtMonth, onBeforeLangSwitch, t } from './i18n'
+import { touchOnly } from './touch'
 import { saveSession, takeSession } from './session'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -83,6 +84,37 @@ const heightRuler = createHeightRuler(document.body, {
   },
   onPreview: (id, height) => sunScene.previewHeight(id, height),
   onCommit: (id, override) => setHeight(id, override),
+  // The keyboard side of the ruler: the note beside the handle follows the height it shows.
+  onNote(id, height) {
+    const building = site?.buildings.find((b) => b.id === id)
+    const handle = document.querySelector('#heightRuler .hrHandle')
+    if (height === null || !building || !handle) return hoverTip.hide()
+    const r = handle.getBoundingClientRect()
+    hoverTip.show(hoverLines(building, 'keys', height), { x: r.right + 24, y: r.top })
+  },
+  returnFocus: () => sceneCanvas.focus({ preventScroll: true }),
+  cycle: () => cycleRuler(),
+})
+// The 3D canvas takes focus, so the keyboard reaches the ruler: R steps it through the buildings (selected first, then the nearest).
+const sceneCanvas = app.querySelector('canvas')!
+sceneCanvas.tabIndex = 0
+sceneCanvas.setAttribute('aria-label', t('shell.canvasAria'))
+function cycleRuler() {
+  if (view !== '3d' || walking || heightPopover.isOpen || !site) return
+  const order = cycleOrder(site.buildings, site.selected.id)
+  const rect = sceneCanvas.getBoundingClientRect()
+  const centre = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  let id = nextInCycle(order, heightRuler.currentId)
+  for (let tries = 0; id !== undefined && tries < order.length; tries++) {
+    const building = site.buildings.find((b) => b.id === id)
+    if (building && heightRuler.open(building, centre)) return
+    id = nextInCycle(order, id)
+  }
+}
+sceneCanvas.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyR' || e.ctrlKey || e.metaKey || e.altKey) return
+  e.preventDefault()
+  cycleRuler()
 })
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
@@ -105,6 +137,7 @@ const gardenJob = createGardenJob()
 let gardenCardOpen = true
 const setGardenMonth = (m: number | null) => {
   gardenMonth = m
+  gardenHint = undefined
   if (findPlant) gardenCardOpen = false
   renderGarden()
 }
@@ -177,6 +210,7 @@ let findPainted = ''
 
 function setFindPlant(plant: Plant | undefined) {
   findPlant = plant
+  gardenHint = undefined // a note about the last click is not about this
   findPainted = ''
   gardenCardOpen = plant === undefined
   if (!plant) {
@@ -507,14 +541,19 @@ function renderTotals() {
   const indoor = new Set(panels.filter((p) => site && panelInside(p, site.selected)).map((p) => p.id))
   const items = panels.map((p, i) => {
     const e = energies.get(p.id)
-    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : e ? t('panels.perYear', { kwh: formatKwh(figure(e)) }) : t('panels.analysing')
-    return { id: p.id, label: t('panels.rowLabel', { n: i + 1 }), detail }
+    // A figure from before the last change stays up, marked, until the new one is in.
+    const stale = e !== undefined && !indoor.has(p.id) && !totals.fresh(p.id)
+    const figureText = e ? t('panels.perYear', { kwh: formatKwh(figure(e)) }) : t('panels.analysing')
+    const detail = indoor.has(p.id) ? EXCLUDED_INSIDE : stale ? t('panels.staleFigure', { figure: figureText }) : figureText
+    return { id: p.id, label: t('panels.rowLabel', { n: i + 1 }), detail, stale }
   })
   let total: string | null = null
-  if (panels.length > 0 && !totals.busy() && energies.size === panels.length) {
+  // One panel's total is its own row and card verdict again: the sum is only said when there is something to add up.
+  if (panels.length > 1 && energies.size === panels.length) {
     total = totalsLine(panels.map((p) => ({ kwh: figure(energies.get(p.id)!), inside: indoor.has(p.id) })), climate !== undefined)
+    if (totals.busy()) total = t('panels.staleFigure', { figure: total })
   }
-  ui.setPanelList({ items, selected: selectedPanel, total })
+  ui.setPanelList({ items, selected: selectedPanel, total, totalStale: totals.busy() })
 }
 
 function requestTotals() {
@@ -628,11 +667,11 @@ function paintSuitability() {
   const { samples, irradiation } = suitResult
   suitEnergy = samples.map((_, i) => surfaceEnergy(irradiation, i * IRRADIATION_STRIDE, assumptions, climate?.clearness))
   const figures = suitEnergy.map((e) => e.weather ?? e.ideal)
-  const { min, max, ticks, observed } = rampScale(figures)
+  const { min, max, ticks, observed, clamped } = rampScale(figures)
   const colors = new Float32Array(samples.length * 3)
   figures.forEach((v, i) => colors.set(suitabilityColor(v, min, max), i * 3))
   sunScene.setSuitability({ samples, colors })
-  ui.setSuitabilityStatus({ kind: 'ready', min, max, ticks, observed, weather: climate !== undefined, count: samples.length })
+  ui.setSuitabilityStatus({ kind: 'ready', min, max, ticks, observed, clamped, weather: climate !== undefined, count: samples.length })
   if (suitPicked !== null) showSuitPick()
 }
 
@@ -1028,6 +1067,7 @@ let site: { /** Every polygon the data has around the origin, however far. */ fu
 siteDeclared = true
 ui.onCutaway((hidden) => {
   floorsHidden = hidden
+  gardenHint = undefined // the roof note asked for exactly this
   renderGarden() // the roof counts of the plant map follow
 })
 /** The user's own heights, by polygon id: kept with the plan (`plan.heights`) and carried to the next building shown. */
@@ -1238,7 +1278,7 @@ function setHeight(id: string, override: HeightOverride | null) {
   }
   setPlan(updated, true)
   if (!exampleMode) savePlan(updated)
-  chip.done(override ? t('shell.heightSet') : t('shell.heightReset'))
+  chip.done(override ? t(touchOnly() ? 'shell.heightSetTouch' : 'shell.heightSet') : t('shell.heightReset'))
 }
 
 /** keepView leaves the camera where it is; otherwise the first plan of a building is framed. */

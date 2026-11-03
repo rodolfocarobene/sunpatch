@@ -90,6 +90,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* The strip spans the thumb's centre travel (thumb width 16px), so a minute lines up with the thumb. */
 #timeBar .timeTrack { position: relative; flex: 1; min-width: 0; height: 22px; }
 .dayStrip { position: absolute; left: 8px; right: 8px; top: 8px; height: 6px; border-radius: 3px; border: 1px solid var(--line); box-sizing: content-box; margin-top: -1px; }
+.sunBand { position: absolute; left: 8px; right: 8px; top: 17px; height: 3px; border-radius: 2px; opacity: 0.9; pointer-events: none; }
 .timeRange { position: absolute; inset: 0; width: 100%; height: 22px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
 .timeRange::-webkit-slider-runnable-track { height: 22px; background: transparent; }
 .timeRange::-moz-range-track { height: 22px; background: transparent; }
@@ -436,6 +437,8 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .panelCard .assumeFields input { width: 56px; margin-left: auto; }
 #panelList { display: flex; flex-direction: column; gap: 8px; }
 #panelTotals { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+#suitLegend .stale { opacity: 0.55; }
+#panelTotals.stale, #panelRows .stale { opacity: 0.65; }
 #panelRows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 #panel #panelRows button { display: flex; justify-content: space-between; gap: 8px; width: 100%; font-size: var(--text-sm); text-align: left; font-variant-numeric: tabular-nums; }
 #panel #panelRows button[aria-pressed='true'], #panel #panelRows button[aria-pressed='true']:hover { background: var(--text); border-color: var(--text); color: var(--surface); }
@@ -534,6 +537,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
     scroll-behavior: auto !important;
   }
 }
+#app canvas:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
 /* The height ruler in 3D: a thin vertical track with a tick per floor, standing at a roof corner; the handle sits at the roof. */
 #heightRuler { position: fixed; z-index: 10; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 #heightRuler .hrTrack { position: absolute; left: -1px; width: 2px; background: var(--accent-strong); opacity: 0.75; border-radius: 1px; }
@@ -575,6 +579,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
     font-size: var(--text-xs); color: var(--muted); background: transparent; border: 0; border-radius: 14px 14px 0 0;
   }
   #panel #sheetGrip:hover:not(:disabled), #panel #sheetGrip:active:not(:disabled) { background: transparent; color: var(--text); }
+  /* The label stays "Options" whatever is folded; the chevron says which way the sheet goes. */
+  #sheetGrip .gripLabel::after { content: ''; display: inline-block; width: 5px; height: 5px; margin-left: 6px; border: solid currentColor; border-width: 1.5px 0 0 1.5px; transform: translateY(-1px) rotate(45deg); }
+  #sheetGrip[aria-expanded='true'] .gripLabel::after { transform: translateY(-3px) rotate(225deg); }
   #sheetGrip .gripBar { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
   #panel #sheetGrip:hover .gripBar { background: var(--accent-strong); }
   #panel #views { order: -1; flex: none; }
@@ -594,6 +601,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   #timeBar #play { min-width: 64px; }
   #timeBar .timeTrack { height: 36px; }
   .dayStrip { left: 12px; right: 12px; top: 15px; }
+  .sunBand { left: 12px; right: 12px; top: 24px; }
   .timeRange, .timeRange::-webkit-slider-runnable-track { height: 36px; }
   .timeRange::-moz-range-track { height: 36px; }
   .timeRange::-webkit-slider-thumb { width: 24px; height: 32px; }

@@ -8,7 +8,7 @@ import { buildBvh, collectOccluders } from './sunmap-trace'
 import { defaultPlan } from './plan'
 import {
   GROUND_MARGIN, GROUND_REACH, IRRADIATION_STRIDE, SUITABILITY_SLOT_MINUTES, facadeSamples, groundSamples, panelFor, rayInputs, roofSamples,
-  rampScale, rangeText, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
+  percentile, rampScale, rangeText, suitabilityColor, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
 } from './suitability'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -183,7 +183,27 @@ describe('place a panel preset', () => {
 
 describe('legend and popover text', () => {
   it('stretches the scale to the spots found, on round ticks', () => {
-    expect(rampScale([650, 1010, 1390])).toEqual({ min: 650, max: 1400, ticks: [750, 1000, 1250], observed: [650, 1390] })
+    expect(rampScale([650, 1010, 1390])).toEqual({ min: 650, max: 1400, ticks: [750, 1000, 1250], observed: [650, 1390], clamped: false })
+  })
+
+  it('stretches over the 5th to 95th percentile, so a few extreme spots do not wash the rest out', () => {
+    // 100 spots between 1000 and 1099, plus one shaded at 100 and one skylight at 2000.
+    const spots = [...Array.from({ length: 100 }, (_, i) => 1000 + i), 100, 2000]
+    const r = rampScale(spots)
+    expect(r).toMatchObject({ min: 1000, max: 1100, observed: [100, 2000], clamped: true })
+  })
+
+  it('computes percentiles by interpolation', () => {
+    expect(percentile([10, 20, 30, 40, 50], 0)).toBe(10)
+    expect(percentile([10, 20, 30, 40, 50], 0.5)).toBe(30)
+    expect(percentile([10, 20, 30, 40, 50], 0.9)).toBe(46)
+    expect(percentile([7], 0.95)).toBe(7)
+    expect(percentile([], 0.5)).toBe(0)
+  })
+
+  it('clamps the colour of a spot beyond the ramp to its end colour', () => {
+    expect(suitabilityColor(5000, 1000, 1100)).toEqual(suitabilityColor(1100, 1000, 1100))
+    expect(suitabilityColor(0, 1000, 1100)).toEqual(suitabilityColor(1000, 1000, 1100))
   })
 
   it('keeps a tight range tight and thins the ticks over a wide one', () => {
@@ -192,11 +212,11 @@ describe('legend and popover text', () => {
     expect(tight.max).toBe(1350)
     expect(tight.ticks).toEqual([1250, 1300, 1350])
     const wide = rampScale([80, 1900])
-    expect(wide).toMatchObject({ min: 50, max: 1900, ticks: [500, 1000, 1500] })
+    expect(wide).toMatchObject({ min: 150, max: 1850, ticks: [500, 1000, 1500] })
     expect(rampScale([700, 700])).toMatchObject({ min: 700, max: 750 })
     expect(rampScale([]).ticks.length).toBeGreaterThan(1)
     // The Milan example: shaded ground and facade at 183, open roofs at 1,394.
-    expect(rampScale([183, 940, 1394])).toMatchObject({ min: 150, max: 1400, ticks: [250, 500, 750, 1000, 1250] })
+    expect(rampScale([183, 940, 1394])).toMatchObject({ min: 250, max: 1350, ticks: [250, 500, 750, 1000, 1250], observed: [183, 1394] })
   })
 
   it('writes the observed range for the legend', () => {

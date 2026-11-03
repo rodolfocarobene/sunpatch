@@ -21,6 +21,8 @@
 .editor-fields { display: flex; flex-direction: column; gap: 6px; }
 .editor-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .editor-row[hidden] { display: none; }
+.editor-scroll, .editor-toprow { display: contents; }
+.editor-box .editor-more, .editor-box .short { display: none; }
 /* Reserved height: the row holds a note or the fix choice and must not change the box height. */
 .editor-options { min-height: 26px; gap: 8px; }
 .editor-box button { padding: 3px 8px; display: inline-flex; align-items: center; gap: 6px; }
@@ -53,6 +55,24 @@
   .editor-side { top: 8px; left: 8px; right: 8px; width: auto; max-height: 30vh; max-height: 30dvh; }
   .editor-box .key { display: none; }
   .editor-box button { min-height: 32px; }
+  /* One row of short tool buttons that scrolls sideways; Floor and File wait behind the last button. */
+  .editor-toolbar { gap: 6px; }
+  .editor-toolbar > .editor-cluster:first-child > h3 { display: none; }
+  .editor-toprow { display: flex; align-items: center; gap: 4px; }
+  .editor-scroll {
+    display: flex; flex: 1; min-width: 0; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-right: 20px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .editor-scroll .editor-row { display: contents; }
+  .editor-scroll button { flex: none; white-space: nowrap; }
+  .editor-box .editor-more { display: inline-flex; flex: none; }
+  .editor-box .editor-more::after { content: ''; width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translateY(-2px); }
+  .editor-box .editor-more[aria-expanded='true']::after { transform: rotate(-135deg); }
+  .editor-box .long { display: none; }
+  .editor-box .short { display: inline; }
+  .editor-toolbar:not([data-more='open']) > .editor-cluster:not(:first-child) { display: none; }
+  .editor-toolbar[data-more='open'] > .editor-cluster:first-child { padding-bottom: 0; }
+  .editor-side:has(.editor-toolbar[data-more='open']) { max-height: 45vh; max-height: 45dvh; }
   .editor-status { left: 8px; right: 8px; bottom: calc(var(--sheet-h, 0px) + 8px); }
   .editor-status span { max-width: none; }
 }

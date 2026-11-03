@@ -9,8 +9,10 @@ import { createPanelShadeJob, shadeKey, type PanelShadeRequest } from './panel-s
 export interface PanelTotals {
   /** Starts or restarts the analysis of `panels`; `onChange` fires as results arrive. */
   update(base: Omit<PanelShadeRequest, 'panel'>, panels: Panel[]): void
-  /** Shades of the panels analysed so far, by panel id. */
+  /** Shades of the panels analysed so far, by panel id; a panel being re-analysed keeps its last shade until the new one arrives (see `fresh`). */
   shades(): Map<string, PanelShade>
+  /** True when the shade of this panel is the answer for the scene as it is now. */
+  fresh(id: string): boolean
   /** True while panels are still waiting for their analysis. */
   busy(): boolean
   dispose(): void
@@ -19,6 +21,8 @@ export interface PanelTotals {
 export function createPanelTotals(onChange: () => void): PanelTotals {
   const job = createPanelShadeJob()
   let done = new Map<string, { key: string; shade: PanelShade }>()
+  /** The last answer per panel, kept while a new one is worked out, so the list does not go blank. */
+  const last = new Map<string, PanelShade>()
   let queue: { panel: Panel; base: Omit<PanelShadeRequest, 'panel'> }[] = []
   let current: { id: string; key: string } | undefined
 
@@ -37,6 +41,7 @@ export function createPanelTotals(onChange: () => void): PanelTotals {
   job.onState((state) => {
     if (state.status === 'ready' && current && state.key === current.key) {
       done.set(current.id, { key: current.key, shade: state.shade })
+      last.set(current.id, state.shade)
       onChange()
       next()
     } else if (state.status === 'error') {
@@ -57,6 +62,7 @@ export function createPanelTotals(onChange: () => void): PanelTotals {
         else queue.push({ panel, base })
       }
       done = keep
+      for (const id of [...last.keys()]) if (!panels.some((p) => p.id === id)) last.delete(id)
       job.stop()
       if (queue.length) next()
       else {
@@ -64,7 +70,8 @@ export function createPanelTotals(onChange: () => void): PanelTotals {
         onChange()
       }
     },
-    shades: () => new Map([...done].map(([id, v]) => [id, v.shade])),
+    shades: () => new Map([...last, ...[...done].map(([id, v]) => [id, v.shade] as const)]),
+    fresh: (id) => done.has(id),
     busy: () => queue.length > 0 || current !== undefined,
     dispose: () => job.dispose(),
   }

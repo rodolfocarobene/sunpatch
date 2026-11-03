@@ -15,6 +15,8 @@ export interface DayHeadline {
   minutes: number
   /** Stretches to show (at most two, in clock order; the longest when there are more). */
   shown: Interval[]
+  /** Every stretch of the day with sun, in clock order (the time slider's band). */
+  runs: Interval[]
   /** True when there were more stretches than are shown. */
   more: boolean
   /** Start of the slot in which the most floor is lit (middle of a tie), minutes of the day. */
@@ -40,7 +42,7 @@ export function dayHeadline(result: Pick<SunMapResult, 'lit' | 'starts'> & { gri
   let max = 0
   for (const c of counts) max = Math.max(max, c)
   const best = max > 0 ? result.starts.filter((_, i) => counts[i] === max) : []
-  return { minutes, shown: top, more: runs.length > top.length, peak: best.length ? best[Math.floor(best.length / 2)] : undefined }
+  return { minutes, runs, shown: top, more: runs.length > top.length, peak: best.length ? best[Math.floor(best.length / 2)] : undefined }
 }
 
 /** Wall-clock text of a minute of the day, through the locale's time format. */
@@ -48,13 +50,41 @@ export const timeText = (minutes: number) => fmtTime(new Date(2001, 0, 1, 0, Mat
 
 export const rangeText = (r: Interval) => `${timeText(r.from)}\u2013${timeText(r.to)}`
 
-/** The sentence and its quiet detail for a day: "Sun inside on 21 Dec: 10:40–14:20 · 3 h 40 min". */
-export function headlineText(h: DayHeadline, day: Date): { text: string; detail: string } {
+/** When the sun next comes inside after `now` (minutes of the day); undefined when it is inside now or never comes back. */
+export function nextSunAfter(runs: Interval[], now: number): number | undefined {
+  if (runs.some((r) => r.from <= now && now < r.to)) return undefined
+  return runs.find((r) => r.from > now)?.from
+}
+
+/** True when `now` is outside every stretch of sun. */
+export const sunIsOut = (runs: Interval[], now: number) => !runs.some((r) => r.from <= now && now < r.to)
+
+/** CSS background for the thin band on the time slider: the stretches of sun inside, clear elsewhere. `max` is the slider's last minute. */
+export function sunBandGradient(runs: Interval[], max: number): string {
+  if (!runs.length) return ''
+  const pct = (m: number) => `${+(Math.min(1, Math.max(0, m / max)) * 100).toFixed(2)}%`
+  const stops: string[] = []
+  let at = 0
+  for (const r of runs) {
+    stops.push(`transparent ${pct(at)} ${pct(r.from)}`, `var(--accent-strong) ${pct(r.from)} ${pct(r.to)}`)
+    at = r.to
+  }
+  stops.push(`transparent ${pct(at)} 100%`)
+  return `linear-gradient(to right, ${stops.join(', ')})`
+}
+
+const nextSunText = (runs: Interval[], now: number) => {
+  const next = nextSunAfter(runs, now)
+  return next === undefined ? t('sun.headNoMore') : t('sun.headNext', { time: timeText(next) })
+}
+
+/** The sentence and its quiet detail for a day: "Sun inside on 21 Dec: 10:40–14:20 · 3 h 40 min". With `now` (minutes of the day) outside every stretch, the detail says when the sun next comes in. */
+export function headlineText(h: DayHeadline, day: Date, now?: number): { text: string; detail: string } {
   const label = dayLabel(day.getMonth(), day.getDate())
   if (h.minutes === 0) return { text: t('sun.headNone', { day: label }), detail: t('sun.headNoneHint') }
   const ranges = h.shown.map(rangeText).join(', ') + (h.more ? ', \u2026' : '')
   return {
     text: t('sun.headSun', { day: label, ranges, duration: duration(h.minutes) }),
-    detail: h.peak === undefined ? '' : t('sun.headPeak', { time: timeText(h.peak) }),
+    detail: now !== undefined && sunIsOut(h.runs, now) ? nextSunText(h.runs, now) : h.peak === undefined ? '' : t('sun.headPeak', { time: timeText(h.peak) }),
   }
 }

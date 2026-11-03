@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { dayHeadline, headlineText, rangeText } from './headline'
+import { dayHeadline, headlineText, nextSunAfter, rangeText, sunBandGradient } from './headline'
 import { useLang } from './i18n'
 
 afterEach(() => useLang('en'))
@@ -65,5 +65,37 @@ describe('headlineText', () => {
     const { text, detail } = headlineText(dayHeadline(result([slots(0, 0, 12)])), day)
     expect(text).toBe('No direct sun inside on 21 Dec')
     expect(detail).not.toBe('')
+  })
+})
+
+describe('next sun and the slider band', () => {
+  // 10:40-11:30 and 14:00-15:00
+  const runs = [{ from: 640, to: 690 }, { from: 840, to: 900 }]
+  it('finds the next stretch, nothing when inside or after the last', () => {
+    expect(nextSunAfter(runs, 500)).toBe(640)
+    expect(nextSunAfter(runs, 700)).toBe(840)
+    expect(nextSunAfter(runs, 650)).toBeUndefined()
+    expect(nextSunAfter(runs, 900)).toBeUndefined()
+    expect(nextSunAfter([], 100)).toBeUndefined()
+  })
+  it('keeps every stretch in runs, not just the two shown', () => {
+    const row = slots(0, 4, 60).map((v, i) => v || (i >= 10 && i < 14 ? 1 : 0) || (i >= 20 && i < 24 ? 1 : 0))
+    const h = dayHeadline(result([row]))
+    expect(h.runs).toHaveLength(3)
+    expect(h.shown).toHaveLength(2)
+  })
+  it('says when the sun comes in, or that there is no more, outside the stretches', () => {
+    const h = { minutes: 110, runs, shown: runs, more: false, peak: 660 }
+    expect(headlineText(h, day, 12 * 60 + 30).detail).toBe('Sun comes in at 14:00')
+    expect(headlineText(h, day, 16 * 60).detail).toBe('No more sun inside today')
+    expect(headlineText(h, day, 650).detail).toBe('Most of the floor is lit around 11:00.')
+    expect(headlineText(h, day).detail).toBe('Most of the floor is lit around 11:00.')
+    useLang('it')
+    expect(headlineText(h, day, 12 * 60 + 30).detail).toBe('Il sole entra alle 14:00')
+  })
+  it('draws the band with hard stops over the slider range', () => {
+    expect(sunBandGradient([], 1435)).toBe('')
+    const g = sunBandGradient([{ from: 718, to: 1076 }], 1435)
+    expect(g).toBe('linear-gradient(to right, transparent 0% 50.03%, var(--accent-strong) 50.03% 74.98%, transparent 74.98% 100%)')
   })
 })
