@@ -231,7 +231,7 @@ export const sunGradient = () => `linear-gradient(to right, ${SUN_STOPS.map(([t,
  * RGBA texels (one per grid cell, row 0 = smallest z) of the sun map. Cells that are not floor take the colour of
  * the nearest floor cell, so a smoothly filtered texture does not fade out at the walls.
  */
-export function heatTexels(grid: Grid, minutes: Float32Array): Uint8Array {
+export function heatTexels(grid: Grid, minutes: Float32Array, colour: (v: number) => [number, number, number] = sunColor): Uint8Array {
   const { cols, rows, index } = grid
   const source = new Int32Array(cols * rows).fill(-1)
   let frontier: number[] = []
@@ -261,7 +261,7 @@ export function heatTexels(grid: Grid, minutes: Float32Array): Uint8Array {
   const out = new Uint8Array(cols * rows * 4)
   for (let k = 0; k < source.length; k++) {
     if (source[k] < 0) continue // no floor at all
-    const [r, g, b] = sunColor(minutes[source[k]])
+    const [r, g, b] = colour(minutes[source[k]])
     out.set([r, g, b, 255], k * 4)
   }
   return out

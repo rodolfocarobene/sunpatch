@@ -99,6 +99,12 @@ const HOVER_EDGE_OPACITY = 0.9
 const APARTMENT_SHADOW_MAP = 2048
 // Sun map overlay: a hair above the floor (the floor slab's top is the floor height), see-through enough that the
 // live sun patches still show faintly, and fainter again in first person where it would hide them.
+/** What the floor overlay shows: one value per grid sample and the colour of a value (the sun map's ramp when absent). */
+export interface SunMapPaint {
+  grid: Grid
+  minutes: Float32Array
+  colour?: (v: number) => [number, number, number]
+}
 const SUNMAP_LIFT = 0.012
 const SUNMAP_OPACITY = 0.8
 const SUNMAP_WALK_OPACITY = 0.55
@@ -202,7 +208,7 @@ export interface SunScene {
   /** Called after the scene content changed; the sun map is stale then. */
   onSceneChange(handler: () => void): void
   /** Paints the sun map on the apartment floor; null removes it. */
-  setSunMap(map: { grid: Grid; minutes: Float32Array } | null): void
+  setSunMap(map: SunMapPaint | null): void
   /** Shows or hides the painted sun map (also in first person). */
   setSunMapVisible(on: boolean): void
   /** Paints the panel suitability map: one quad per sample, coloured by `colors` (sRGB 0..1, three numbers each); null removes it. */
@@ -470,7 +476,7 @@ export function createScene(container: HTMLElement): SunScene {
   let version = 0
   let sceneChange: (() => void) | undefined
   let sunMapOn = false
-  let sunMapData: { grid: Grid; minutes: Float32Array } | null = null
+  let sunMapData: SunMapPaint | null = null
   let overlay: Mesh | undefined
   let probe: { x: number; z: number } | null = null
   let probeMark: Group | undefined
@@ -634,8 +640,8 @@ export function createScene(container: HTMLElement): SunScene {
       overlay = undefined
     }
     if (!sunMapData || !plan || !selectedBuilding) return
-    const { grid, minutes } = sunMapData
-    const texture = new DataTexture(heatTexels(grid, minutes), grid.cols, grid.rows, RGBAFormat)
+    const { grid, minutes, colour } = sunMapData
+    const texture = new DataTexture(heatTexels(grid, minutes, colour), grid.cols, grid.rows, RGBAFormat)
     texture.colorSpace = SRGBColorSpace
     texture.magFilter = texture.minFilter = LinearFilter
     texture.generateMipmaps = false

@@ -67,7 +67,12 @@ import { CELL, sampleAt, sampleMinutes, spotStats, type SunMapResult } from './s
 import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
-import { fmtMonth, onBeforeLangSwitch, t } from './i18n'
+import { fmt1Fixed, fmtMonth, onBeforeLangSwitch, t, upFirst } from './i18n'
+import { facadeWalls } from './apartment'
+import { bandOf, daylightColor, summarize } from './dayfactor'
+import { glassTriangles } from './dayfactor-trace'
+import { createDaylightJob, type DaylightResult } from './dayfactor-job'
+import { bandWord } from './ui'
 import { touchOnly } from './touch'
 import { saveSession, takeSession } from './session'
 import { decodeShare, encodeShare, shareUrl } from './share'
@@ -84,6 +89,7 @@ const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
+const daylightJob = createDaylightJob()
 // "Through the year" under the headline: worked out (in a worker of its own) only while its disclosure is open.
 const yearJob = createYearJob()
 const yearCard = createYearCard(document.getElementById('yearSlot')!)
@@ -131,6 +137,8 @@ sceneCanvas.addEventListener('keydown', (e) => {
 })
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false
+let daylightOn = false
+let daylightResult: DaylightResult | undefined
 let sunResult: SunMapResult | undefined
 const HEADLINE_CELL = 0.5
 /** Sample spacing of the request behind `sunResult`; the painted map needs the fine grid. */
@@ -793,6 +801,7 @@ ui.onSuitability((on) => {
   sunScene.setSuitabilityVisible(on)
   if (on) {
     if (sunMapOn) ui.setSunMap(false) // both paint on the same surfaces; one at a time
+    if (daylightOn) ui.setDaylight(false)
     scheduleSuitability()
   } else {
     suitJob.stop()
@@ -849,9 +858,62 @@ sunJob.onState((state) => {
     if (sunMapOn) ui.setSunMapStatus({ kind: 'error', message: state.message })
   }
 })
+/** The estimate is its own layer on the sun map's floor overlay: asked after the synchronous changes of a pick are done. */
+function requestDaylight() {
+  if (!daylightOn || !site || !plan) return
+  const { selected } = site
+  const p = plan
+  daylightJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan: p,
+    floorY: floorBase(selected, p),
+    occluders: () => sunScene.occluders(),
+    glass: () => glassTriangles(facadeWalls(p, selected).glass),
+  })
+}
+
+function showDaylightProbe() {
+  if (!daylightResult || !probePoint) return
+  const sample = sampleAt(daylightResult.grid, probePoint.x, probePoint.z)
+  if (sample === undefined) return closeProbe()
+  const df = daylightResult.df[sample]
+  popover.showText(t('sun.dayHeadSpot', { df: fmt1Fixed(df) }), t('sun.daySpotDetail', { band: upFirst(bandWord(bandOf(df))) }), t('sun.dayAria'))
+}
+
+daylightJob.onState((state) => {
+  if (!daylightOn) return
+  if (state.status === 'running') {
+    daylightResult = undefined
+    sunScene.setSunMap(null)
+    if (popover.open) closeProbe()
+    ui.setDaylightStatus({ kind: 'computing', progress: state.progress })
+  } else if (state.status === 'ready') {
+    daylightResult = state.result
+    sunScene.setSunMap({ grid: state.result.grid, minutes: state.result.df, colour: daylightColor })
+    const { mean, dimShare } = summarize(state.result.df)
+    ui.setDaylightStatus({ kind: 'ready', mean, dimShare })
+    showDaylightProbe()
+  } else if (state.status === 'error') ui.setDaylightStatus({ kind: 'error', message: state.message })
+})
+ui.onDaylight((on) => {
+  daylightOn = on
+  if (on) {
+    if (sunMapOn) ui.setSunMap(false) // both paint on the same floor overlay; one at a time
+    if (suitOn) ui.setSuitability(false)
+    sunScene.setSunMapVisible(true)
+    requestDaylight()
+  } else {
+    daylightJob.stop()
+    daylightResult = undefined
+    closeProbe()
+    sunScene.setSunMap(null)
+    sunScene.setSunMapVisible(sunMapOn)
+  }
+})
 ui.onSunMap((on) => {
   sunMapOn = on
   if (on && suitOn) ui.setSuitability(false)
+  if (on && daylightOn) ui.setDaylight(false)
   sunScene.setSunMapVisible(on)
   if (on) {
     if (sunResult && tracedCell <= CELL) {
@@ -883,6 +945,7 @@ sunScene.onSceneChange(() => {
   sunResult = undefined
   closeProbe()
   scheduleSunMap()
+  requestDaylight()
   if (suitOn) {
     // The map belongs to the scene it was traced in: a new building or plan clears it (a panel placed from it keeps it until the update arrives).
     closeSuitPick()
@@ -897,6 +960,10 @@ sunScene.onFloorClick((at) => {
   if (!at) return closeProbe()
   probePoint = at
   sunScene.setProbe(at)
+  if (daylightOn) {
+    showDaylightProbe()
+    return
+  }
   // Walking, a click is a question about the sun map: it turns the map on, and the answer comes when it is ready.
   if (!sunMapOn) ui.setSunMap(true)
   const inGrid = sunResult !== undefined && sampleAt(sunResult.grid, at.x, at.z) !== undefined

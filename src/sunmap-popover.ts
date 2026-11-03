@@ -16,6 +16,8 @@ export function spotSentence(stats: SpotStats): { headline: string; share: strin
 export interface SunMapPopover {
   /** Shows the answer for a spot. `strip` is the CSS background of the day strip (the time slider's). */
   show(stats: SpotStats, strip: string, minutesNow: number): void
+  /** Shows two lines of text with no day strip (the daylight estimate has no time of day). */
+  showText(headline: string, text: string, aria: string): void
   /** Follows the marked point on screen; hidden while it is out of view. */
   moveTo(at: { x: number; y: number; visible: boolean } | null): void
   /** The time slider moved: the "now" tick follows. */
@@ -51,6 +53,8 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
   const strip = box.querySelector<HTMLElement>('.dayStrip')!
   const sun = box.querySelector<HTMLElement>('.spotSun')!
   const now = box.querySelector<HTMLElement>('.spotNow')!
+  const strips = box.querySelectorAll<HTMLElement>('.spotTrack, .spotAxis')
+  const showStrips = (on: boolean) => strips.forEach((el) => (el.hidden = !on))
   let isOpen = false
 
   const close = () => {
@@ -74,6 +78,8 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
   return {
     show(stats, background, minutesNow) {
       const { headline, share, intervals } = spotSentence(stats)
+      showStrips(true)
+      box.setAttribute('aria-label', t('sun.spotAria'))
       head.textContent = headline
       // Each interval stays on one line; they wrap between each other.
       detail.replaceChildren(
@@ -97,6 +103,15 @@ export function createSunMapPopover(container: HTMLElement, onClose: () => void)
       place(minutesNow)
       isOpen = true
       // Hidden until the scene reports where the point is on screen (next frame).
+      box.style.visibility = 'hidden'
+      box.hidden = false
+    },
+    showText(headline, text, aria) {
+      head.textContent = headline
+      detail.textContent = text
+      showStrips(false)
+      box.setAttribute('aria-label', aria)
+      isOpen = true
       box.style.visibility = 'hidden'
       box.hidden = false
     },

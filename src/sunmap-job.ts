@@ -80,7 +80,7 @@ export function createSunMapJob(): SunMapJob {
 
   function onWorker(m: WorkerOut) {
     if (!running || m.id !== running.id) return
-    if (m.kind === 'shaded' || m.kind === 'suited' || m.kind === 'gardened' || m.kind === 'yeared') return // answers for the other jobs' own workers
+    if (m.kind === 'shaded' || m.kind === 'suited' || m.kind === 'gardened' || m.kind === 'yeared' || m.kind === 'daylit') return // answers for the other jobs' own workers
     if (m.kind === 'progress') {
       emit({ status: 'computing', progress: m.done })
       return
