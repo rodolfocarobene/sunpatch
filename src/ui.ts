@@ -7,7 +7,7 @@ import type { SunDirection } from './sun'
 import { activePreset, dateValue, dayLabel, daylight, snapMinutes, nextPlayMinute, presetDates, startMinutes, stripGradient, STEP, DAY_MAX, type Daylight } from './daylight'
 import { compassName, sunDirection } from './sun'
 import type { NextStep } from './next-step'
-import { headlineText, type DayHeadline } from './headline'
+import { headlineText, sunBandGradient, type DayHeadline } from './headline'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
 import { rangeText } from './suitability'
@@ -241,6 +241,7 @@ export function createUI(
       <div class="barRow">
         <div class="timeTrack">
           <div id="dayStrip" class="dayStrip" aria-hidden="true"></div>
+          <div id="sunBand" class="sunBand" aria-hidden="true"></div>
           <input id="time" class="timeRange" type="range" min="0" max="${DAY_MAX}" step="${STEP}" aria-label="${t('sun.time')}" value="${startMinutes(now, MILAN.lat, MILAN.lon)}">
         </div>
         <span id="timeLabel" title="${t('sun.tzTitle')}"></span>
@@ -268,6 +269,7 @@ export function createUI(
   const summary = $('sunSummary')
   const presetBox = $('presets')
   const strip = $('dayStrip')
+  const sunBand = $('sunBand')
   presetBox.addEventListener('click', (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-date]')
     if (!chip) return
@@ -321,6 +323,32 @@ export function createUI(
   const sunMap = $<HTMLInputElement>('sunMap')
   const legend = $('sunMapLegend')
   const headline = $('sunHeadline')
+  let headlineStatus: HeadlineStatus | null = null
+  /** Paints the headline and the sun band on the time slider; runs again when the time moves, as the detail line follows it. */
+  function renderHeadline() {
+    const status = headlineStatus
+    headline.hidden = status === null
+    sunBand.style.background = status?.kind === 'ready' ? sunBandGradient(status.headline.runs, DAY_MAX) : ''
+    if (!status) return headline.replaceChildren()
+    if (status.kind === 'noWindows') {
+      const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
+      toPlan.addEventListener('click', () => onView('plan'))
+      headline.replaceChildren(t('sun.headNoWindowsBefore'), toPlan, t('sun.headNoWindowsAfter'))
+      headline.className = 'quiet'
+    } else if (status.kind === 'working') {
+      headline.replaceChildren(t('sun.headWorking'))
+      headline.className = 'quiet'
+    } else if (status.kind === 'error') {
+      headline.replaceChildren(t('sun.mapError'))
+      headline.className = 'quiet'
+    } else {
+      const { text, detail } = headlineText(status.headline, status.day, Number(time.value))
+      const parts = [Object.assign(document.createElement('strong'), { textContent: text })]
+      if (detail) parts.push(Object.assign(document.createElement('span'), { textContent: detail }))
+      headline.replaceChildren(...parts)
+      headline.className = ''
+    }
+  }
   let sunMapListener: ((on: boolean) => void) | undefined
   const applySunMap = () => {
     legend.hidden = !sunMap.checked
@@ -452,6 +480,11 @@ export function createUI(
     const sun = sunDirection(when, la, lo)
     onSun(sun)
     listener?.(when, sun, strip.style.background, { lat: la, lon: lo })
+    if (headlineStatus?.kind === 'ready') {
+      // The detail line follows the time; another date's band waits for its own answer.
+      if (dateValue(headlineStatus.day) === date.value) renderHeadline()
+      else sunBand.style.background = ''
+    }
     const times = SunCalc.getTimes(new Date(when.getFullYear(), when.getMonth(), when.getDate(), 12), la, lo)
     const rise = fmtTime(times.sunrise)
     const set = fmtTime(times.sunset)
@@ -628,26 +661,8 @@ export function createUI(
       applySunMap()
     },
     setHeadline(status) {
-      headline.hidden = status === null
-      if (!status) return headline.replaceChildren()
-      if (status.kind === 'noWindows') {
-        const toPlan = Object.assign(document.createElement('button'), { type: 'button', className: 'link', textContent: t('shell.tabPlan') })
-        toPlan.addEventListener('click', () => onView('plan'))
-        headline.replaceChildren(t('sun.headNoWindowsBefore'), toPlan, t('sun.headNoWindowsAfter'))
-        headline.className = 'quiet'
-      } else if (status.kind === 'working') {
-        headline.replaceChildren(t('sun.headWorking'))
-        headline.className = 'quiet'
-      } else if (status.kind === 'error') {
-        headline.replaceChildren(t('sun.mapError'))
-        headline.className = 'quiet'
-      } else {
-        const { text, detail } = headlineText(status.headline, status.day)
-        const parts = [Object.assign(document.createElement('strong'), { textContent: text })]
-        if (detail) parts.push(Object.assign(document.createElement('span'), { textContent: detail }))
-        headline.replaceChildren(...parts)
-        headline.className = ''
-      }
+      headlineStatus = status
+      renderHeadline()
     },
     setSunMapStatus(status) {
       legend.innerHTML = legendHtml(status)
