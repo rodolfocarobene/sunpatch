@@ -662,11 +662,11 @@ function paintSuitability() {
   const { samples, irradiation } = suitResult
   suitEnergy = samples.map((_, i) => surfaceEnergy(irradiation, i * IRRADIATION_STRIDE, assumptions, climate?.clearness))
   const figures = suitEnergy.map((e) => e.weather ?? e.ideal)
-  const { min, max, ticks, observed } = rampScale(figures)
+  const { min, max, ticks, observed, clamped } = rampScale(figures)
   const colors = new Float32Array(samples.length * 3)
   figures.forEach((v, i) => colors.set(suitabilityColor(v, min, max), i * 3))
   sunScene.setSuitability({ samples, colors })
-  ui.setSuitabilityStatus({ kind: 'ready', min, max, ticks, observed, weather: climate !== undefined, count: samples.length })
+  ui.setSuitabilityStatus({ kind: 'ready', min, max, ticks, observed, clamped, weather: climate !== undefined, count: samples.length })
   if (suitPicked !== null) showSuitPick()
 }
 

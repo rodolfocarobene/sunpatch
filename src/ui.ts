@@ -39,7 +39,7 @@ export type HeadlineStatus =
 
 export type SuitabilityStatus =
   | { kind: 'computing'; progress: number; updating?: boolean }
-  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; weather: boolean; count: number }
+  | { kind: 'ready'; min: number; max: number; ticks: number[]; observed: [number, number]; clamped: boolean; weather: boolean; count: number }
   | { kind: 'error'; message: string }
 
 export interface PanelList {
@@ -785,7 +785,7 @@ function suitabilityLegendHtml(status: SuitabilityStatus): string {
     `<div class="legendBar" style="background:${sunGradient()}"></div>` +
     `<div class="legendTicks scaled">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
-    `<span class="legendHint">${t('sun.suitHint', { n: status.count })}</span>`
+    `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`
   )
 }
 

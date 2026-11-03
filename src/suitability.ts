@@ -265,33 +265,44 @@ export function panelFor(s: SurfaceSample, id: string): Panel {
   return { ...base, x: s.x, z: s.z, elevation: s.kind === 'roof' ? s.top : GROUND_ELEVATION, tilt: ROOF_TILT, azimuth: s.azimuth }
 }
 
+/** The value at fraction `q` (0..1) of the sorted figures, interpolating between neighbours. */
+export function percentile(sorted: ArrayLike<number>, q: number): number {
+  if (sorted.length === 0) return 0
+  const at = Math.min(1, Math.max(0, q)) * (sorted.length - 1)
+  const i = Math.floor(at)
+  return sorted[i] + (sorted[Math.min(sorted.length - 1, i + 1)] - sorted[i]) * (at - i)
+}
+
+/** The ramp covers this middle share of the spots; a few extreme ones (a skylight, a deep courtyard) must not wash the rest out. */
+export const RAMP_LOW = 0.05
+export const RAMP_HIGH = 0.95
+
 /**
- * The colour scale for these figures (kWh/kWp/yr), stretched to what the spots really make: it runs from the worst
- * spot to the best, each rounded outward to 50, instead of from 0 to a round top. `ticks` are the round values
- * inside it (every 50 to 500, by how wide it is) for the legend to label; `observed` is the exact range.
+ * The colour scale for these figures (kWh/kWp/yr), stretched to what most spots make: it runs from the 5th to the 95th
+ * percentile, each rounded outward to 50 (spots beyond take the end colours), instead of from 0 to a round top. `ticks`
+ * are the round values inside it (every 50 to 500, by how wide it is) for the legend to label; `observed` is the exact
+ * range of all spots, and `clamped` says some lie outside the ramp.
  */
-export function rampScale(values: ArrayLike<number>): { min: number; max: number; ticks: number[]; observed: [number, number] } {
-  let lo = Infinity
-  let hi = -Infinity
-  for (let i = 0; i < values.length; i++) {
-    lo = Math.min(lo, values[i])
-    hi = Math.max(hi, values[i])
-  }
-  if (!Number.isFinite(lo)) lo = hi = 0
+export function rampScale(values: ArrayLike<number>): { min: number; max: number; ticks: number[]; observed: [number, number]; clamped: boolean } {
+  const sorted = Float64Array.from(values).sort()
+  let lo = sorted.length ? sorted[0] : 0
+  let hi = sorted.length ? sorted[sorted.length - 1] : 0
   lo = Math.max(0, lo)
   hi = Math.max(lo, hi)
-  const min = Math.floor(lo / 50) * 50
-  const max = Math.max(Math.ceil(hi / 50) * 50, min + 50)
+  const low = Math.max(0, percentile(sorted, RAMP_LOW))
+  const high = Math.max(low, percentile(sorted, RAMP_HIGH))
+  const min = Math.floor(low / 50) * 50
+  const max = Math.max(Math.ceil(high / 50) * 50, min + 50)
   const span = max - min
   const step = span > 1500 ? 500 : span > 600 ? 250 : span > 250 ? 100 : 50
   const ticks: number[] = []
   for (let t = Math.ceil(min / step) * step; t <= max; t += step) ticks.push(t)
-  return { min, max, ticks, observed: [lo, hi] }
+  return { min, max, ticks, observed: [lo, hi], clamped: lo < min || hi > max }
 }
 
 /** sRGB (0..1) of the sun-map ramp for a figure: `min` kWh/kWp/yr is its dark end, `max` its light end. */
 export function suitabilityColor(kwh: number, min: number, max: number): [number, number, number] {
-  return sunColor(((Math.max(min, kwh) - min) / (max - min)) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
+  return sunColor(((Math.min(max, Math.max(min, kwh)) - min) / (max - min)) * FULL_SUN_MINUTES).map((c) => c / 255) as [number, number, number]
 }
 
 export const round10 = (n: number): string => fmtNumber(Math.round(n / 10) * 10)
