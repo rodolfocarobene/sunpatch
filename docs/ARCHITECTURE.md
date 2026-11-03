@@ -64,7 +64,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 | `garden-spots.ts`, `garden-trace.ts`, `garden-job.ts` | Gardener sun input: indoor, ground and roof spots, monthly direct-sun minutes per spot, the worker job. |
 | `garden-find.ts`, `garden-find-panel.ts` | The reverse direction: kind filtering, colour steps, per-kind counts, summary text, best spot (pure), and the "Find a place for" picker with legend. |
 | `garden-pick.ts`, `garden-text.ts`, `garden-card.ts` | The Garden tab: what a click means (floor, ground, roof or nothing), the card's words and month strips (pure), and the card itself. |
-| `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures, the worker job that runs it progressively, the click popover. |
+| `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures (shown per standard panel, 0.4 kW; per kW under Details), the worker job that runs it progressively, the click popover. |
 | `year.ts`, `year-job.ts`, `year-card.ts` | "Through the year" chart in the 3D tab: the 21st of each month, bar fractions, the summary sentence (pure); its own worker job (the `year` worker message traces 12 days on the 0.5 m headline grid, asking every 3rd 5-minute slot and the ones between only where the answer changes, `countSparse` in `sunmap-trace.ts`; only while the disclosure is open, cached per scene, floor, place and year, cancelled by a scene change); the disclosure with its bar buttons. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals. |
 

@@ -35,7 +35,7 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
   Figures come in two flavours: the ideal clear-sky energy and one weighted by the local weather
   ([NASA POWER](https://power.larc.nasa.gov/) climate averages).
 - **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
-  building, in kWh a year for each kW of panels, with local weather. Click a spot and place a panel there.
+  building, in kWh a year for one standard panel (400 W), with local weather. Click a spot and place a panel there.
 - **Garden**: click a spot (your apartment floor, a balcony, the ground or a roof) and see the direct sun it gets
   each month and which plants of a built-in catalogue of about 70 would grow there, month by month, with a reason
   for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
@@ -133,8 +133,8 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
 4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
    time do not matter here: everything is a year).
    - **Panel suitability**: off until you tick it (the Panels tab opens with a line saying so); tick it to colour the outside of the building and its surroundings by the yearly energy a
-   panel would make there, in kWh a year for each kW of panels. The colours stretch over the range found around your building, and the legend
-   gives that range, for example *650 … 1,400 kWh a year per kW*. The facade is sampled every metre (panels
+   panel would make there, in kWh a year for one standard panel (400 W; the per-kW figure is under Details). The colours stretch over the range found around your building, and the legend
+   gives that range, for example *Across these spots: 260 … 560 kWh a year*. The facade is sampled every metre (panels
    vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
    2 m grid; roofs and ground use a 30 degree stand facing south (north in the southern hemisphere). It takes a
    few seconds to a minute for a big building (a progress bar shows), runs only when ticked, and is kept for

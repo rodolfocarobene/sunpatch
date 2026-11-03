@@ -318,17 +318,37 @@ export function suitabilityGradient(): string {
   return `linear-gradient(to right, ${stops.join(', ')}, ${hex(SUIT_RAMP_TOP)} 100%)`
 }
 
+/**
+ * The "standard panel" the Panels tab speaks in: about 1.7 m2 at 400 Wp (the drawn default is 1.13 x 1.72 m, 0.41 kW).
+ * The model works per kW of panels, so a standard panel makes kWh/kW x 0.4; per-kW figures stay only in the Details.
+ */
+export const STANDARD_PANEL_KW = 0.4
+
 export const round10 = (n: number): string => fmtNumber(Math.round(n / 10) * 10)
 
-/** The legend's range line, "650\u20131,400 kWh a year per kW" (the true worst and best spot, not the rounded ticks). */
-export const rangeText = ([lo, hi]: [number, number]): string => t('panels.rangeLine', { lo: round10(lo), hi: round10(hi) })
+/** One standard panel's kWh a year from the per-kW figure. */
+export const perPanel = (kwhPerKw: number): number => kwhPerKw * STANDARD_PANEL_KW
+
+/** The legend's range line, "Across these spots: 260\u2013560 kWh a year" for one standard panel (the true worst and best spot). */
+export const rangeText = ([lo, hi]: [number, number]): string => t('panels.rangeLine', { lo: round10(perPanel(lo)), hi: round10(perPanel(hi)) })
+
+/** Round legend ticks for the ramp [min, max] (kWh/kW), in kWh a year of one standard panel: [{ value, at: 0..1 }]. */
+export function panelTicks(min: number, max: number): { value: number; at: number }[] {
+  const lo = perPanel(min)
+  const span = perPanel(max) - lo
+  const step = span > 600 ? 200 : span > 300 ? 100 : span > 120 ? 50 : 20
+  const out: { value: number; at: number }[] = []
+  for (let v = Math.ceil(lo / step) * step; v <= lo + span + 1e-9; v += step) out.push({ value: v, at: (v - lo) / span })
+  return out
+}
 
 /** The popover's lines, as in the sun map's: the answer first, then what the surface is and what the figure rests on. */
-export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { headline: string; detail: string } {
+export function suitabilityText(s: SurfaceSample, e: SurfaceEnergy): { headline: string; detail: string; more: string } {
   const loss = e.shadingShare > 0 && e.shadingShare < 0.005 ? '<1%' : `${fmtNumber(Math.round(e.shadingShare * 100))}%`
-  const basis = e.weather === undefined ? t('panels.suitBasisClear') : t('panels.suitBasisWeather', { ideal: round10(e.ideal) })
+  const basis = e.weather === undefined ? t('panels.suitBasisClear') : t('panels.suitBasisWeather', { ideal: round10(perPanel(e.ideal)) })
   return {
-    headline: t('panels.suitHead', { kwh: round10(e.weather ?? e.ideal) }),
+    headline: t('panels.suitHead', { kwh: round10(perPanel(e.weather ?? e.ideal)) }),
+    more: t('panels.suitPerKw', { kwh: round10(e.weather ?? e.ideal) }),
     detail: t('panels.suitDetail', { surface: surfaceLabel(s), basis, loss }),
   }
 }

@@ -658,3 +658,6 @@ input::placeholder { color: var(--muted); opacity: 1; }
 @media (pointer: coarse) and (not (any-pointer: fine)) {
   #panel #walk { display: none; }
 }
+#suitPopover .spotMore { font-size: 12px; color: var(--muted); }
+#suitPopover .spotMore summary { cursor: pointer; }
+#suitPopover .spotPerKw { display: block; margin-top: 2px; font-variant-numeric: tabular-nums; }

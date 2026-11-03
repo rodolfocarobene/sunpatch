@@ -11,7 +11,7 @@ import { headlineText, sunBandGradient, timeText, type DayHeadline } from './hea
 import type { Interval } from './sunmap'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
-import { rangeText, suitabilityGradient } from './suitability'
+import { panelTicks, rangeText, suitabilityGradient } from './suitability'
 import { buildingLine } from './building-line'
 import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
 
@@ -845,7 +845,7 @@ function legendHtml(status: SunMapStatus): string {
   )
 }
 
-/** The suitability legend: the ramp in kWh a year per kW of panels, and what the colours assume. */
+/** The suitability legend: the ramp in kWh a year of one standard panel, and what the colours assume. */
 function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number): string {
   if (status.kind === 'computing') {
     const pct = Math.round(status.progress * 100)
@@ -853,14 +853,13 @@ function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number):
     return `<span class="legendHead" role="status">${head}\u2026 ${pct}%</span><div class="legendBar busy" style="--progress:${pct}%"></div>`
   }
   if (status.kind === 'error') return `<span class="legendHead" role="alert">${status.message}</span>`
-  const at = (v: number) => (((v - status.min) / (status.max - status.min)) * 100).toFixed(1)
-  const tick = (v: number) => `<span style="left:${at(v)}%">${fmtNumber(v)}</span>`
+  const tick = (v: { value: number; at: number }) => `<span style="left:${(v.at * 100).toFixed(1)}%">${fmtNumber(v.value)}</span>`
   return (
     (updatingPct === undefined
       ? `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>`
       : `<span class="legendHead" role="status">${t('sun.suitUpdating')}\u2026 ${updatingPct}%</span>`) +
     `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${suitabilityGradient()}"></div>` +
-    `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${status.ticks.map(tick).join('')}</div>` +
+    `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${panelTicks(status.min, status.max).map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
     `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`
   )
