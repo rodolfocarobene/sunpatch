@@ -1,4 +1,4 @@
-import { fmtNumber, getLang, t, upFirst, type Key } from './i18n'
+import { fmt1, fmtNumber, getLang, t, upFirst, type Key } from './i18n'
 import { careLinks, creditText, loadPlantInfo, type Credit, type PlantInfo } from './plant-info'
 import { KIND_LABEL, type PlantRow } from './garden-text'
 import { plantName, sunClass, type Plant, type SunClass } from './plants'
@@ -24,6 +24,9 @@ export function plantFacts(plant: Plant): Fact[] {
   const facts: Fact[] = [
     { label: t('plant.factKind'), value: upFirst(t(KIND_LABEL[plant.kind])) },
     { label: t('plant.factSun'), value: t('plant.sunValue', { cls: t(SUN_LABEL[sunClass(plant)]), min: n(plant.sun.min), ideal: n(plant.sun.ideal) }) },
+    ...(plant.daylight
+      ? [{ label: t('plant.factLight'), value: t('plant.lightValue', { min: fmt1(plant.daylight.min), ideal: fmt1(plant.daylight.ideal) }) }]
+      : []),
     {
       label: t('plant.factTemp'),
       value: t('plant.tempValue', { min: n(plant.temp.min), max: n(plant.temp.max), lo: n(plant.temp.optLow), hi: n(plant.temp.optHigh), survive: n(plant.temp.survive) }),

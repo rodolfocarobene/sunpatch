@@ -13,7 +13,7 @@ import type { Climate } from './weather'
 export type GardenTrace =
   | { status: 'idle' }
   | { status: 'running'; progress: number }
-  | { status: 'done'; sunMinutes: number[] }
+  | { status: 'done'; sunMinutes: number[]; /** Indoor spots: the daylight factor in %, when measured. */ daylight?: number }
   | { status: 'error'; message: string }
 
 export interface GardenCardInput {
@@ -166,9 +166,9 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   }
 
   /** The spot's plants in two parts: the answer (lead, best rows, "Show all") shown first, and the poor ones kept after the strips. */
-  function plants(input: GardenCardInput, sunMinutes: number[]): { answer: HTMLElement; rest: HTMLElement } {
+  function plants(input: GardenCardInput, sunMinutes: number[], daylight?: number): { answer: HTMLElement; rest: HTMLElement } {
     const indoor = input.kind === 'indoor'
-    const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
+    const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
     const { fit, poor } = splitPlants(ranked)
     options.onRanked(ranked)
     const answer = el('div', 'gardenPlants gardenAnswer')
@@ -184,7 +184,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       ),
     )
     if (fit.length === 0) {
-      const rated = input.month === null ? ranked : rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!)
+      const rated = input.month === null ? ranked : rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!)
       const out = spotDeadEnd(rated, input.month)
       if (out) {
         const line = el('p', 'plantsNext', out.text)
@@ -298,7 +298,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         const indoor = input.kind === 'indoor'
         const ready = trace.status === 'done' && (indoor || (input.weather === 'ready' && input.climate !== undefined))
         options.onRanked(
-          ready ? rankPlants({ indoor, sunMinutes: trace.sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month }) : null,
+          ready ? rankPlants({ indoor, sunMinutes: trace.sunMinutes, daylight: trace.daylight }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month }) : null,
         )
         return
       }
@@ -320,7 +320,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       } else if (outdoor && (input.weather !== 'ready' || !input.climate)) {
         parts.push(...charts, busy(t('garden.loadingTemps')))
       } else {
-        const { answer, rest } = plants(input, trace.sunMinutes)
+        const { answer, rest } = plants(input, trace.sunMinutes, trace.daylight)
         parts.unshift(answer)
         if (outdoor) charts.push(tempChart(input.climate!, input.month))
         results.replaceChildren(rest)

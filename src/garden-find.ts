@@ -1,6 +1,6 @@
 import { POT_HEIGHT, type GardenSpot, type SpotKind, type SunnySpot } from './garden-spots'
 import { assess, type IssueKind, type Rating, type Temperatures } from './garden'
-import { fmtMonth, t, upFirst, type Key } from './i18n'
+import { fmt1, fmt1Fixed, fmtMonth, t, upFirst, type Key } from './i18n'
 import { plantName, type Plant } from './plants'
 import { hoursText, monthsText, whereText, type DeadEnd } from './garden-text'
 import type { PickedKind } from './garden-pick'
@@ -139,7 +139,7 @@ const list = (items: string[]): string => (items.length <= 1 ? items.join('') : 
  * Two plain sentences: where the plant grows best (good spots first, ok ones when none is good), and where it finds nowhere.
  * `centre` is the building's centre in scene metres, so spots can be named by direction.
  */
-export function findSummary(plantLabel: string, month: string | null, stats: KindStats[], centre: { x: number; z: number }): string {
+export function findSummary(plantLabel: string, month: string | null, stats: KindStats[], centre: { x: number; z: number }, indoorLight = false): string {
   const when = month === null ? '' : t('garden.inMonth', { month })
   if (stats.length === 0) return ''
   const withGood = stats.filter((s) => s.good > 0)
@@ -156,7 +156,8 @@ export function findSummary(plantLabel: string, month: string | null, stats: Kin
     return parts.join(' ')
   }
   // A kind with a clear reason gets its own sentence, so the reason cannot be read as belonging to the others.
-  const why = (s: KindStats) => (s.why ? WHY[s.why] : undefined)
+  // Indoors, a plant rated by daylight too is short of light, not only of direct sun.
+  const why = (s: KindStats) => (s.why === 'dark' && s.kind === 'indoor' && indoorLight ? t('garden.whyDarkLight') : s.why ? WHY[s.why] : undefined)
   const plain = none.filter((s) => !why(s))
   if (plain.length > 0) parts.push(t('garden.sumNowhere', { places: list(plain.map((s) => NOWHERE[s.kind])) }))
   for (const s of none.filter(why)) parts.push(t('garden.sumNowhereWhy', { place: NOWHERE[s.kind], reason: why(s)! }))
@@ -222,6 +223,11 @@ export function findDeadEnd(plant: Plant, month: number | null, counts: MonthCou
   let sunMax = 0
   let sunMonth = 0
   for (const s of spots) s.sunMinutes.forEach((m, i) => { if (m > sunMax) { sunMax = m; sunMonth = i } })
+  const lit = spots.filter((s) => s.daylight !== undefined)
+  if (why === 'dark' && plant.daylight && lit.length > 0) {
+    const best = Math.max(...lit.map((s) => s.daylight!))
+    return { text: t('garden.endBrightest', { df: fmt1Fixed(best), name, need: fmt1(plant.daylight.min) }) }
+  }
   if (why === 'dark' || (why === undefined && sunMax / 60 < plant.sun.min)) {
     return { text: t('garden.endSunniest', { sun: hoursText(sunMax), month: fmtMonth(sunMonth), name, need: hoursText(plant.sun.min * 60) }) }
   }

@@ -50,7 +50,7 @@ import { YEAR_DAY } from './year'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
-import { discSpots, gardenSpots, meanSun, roofSpots } from './garden-spots'
+import { discSpots, gardenSpots, meanDaylight, meanSun, roofSpots } from './garden-spots'
 import { insideOutline } from './walk-geom'
 import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
@@ -300,6 +300,7 @@ function requestFind(again = false) {
     slotMinutes: GARDEN_AREA_SLOT_MINUTES,
     spots: () => gardenSpots(selected, buildings, thePlan, lat),
     occluders: () => sunScene.occluders(),
+    glass: () => glassTriangles(facadeWalls(thePlan, selected).glass),
   })
   renderGarden()
 }
@@ -354,7 +355,7 @@ function renderFind() {
     }
     roofHidden = roofNoteVisible(plant, spots, floorsHidden)
     const centre = site ? ringCentroid(site.selected.outer) : { x: 0, z: 0 }
-    if (!waiting) summary = findSummary(plantName(plant), gardenMonth === null ? null : fmtMonth(gardenMonth), stats, centre)
+    if (!waiting) summary = findSummary(plantName(plant), gardenMonth === null ? null : fmtMonth(gardenMonth), stats, centre, !!plant.daylight)
   }
   findPanel.set({
     plantId: plant?.id ?? null,
@@ -421,6 +422,7 @@ function requestGarden(again = false) {
   if (!gardenSpot || !site || !plan || !sunDay) return
   const { x, y, z, kind } = gardenSpot
   const thePlan = plan
+  const { selected } = site
   if (again) gardenTrace = { status: 'running', progress: 0 }
   gardenJob.request({
     sceneVersion: sunScene.sceneVersion(),
@@ -431,6 +433,7 @@ function requestGarden(again = false) {
     tag: `${kind} ${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`,
     spots: () => discSpots(x, y, z, kind === 'indoor', kind === 'indoor' ? (px, pz) => insideOutline(thePlan, { x: px, z: pz }) : undefined),
     occluders: () => sunScene.occluders(),
+    glass: () => glassTriangles(facadeWalls(thePlan, selected).glass),
   })
   renderGarden()
 }
@@ -439,7 +442,7 @@ gardenJob.onState((state: GardenState) => {
   if (!gardenSpot) return
   gardenTrace =
     state.status === 'running' ? { status: 'running', progress: state.progress }
-    : state.status === 'done' ? { status: 'done', sunMinutes: meanSun(state.result.spots) }
+    : state.status === 'done' ? { status: 'done', sunMinutes: meanSun(state.result.spots), daylight: meanDaylight(state.result.spots) }
     : state.status === 'error' ? { status: 'error', message: state.message }
     : { status: 'idle' }
   renderGarden()

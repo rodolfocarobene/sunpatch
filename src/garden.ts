@@ -1,7 +1,8 @@
 // Which plants suit a spot, month by month. Direct sun at the spot and local temperature are compared with the plant's
 // needs; a rating is the worst thing found, and every finding can be said in one plain sentence.
 
-import { fmtMonth, fmtNumber, locale, t, upFirst } from './i18n'
+import { bandOf, type Band } from './dayfactor'
+import { fmt1, fmt1Fixed, fmtMonth, fmtNumber, locale, t, upFirst, type Key } from './i18n'
 import { PLANTS, plantName, type Plant } from './plants'
 import type { Climate } from './weather'
 
@@ -12,7 +13,15 @@ export type IssueKind = 'dark' | 'glare' | 'cold' | 'frost' | 'hot' | 'place'
 export interface Spot {
   indoor: boolean
   sunMinutes: number[]
+  /**
+   * Indoor spots: the overcast daylight factor in % at the spot (dayfactor.ts), when measured. Plants that have a
+   * `daylight` need are then also rated by it; outdoors it means nothing (about 100 % minus obstructions) and is not used.
+   */
+  daylight?: number
 }
+
+/** Under this many hours a day, direct sun is not counted as a verdict that carries a plant: a quarter hour is a glint, not sun. */
+export const SUN_FLOOR_HOURS = 0.25
 
 export type Temperatures = Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'>
 
@@ -34,11 +43,23 @@ export const TENDER_BELOW = -3
 
 const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 const SCORE: Record<Rating, number> = { good: 1, ok: 0.5, poor: 0 }
+const LIGHT_ORDER: Record<Rating, number> = { poor: 0, ok: 1, good: 2 }
+const BAND_KEY: Record<Band, Key> = { dim: 'garden.lightDim', fair: 'garden.lightFair', bright: 'garden.lightBright', veryBright: 'garden.lightVeryBright' }
 
 export interface Issue {
   kind: IssueKind
   /** A severe issue makes the month poor; a mild one makes it ok. */
   severe: boolean
+}
+
+/** What the indirect daylight said about a plant at an indoor spot, when it was used. */
+export interface DaylightFinding {
+  /** Daylight factor at the spot, %. */
+  df: number
+  /** The daylight verdict alone: good from the plant's ideal, ok from its minimum, else poor. */
+  verdict: Rating
+  /** Daylight gave a better light verdict than direct sun did, so it carries this month's light. */
+  carries: boolean
 }
 
 export interface MonthResult {
@@ -54,6 +75,8 @@ export interface MonthResult {
   tMax: number
   /** The night temperature used for frost: coldest on record for tender plants, typical for hardy ones. */
   tNight: number
+  /** Set when the spot's daylight was weighed (an indoor spot with a measured factor, and a plant with a daylight need). */
+  daylight?: DaylightFinding
 }
 
 /** One month of one plant at one spot. */
@@ -70,9 +93,21 @@ export function rateMonth(plant: Plant, spot: Spot, climate: Temperatures, month
   const frost = tNight < plant.temp.survive
   // A hardy perennial outdoors that is too cold to grow just rests; it needs no sun and is not failing.
   const dormant = !spot.indoor && plant.life === 'perennial' && tMean < plant.temp.min && !frost
+  let daylight: DaylightFinding | undefined
   if (!dormant) {
-    if (sunHours < plant.sun.min) add('dark', true)
-    else if (sunHours < plant.sun.ideal) add('dark', false)
+    const sunVerdict: Rating = sunHours < plant.sun.min ? 'poor' : sunHours < plant.sun.ideal ? 'ok' : 'good'
+    let light = sunVerdict
+    if (spot.indoor && spot.daylight !== undefined && plant.daylight) {
+      const df = spot.daylight
+      const verdict: Rating = df >= plant.daylight.ideal ? 'good' : df >= plant.daylight.min ? 'ok' : 'poor'
+      // A shade plant's "no sun needed" is not a verdict once daylight is measured: with no real sun, only daylight can carry it.
+      const sunSays: Rating = sunVerdict === 'ok' && sunHours < SUN_FLOOR_HOURS ? 'poor' : sunVerdict
+      const carries = LIGHT_ORDER[verdict] > LIGHT_ORDER[sunSays]
+      light = carries ? verdict : sunSays
+      daylight = { df, verdict, carries }
+    }
+    if (light === 'poor') add('dark', true)
+    else if (light === 'ok') add('dark', false)
   }
   if (plant.sun.max !== undefined && sunHours > plant.sun.max) add('glare', true)
   if (tMean < plant.temp.min) add('cold', !dormant)
@@ -82,7 +117,7 @@ export function rateMonth(plant: Plant, spot: Spot, climate: Temperatures, month
   else if (tMean > plant.temp.optHigh) add('hot', false)
 
   const rating: Rating = issues.some((i) => i.severe) ? 'poor' : issues.length > 0 ? 'ok' : 'good'
-  return { month, rating, issues, resting: dormant, sunHours, tMean, tMax, tNight }
+  return { month, rating, issues, resting: dormant, sunHours, tMean, tMax, tNight, daylight }
 }
 
 export const rateYear = (plant: Plant, spot: Spot, climate: Temperatures): MonthResult[] =>
@@ -98,14 +133,18 @@ export function explain(plant: Plant, r: MonthResult): string {
   const month = fmtMonth(r.month)
   const issue = r.issues.find((i) => i.severe) ?? r.issues[0]
   const sun = hours(r.sunHours)
-  const p = { name, Name, month, sun }
-  if (!issue) return t('garden.explainGood', { ...p, t: deg(r.tMean) })
+  const day = r.daylight
+  const light = day ? { band: t(BAND_KEY[bandOf(day.df)]), df: fmt1Fixed(day.df) } : { band: '', df: '' }
+  const p = { name, Name, month, sun, ...light }
+  if (!issue) return day?.carries ? t('garden.explainGoodDay', p) : t('garden.explainGood', { ...p, t: deg(r.tMean) })
   const temp = plant.temp
   const range = { lo: temp.optLow, hi: temp.optHigh }
   switch (issue.kind) {
     case 'place':
       return t(plant.indoor ? 'garden.explainIndoorOnly' : 'garden.explainOutdoorOnly', p)
     case 'dark':
+      if (day && !issue.severe && day.carries) return t('garden.explainDarkDayMild', { ...p, ideal: fmt1(plant.daylight!.ideal) })
+      if (day && issue.severe) return t('garden.explainDarkDay', { ...p, need: fmt1(plant.daylight!.min) })
       return issue.severe
         ? t('garden.explainDark', { ...p, need: hours(plant.sun.min) })
         : t('garden.explainDarkMild', { ...p, ideal: hours(plant.sun.ideal) })
@@ -192,7 +231,8 @@ export function seasonScore(plant: Plant, year: MonthResult[], summary: PlantSum
   if (plant.life === 'perennial') {
     if (year.some((r) => r.issues.some((i) => i.severe && (i.kind === 'frost' || i.kind === 'place')))) return 0
     const active = year.filter((r) => !r.resting)
-    const lives = Math.max(...year.map((r) => r.sunHours)) >= plant.sun.min
+    // Measured daylight decides whether a shade plant lives here; without it (or for a sun plant) the sunniest month does.
+    const lives = year.some((r) => (r.daylight ? r.daylight.verdict !== 'poor' || r.sunHours >= Math.max(plant.sun.min, SUN_FLOOR_HOURS) : r.sunHours >= plant.sun.min))
     return active.length === 0 ? 0 : active.reduce((a, r) => a + (r.rating === 'poor' && lives ? 0.5 : SCORE[r.rating]), 0) / active.length
   }
   if (summary.fits === undefined) return mean(year)
