@@ -172,6 +172,12 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    windows. Click the floor to read the hours of direct sun at that spot (this turns the sun map on if it is
    off); the first `Esc` closes that box, the next one leaves the walk.
 
+**On a phone** (windows up to 700 px wide) the left panel becomes a bottom sheet: tap its grip to fold it to the
+tabs and the one-line answer, or open it to 60% of the height. The sun bar rides above the folded sheet and hides
+while the sheet is open. Orbit, tap to select, Garden spots and Panels all work by touch. Walking needs a keyboard,
+so the Walk button is hidden on touch-only devices; the height ruler and the hover tooltips have no touch version
+(use **Edit height** in the panel).
+
 Times are in your browser's time zone, so use the app from the same time zone as the place you are looking at.
 
 ## Accuracy and limitations

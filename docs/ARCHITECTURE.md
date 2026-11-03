@@ -313,6 +313,15 @@ The Garden tab (`View` 'garden') shares the 3D scene and camera with Panels; the
 
 The plant map ("Find a place for...", `garden-find-panel.ts`, state in main.ts): picking a plant runs a second `createGardenJob` (so a clicked spot's trace and the area trace never abort each other) over `gardenSpots` (indoor, ground, roof), cached by the job's key, so changing plant or month only calls `scoreSpots` again (outdoor spots with the NASA POWER climate, indoor ones without, since they ignore the weather; with no climate they are left unscored and uncoloured). `kindsFor` skips the kinds a plant cannot stand on, `stepOf` maps ratings to good (2), ok (1) and poor (0, not drawn), and `scene.setGardenMap` draws one flat quad per coloured spot, one mesh per kind: the roof's mesh hides while floors above are hidden (it would hang in the air) and none of them take clicks, so a click still names the surface and opens the spot card. `kindStats` and `findSummary` turn the scores into the sentence (best kinds with a compass direction of their centre from the building's centre, "Only fair", "Nowhere suitable", with a reason such as "not enough direct sun" when at least 60% of that kind's spots fail the same way: `scoreSpots` returns `mainIssue` for poor spots), and `bestSpot` (highest score, then most sun) feeds "Show the best spot", which selects it as if clicked. A scene change retraces the area; leaving the tab clears the plant.
 
+## Narrow layout (bottom sheet)
+
+CSS-first, one `@media (max-width: 700px)` block at the end of `src/style.css` (plus one in `src/editor.css`); wider
+screens are untouched. `ui.ts` adds a `#sheetGrip` button and `data-sheet="open|closed"` on `#panel` (Map opens, other
+tabs start folded; the grip toggles). Folded, CSS keeps only the grip, the tabs and `#sunHeadline`, `#cardSlot` or
+`#gardenSlot`. A `ResizeObserver` publishes `--sheet-h`, which lifts `#dock`, the plan hint and the MapLibre
+attribution above the sheet; `#dock` is hidden while the sheet is open. `main.ts` gives the scene a zero horizontal
+frame inset when narrow. Walk is hidden under `(pointer: coarse) and (not (any-pointer: fine))`.
+
 ## Testing
 
 - `npm test` runs the unit tests (pure geometry, parsing, network fallbacks with an injected `fetch`).

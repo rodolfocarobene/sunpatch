@@ -168,7 +168,7 @@ export function createUI(
     <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>${t('shell.see3d')}</button></p>
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
-      <div id="sunHeadline" class="sheetKeep" hidden role="status"></div>
+      <div id="sunHeadline" hidden role="status"></div>
       <div id="aptTools">
         <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">
@@ -209,10 +209,10 @@ export function createUI(
         <ul id="panelRows" hidden></ul>
         <p id="panelEmpty" class="hint">${t('shell.panelEmptyBefore')}<button id="emptyToPlan" class="link" type="button">${t('shell.tabPlan')}</button>${t('shell.panelEmptyAfter')}</p>
       </div>
-      <div id="cardSlot" class="sheetKeep"></div>
+      <div id="cardSlot"></div>
     </section>
     <section data-views="garden" id="gardenSection">
-      <div id="gardenSlot" class="sheetKeep"></div>
+      <div id="gardenSlot"></div>
       <div id="gardenMonthSlot"></div>
       <div class="field findGroup">
         <h3 class="groupHead">${t('shell.gardenFind')}</h3>

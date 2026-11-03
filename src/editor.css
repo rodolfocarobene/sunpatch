@@ -47,3 +47,12 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Narrow screens: the tool boxes span the top and scroll, the hint sits above the bottom sheet (key hints mean nothing on a phone). */
+@media (max-width: 700px) {
+  .editor-side { top: 8px; left: 8px; right: 8px; width: auto; max-height: 30vh; max-height: 30dvh; }
+  .editor-box .key { display: none; }
+  .editor-box button { min-height: 32px; }
+  .editor-status { left: 8px; right: 8px; bottom: calc(var(--sheet-h, 0px) + 8px); }
+  .editor-status span { max-width: none; }
+}
