@@ -92,14 +92,14 @@ const heightRuler = createHeightRuler(document.body, {
     hoverTip.show(hoverLines(building, 'keys', height), { x: r.right + 24, y: r.top })
   },
   returnFocus: () => sceneCanvas.focus({ preventScroll: true }),
+  cycle: () => cycleRuler(),
 })
 // The 3D canvas takes focus, so the keyboard reaches the ruler: R steps it through the buildings (selected first, then the nearest).
 const sceneCanvas = app.querySelector('canvas')!
 sceneCanvas.tabIndex = 0
 sceneCanvas.setAttribute('aria-label', t('shell.canvasAria'))
-sceneCanvas.addEventListener('keydown', (e) => {
-  if (e.code !== 'KeyR' || e.ctrlKey || e.metaKey || e.altKey || view !== '3d' || walking || heightPopover.isOpen || !site) return
-  e.preventDefault()
+function cycleRuler() {
+  if (view !== '3d' || walking || heightPopover.isOpen || !site) return
   const order = cycleOrder(site.buildings, site.selected.id)
   const rect = sceneCanvas.getBoundingClientRect()
   const centre = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
@@ -109,6 +109,11 @@ sceneCanvas.addEventListener('keydown', (e) => {
     if (building && heightRuler.open(building, centre)) return
     id = nextInCycle(order, id)
   }
+}
+sceneCanvas.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyR' || e.ctrlKey || e.metaKey || e.altKey) return
+  e.preventDefault()
+  cycleRuler()
 })
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
 let sunMapOn = false

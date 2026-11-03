@@ -87,6 +87,8 @@ export interface HeightRulerHandlers {
   onNote?(id: string, height: number | null): void
   /** Esc on the handle: focus goes back to the 3D canvas. */
   returnFocus?(): void
+  /** R on the handle: on to the next building. */
+  cycle?(): void
 }
 
 export interface HeightRuler {
@@ -231,6 +233,10 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
     } else if (e.key === 'Enter') {
       e.preventDefault()
       commitKeyed()
+    } else if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      commitKeyed()
+      handlers.cycle?.()
     } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
@@ -339,6 +345,7 @@ export function createHeightRuler(container: HTMLElement, handlers: HeightRulerH
       pointer = at
       if (!show(b.id)) return false
       handle.focus({ preventScroll: true })
+      handlers.onNote?.(b.id, target!.building.height) // moving between buildings does not refocus the handle
       return true
     },
     get currentId() {
