@@ -1,0 +1,25 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "pages": {
+      "1": {
+        "title": "File:Basil.jpg",
+        "imageinfo": [
+          {
+            "extmetadata": {
+              "Artist": {
+                "value": "<a href=\"//commons.wikimedia.org/wiki/User:Example\">Jane Example</a>"
+              },
+              "LicenseShortName": {
+                "value": "CC BY-SA 4.0"
+              },
+              "LicenseUrl": {
+                "value": "https://creativecommons.org/licenses/by-sa/4.0"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
