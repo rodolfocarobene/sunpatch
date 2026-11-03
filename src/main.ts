@@ -41,7 +41,10 @@ import { climateKey, loadClimate, type Climate } from './weather'
 import { modules, newPanelId } from './panel'
 import { createPanelShadeJob, shadeKey as panelShadeKey } from './panel-shade-job'
 import { createSunMapJob } from './sunmap-job'
+import { createYearJob } from './year-job'
+import { createYearCard } from './year-card'
 import { dayHeadline } from './headline'
+import { YEAR_DAY } from './year'
 import { createSuitabilityJob, type SuitabilityResult } from './suitability-job'
 import { createSuitabilityPopover } from './suitability-popover'
 import { createGardenJob, GARDEN_AREA_SLOT_MINUTES, type GardenResult, type GardenState } from './garden-job'
@@ -77,6 +80,9 @@ const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
+// "Through the year" under the headline: worked out (in a worker of its own) only while its disclosure is open.
+const yearJob = createYearJob()
+const yearCard = createYearCard(document.getElementById('yearSlot')!)
 // Building heights: the hover note says where a height came from, the right-click box (or the building line's button) changes it.
 const hoverTip = createHoverTip(document.body)
 const heightRuler = createHeightRuler(document.body, {
@@ -619,7 +625,34 @@ function scheduleSunMap() {
   sunTimer = window.setTimeout(requestSunMap, 0)
 }
 
+/** The year chart's trace: only while the disclosure is open in the 3D tab with an apartment that has windows. */
+function requestYear() {
+  const usable = view === '3d' && site && plan && sunDay && plan.windows.length > 0
+  yearCard.setAvailable(!!usable)
+  if (!usable || !yearCard.open) return yearJob.stop()
+  yearJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan: plan!,
+    floorY: floorBase(site!.selected, plan!),
+    year: sunDay!.when.getFullYear(),
+    lat: sunDay!.lat,
+    lon: sunDay!.lon,
+    occluders: () => sunScene.occluders(),
+  })
+}
+yearJob.onState((state) => {
+  if (state.status === 'running') yearCard.setState({ kind: 'running', progress: state.progress })
+  else if (state.status === 'ready') yearCard.setState({ kind: 'ready', minutes: state.minutes })
+  else if (state.status === 'error') yearCard.setState({ kind: 'error' })
+  else yearCard.setState({ kind: 'idle' })
+})
+yearCard.onToggle(requestYear)
+yearCard.onPick((month) => {
+  if (sunDay) ui.setWhen(dateValue(new Date(sunDay.when.getFullYear(), month, YEAR_DAY)), minutesOfDay(sunDay.when))
+})
+
 function requestSunMap() {
+  requestYear()
   // The 3D tab's headline needs the day's lit flags too, so the job runs there with or without the painted map.
   if (!(sunMapOn || view === '3d') || !site || !plan || !sunDay) return
   if (plan.windows.length === 0) {
@@ -869,6 +902,7 @@ sunScene.setWalkHandlers({
 ui.onChange((when, sun, strip, place) => {
   hud.setSun(sun)
   sunDay = { when, strip, ...place }
+  yearCard.setMonth(when.getMonth())
   popover.setNow(minutesOfDay(when))
   // Only another day or place needs a new sun map; the time slider just moves along it.
   const key = `${dateKey(when)} ${place.lat} ${place.lon}`
@@ -1094,6 +1128,7 @@ function setView(next: View) {
   } else if (suitWish) ui.setSuitability(true)
   ui.setView(next)
   if (next === '3d') scheduleSunMap()
+  else requestYear()
   renderTotals()
   planSummary.hidden = next !== 'plan' || selectedPanel === null
 }

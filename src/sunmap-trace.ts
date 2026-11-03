@@ -90,3 +90,20 @@ export function traceSun(
   }
   return lit
 }
+
+/** How many of the slots (three numbers each in `dirs`) have at least one sample in the sun: the headline's count, stopping at the first lit sample of a slot. */
+export function litSlots(bvh: MeshBVH, points: Float32Array, floorY: number, dirs: Float32Array): number {
+  const samples = points.length / 2
+  const slots = dirs.length / 3
+  const ray = new Ray()
+  let count = 0
+  for (let i = 0; i < slots; i++) {
+    for (let s = 0; s < samples; s++) {
+      if (seesSun(bvh, ray, points[s * 2], floorY + SAMPLE_LIFT, points[s * 2 + 1], dirs, i * 3)) {
+        count++
+        break
+      }
+    }
+  }
+  return count
+}
