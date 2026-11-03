@@ -247,7 +247,7 @@ illuminance outdoors on open ground:
   R the area-weighted mean reflectance (floor 0.3, walls 0.5, ceiling 0.7); R_fw the floor with the lower half of the
   walls, R_cw the ceiling with the upper half. C is 39, the unobstructed value, always: C falls with the obstruction angle
   but the angle is not measured, so IRC is a little high for a facade with a tall neighbour. The 0.85 in the formula
-  already allows for glazing, so applying the 0.56 as well is a deliberate (slightly low) choice.
+  is clean-glass transmittance, so the glazing factor (0.7 x 0.8) enters relative to it (x 0.56 / 0.85), not on top.
 - **Grid and cost**: 0.5 m cells (`DAYLIGHT_CELL`), 40 points per worker turn with progress, a newer request or a new
   scene version stops the run (`dayfactor-job.ts` aborts its own worker; the worker also refuses a scene key it does not
   hold). The Milan example's 427 points take about 1.0 to 2.0 s end to end in headless Chromium on 4 cores (rays 250 to

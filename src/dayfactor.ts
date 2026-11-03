@@ -14,6 +14,8 @@ export const GLASS_TRANSMITTANCE = 0.7
 export const MAINTENANCE = 0.8
 /** The glass and frame factors together, applied to SC, ERC and IRC. */
 export const GLAZING = GLASS_TRANSMITTANCE * MAINTENANCE
+/** The clean-glass transmittance built into the BRE IRC formula. */
+const CLEAN_GLASS = 0.85
 /** Luminance of an obstruction (a neighbour's facade) as a fraction of the average sky luminance: the usual simple rule. */
 export const EXTERNAL_REFLECTANCE = 0.2
 /** BRE's coefficient C for an unobstructed view of the sky; it falls as the obstruction angle grows (not measured here, so 39 always). */
@@ -85,7 +87,8 @@ export function roomSurfaces(plan: Plan): RoomSurfaces {
  * The BRE split-flux internally reflected component, as a % of the outdoor horizontal illuminance, constant over
  * the room: IRC = 0.85 W / (A (1 - R)) (C R_fw + 5 R_cw), with W the glass area, A the total surface (floor, ceiling,
  * walls), R their area-weighted mean reflectance, R_fw that of the floor and the lower half of the walls, R_cw that
- * of the ceiling and the upper half (the windows' mid-height splits the walls). `glazing` multiplies the result.
+ * of the ceiling and the upper half (the windows' mid-height splits the walls). The 0.85 is the formula's own clean-glass
+ * transmittance, so `glazing` (transmittance x maintenance) enters relative to it rather than on top of it.
  */
 export function internalReflected(glassArea: number, room: RoomSurfaces, c = C_UNOBSTRUCTED, glazing = GLAZING, r = REFLECTANCE): number {
   const total = 2 * room.floor + room.walls
@@ -95,7 +98,7 @@ export function internalReflected(glassArea: number, room: RoomSurfaces, c = C_U
   const lowerArea = room.floor + half
   const fw = (r.floor * room.floor + r.walls * half) / lowerArea
   const cw = (r.ceiling * room.floor + r.walls * half) / lowerArea
-  return ((0.85 * glassArea) / (total * (1 - mean))) * (c * fw + 5 * cw) * glazing
+  return ((0.85 * glassArea) / (total * (1 - mean))) * (c * fw + 5 * cw) * (glazing / CLEAN_GLASS)
 }
 
 /** The rays' contribution at one point, in %: SC from sky seen through glass, ERC from obstructions seen through glass. */

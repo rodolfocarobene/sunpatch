@@ -41,12 +41,12 @@ describe('internal reflected component', () => {
   // loss, C = 39, floor 0.3, walls 0.5, ceiling 0.7.
   //   A = 2 * 20 + 18 * 2.7 = 88.6; R = (0.3 * 20 + 0.7 * 20 + 0.5 * 48.6) / 88.6 = 0.5
   //   R_fw = (6 + 12.15) / 44.3 = 0.4097, R_cw = (14 + 12.15) / 44.3 = 0.5903
-  //   IRC = 0.85 * 2.8 / (88.6 * 0.5) * (39 * 0.4097 + 5 * 0.5903) = 1.017 %
+  //   IRC = 0.85 * 2.8 / (88.6 * 0.5) * (39 * 0.4097 + 5 * 0.5903) = 1.017 % with clean glass; glazing 1 is an open hole, so 1.017 / 0.85
   it('matches the worked example', () => {
-    expect(internalReflected(2.8, { floor: 20, walls: 18 * 2.7 }, 39, 1)).toBeCloseTo(1.017, 2)
+    expect(internalReflected(2.8, { floor: 20, walls: 18 * 2.7 }, 39, 1)).toBeCloseTo(1.017 / 0.85, 2)
   })
   it('applies the glass and frame factors, and is 0 without glass', () => {
-    expect(internalReflected(2.8, { floor: 20, walls: 48.6 })).toBeCloseTo(1.017 * GLAZING, 2)
+    expect(internalReflected(2.8, { floor: 20, walls: 48.6 })).toBeCloseTo((1.017 * GLAZING) / 0.85, 2)
     expect(internalReflected(0, { floor: 20, walls: 48.6 })).toBe(0)
   })
   it('measures the surfaces of a plan outline', () => {
