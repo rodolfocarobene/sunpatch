@@ -36,6 +36,7 @@ Sun map switch / date / scene change ──► main.ts ──► sunmap-job.ts �
 |---|---|
 | `main.ts` | App state and wiring: views (Map / Plan / 3D / Panels), picking, OSM refinement, plan loading. |
 | `ui.ts`, `chip.ts`, `style.css` | Left panel (views, one-line building identity from `building-line.ts`, dismissible switching hint, overlay toggles, location and accuracy; in Panels the suitability switch, the panel list and the docked card), the docked date/time bar (`#dock`), status chip. |
+| `share.ts`, `shared-chip.ts` | Share links: the versioned hash format (`#s=1.<deflate-raw, base64url>` of `{ll, d, m, t, p, x?}`: pick point, date, minutes, tab, the plan without its `version`, and the example flag; `#s=1u.` is the uncompressed form for browsers without `CompressionStream`), its strict decoding (bad base64, bad deflate, bad JSON, out-of-range values and `validatePlan` failures are all `broken`; another version is `version`), and the bar that says "Viewing a shared plan" with Save as mine. |
 | `example.ts` | The `?example=milan` sample: lazy-loads the Milan fixture and builds the apartment plan from the building outline. |
 | `map.ts`, `geocode.ts` | MapLibre map, Nominatim search (house-number ranking: a bare street is labelled and drawn as a line, never snapped to a building), found-building highlight, tile buildings accessor. |
 | `tiles.ts` | Vector-tile features → `Building` for the instant preview; joins pieces cut at tile borders. |
@@ -152,6 +153,16 @@ deal with it:
   (`userData.polygonId`; an outline is drawn for the selected building with its apartment): no rebuild, no scene version
   bump, no re-trace. On release `onCommit` calls `setHeight` (the same override path as the Height box, so `plan.heights`,
   the version bump and the selected building's floor count follow); Esc puts it back.
+
+## Share links
+
+The Share button (3D tab, shown when a plan exists) builds the link from `main.ts` state and copies it (`navigator.share` on touch devices,
+else the clipboard, else a selectable field). Opening one (`openShare`) reads the hash once and removes it from the address bar. A shared plan
+behaves like the example's: `sharedMode` makes `ephemeral()` true, so nothing autosaves and `planFor` (which replaces `savedPlanFor` in `show` and
+`choose`) answers with the shared plan while the building loads (`sharedPlan`, dropped when the load ends), so the saved selection and heights apply
+as for a saved plan. The recipient's own plan for that building is neither read nor written; **Save as mine** writes it (asking first if one exists).
+Picking or switching to another building ends the shared copy. A language switch carries the shared plan in the session (`Session.shared`). A link made
+from the Milan example reopens the bundled fixture (`x: 1`), since it works offline. Invalid hashes show a notice and the normal start.
 
 ## The plan model
 

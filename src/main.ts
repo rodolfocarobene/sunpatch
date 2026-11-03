@@ -895,7 +895,9 @@ const mapView = createMapView(document.body, restored ?? MILAN, pick, ui.searchS
 // A share link (#s=...) is read once and taken out of the address bar, so a reload does not reopen it over later edits.
 const shareHash = location.hash.startsWith('#s=') ? location.hash : ''
 if (shareHash) history.replaceState(null, '', location.pathname + location.search)
-let exampleMode = !shareHash && new URLSearchParams(location.search).get('example') === 'milan' && (!restored || restored.example === true)
+const fromQuery = new URLSearchParams(location.search).get('example') === 'milan' && (!restored || restored.example === true)
+// A shared copy of the example has no ?example in its address: the session says it was the example.
+let exampleMode = !shareHash && (fromQuery || (restored?.example === true && restored.shared !== undefined))
 /**
  * The plan on screen came from a share link: it is shown like the example (never saved, the recipient's own plan for the
  * building untouched) until "Save as mine". `sharedPlan` is what the building load applies, and is dropped when the load ends.
@@ -951,7 +953,8 @@ else if (exampleMode) {
   ui.setWhen(restored.date, restored.minutes)
   restoreView = restored.view
   if (restoredShare) sharedPlan = restoredShare
-  pick(restored.lat, restored.lon, true)
+  // After the rest of the module has run: pick() touches state declared further down (`edited`, `last`).
+  queueMicrotask(() => pick(restored.lat, restored.lon, true))
 } else mapView.focusSearch() // the search is the first thing to do on the map
 
 /** Opens a share link: the building at its point with the shared plan, on its date, time and tab; a bad link just says so. */

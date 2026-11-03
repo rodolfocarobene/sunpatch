@@ -293,7 +293,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 }
 #sharedChip[hidden] { display: none; }
 #sharedChip[data-kind='notice'] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
-#sharedChip button {
+#sharedChip button { white-space: nowrap;
   font: inherit; padding: 2px 8px; cursor: pointer; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
 #sharedChip button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
