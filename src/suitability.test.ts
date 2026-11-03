@@ -8,7 +8,7 @@ import { buildBvh, collectOccluders } from './sunmap-trace'
 import { defaultPlan } from './plan'
 import {
   GROUND_MARGIN, GROUND_REACH, IRRADIATION_STRIDE, SUITABILITY_SLOT_MINUTES, facadeSamples, groundSamples, panelFor, rayInputs, roofSamples,
-  percentile, rampScale, rangeText, suitabilityColor, suitabilityGradient, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
+  panelTicks, percentile, rampScale, rangeText, suitabilityColor, suitabilityGradient, suitabilityText, surfaceEnergy, surfaceLabel, surfaceSamples, traceSamples, type SurfaceSample,
 } from './suitability'
 
 const MILAN = { lat: 45.4642, lon: 9.19 }
@@ -220,7 +220,8 @@ describe('legend and popover text', () => {
   })
 
   it('writes the observed range for the legend', () => {
-    expect(rangeText([648, 1396])).toBe('650\u20131,400 kWh a year per kW')
+    expect(rangeText([648, 1396])).toBe('Across these spots: 260\u2013560 kWh a year')
+    expect(panelTicks(250, 1350).map((x) => x.value)).toEqual([100, 200, 300, 400, 500])
   })
 
   it('colours the low end dark and the top light, like the sun map', () => {
@@ -242,11 +243,12 @@ describe('legend and popover text', () => {
   it('says the figure with weather, the ideal and the shading loss, or labels the clear-sky fallback', () => {
     const roof = { kind: 'roof' as const, x: 0, y: 9, z: 0, azimuth: 180, tilt: 30, size: 1, top: 9 }
     expect(suitabilityText(roof, { ideal: 1840, weather: 1387, shadingShare: 0.04 })).toEqual({
-      headline: 'About 1,390 kWh a year per kW',
-      detail: 'Roof, 30\u00b0 south \u00b7 with local weather (ideal 1,840) \u00b7 shading loss 4%',
+      headline: 'One standard panel here: about 550 kWh a year',
+      more: '1 kW of panels here: 1,390 kWh a year',
+      detail: 'Roof, 30\u00b0 south \u00b7 with local weather (ideal 740) \u00b7 shading loss 4%',
     })
     const clear = suitabilityText(roof, { ideal: 1840, shadingShare: 0.001 })
-    expect(clear.headline).toBe('About 1,840 kWh a year per kW')
+    expect(clear.headline).toBe('One standard panel here: about 740 kWh a year')
     expect(clear.headline).not.toContain('~')
     expect(clear.detail).toBe('Roof, 30\u00b0 south \u00b7 clear sky, no weather data \u00b7 shading loss <1%')
   })

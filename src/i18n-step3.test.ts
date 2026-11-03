@@ -61,7 +61,7 @@ describe('panel and suitability text follows the language', () => {
     expect(round10(1234)).toBe('1,230')
     useLang('it')
     expect(formatKwh(12345.4)).toBe('12.345 kWh')
-    expect(rangeText([650, 1400])).toBe('650–1400 kWh/anno per kW')
+    expect(rangeText([650, 1400])).toBe('Tra questi punti: 260–560 kWh all’anno')
   })
 
   it('says the totals line and the verdict in Italian', () => {

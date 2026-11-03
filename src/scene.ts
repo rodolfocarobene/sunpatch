@@ -232,6 +232,8 @@ export interface SunScene {
   onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
   /** Turns the Garden view's picking on or off: while on, a plain click (not a drag) reports the surface the camera sees there. */
   setGardenPicking(on: boolean): void
+  /** Double-clicking the apartment floor starts walking only in the 3D view (Panels and Garden have no walk mode). */
+  setWalkOnDoubleClick(on: boolean): void
   /** Called with the surface under a plain click while picking (null for the sky); `normalY` is the surface normal's height component. */
   onGardenClick(handler: (hit: GardenHit | null) => void): void
   /** Marks a spot of the Garden view on the surface (`y` is the surface height); null removes the mark. */
@@ -476,6 +478,7 @@ export function createScene(container: HTMLElement): SunScene {
   let probeShown = ''
   // Garden view: whether clicks pick a spot, and the marker on it.
   let gardenPicking = false
+  let walkOnDoubleClick = true
   let gardenAt: { x: number; y: number; z: number } | null = null
   let gardenPulseFrom = 0
   let gardenMark: Group | undefined
@@ -1138,7 +1141,7 @@ export function createScene(container: HTMLElement): SunScene {
   // Double-click on the apartment floor (not through a wall) stands there.
   const raycaster = new Raycaster()
   renderer.domElement.addEventListener('dblclick', (e) => {
-    if (walking || !plan || !floorMesh) return
+    if (walking || !walkOnDoubleClick || !plan || !floorMesh) return
     const rect = renderer.domElement.getBoundingClientRect()
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
     raycaster.setFromCamera(ndc, camera)
@@ -1571,6 +1574,9 @@ export function createScene(container: HTMLElement): SunScene {
     },
     setGardenPicking(on) {
       gardenPicking = on
+    },
+    setWalkOnDoubleClick(on) {
+      walkOnDoubleClick = on
     },
     onGardenClick(handler) {
       gardenClick = handler
