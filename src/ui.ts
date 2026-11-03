@@ -61,8 +61,12 @@ export interface UI {
   setNextStep(step: NextStep): void
   /** Shows the sample-apartment note (Plan and 3D views) until it is dismissed. */
   setExample(on: boolean): void
-  /** Shows the cutaway toggle while an apartment plan is in the 3D scene. */
+  /** Shows the cutaway toggle and the Share button while an apartment plan is in the 3D scene. */
   setPlanActive(active: boolean): void
+  /** The Share button was pressed: the caller builds the link and answers through `setShareResult`. */
+  onShare(listener: () => void): void
+  /** What the Share button reports ("Link copied"); null restores the privacy line. `link` shows a field with the link selected. */
+  setShareResult(text: string | null, link?: string): void
   /** The "Hide floors above" state, shared with the walk HUD: set it, flip it, or hear about changes. */
   setCutaway(on: boolean): void
   toggleCutaway(): void
@@ -180,6 +184,11 @@ export function createUI(
             <label class="row" title="${t('shell.sunMapTitle')}"><input id="sunMap" type="checkbox"> ${t('shell.sunMap')} <kbd class="walkKey">M</kbd></label>
             <div id="sunMapLegend" hidden></div>
           </div>
+        </div>
+        <div id="shareBox" class="field" hidden>
+          <button id="shareBtn" class="link" type="button" title="${t('shell.shareTitle')}">${t('shell.share')}</button>
+          <p id="shareNote" class="legendNote">${t('shell.shareNote')}</p>
+          <input id="shareField" type="text" readonly hidden aria-label="${t('shell.shareField')}">
         </div>
       </div>
       <details id="location">
@@ -621,7 +630,21 @@ export function createUI(
     setRoofHint(show) {
       $('gardenRoofHint').hidden = !show
     },
+    onShare(fn) {
+      $('shareBtn').addEventListener('click', fn)
+    },
+    setShareResult(text, link) {
+      const field = $<HTMLInputElement>('shareField')
+      $('shareNote').textContent = text ?? t('shell.shareNote')
+      field.hidden = link === undefined
+      if (link !== undefined) {
+        field.value = link
+        field.focus()
+        field.select()
+      }
+    },
     setPlanActive(active) {
+      $('shareBox').hidden = !active
       $('aptShow').hidden = !active
       if (active) applyCutaway()
     },

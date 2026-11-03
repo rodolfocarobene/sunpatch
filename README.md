@@ -49,6 +49,9 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 - **Walk inside** in first person at eye height, see the sun disc through the windows and step the time while you
   look around.
 - Plans are saved in the browser automatically and can be exported and imported as JSON.
+- **Share** (3D tab) copies a link that opens the same apartment, date, time and tab in another browser. Everything is in
+  the URL hash (deflated JSON, about 500 characters for the Milan example) and goes to no server; it does include the
+  building's location. The recipient sees it as a shared copy (never saved over their own plan) with a "Save as mine" button.
 
 | | |
 |---|---|

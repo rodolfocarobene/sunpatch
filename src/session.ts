@@ -14,6 +14,8 @@ export interface Session {
   minutes: number
   /** The bundled Milan example was open (its edits are never saved, so it is reopened rather than picked). */
   example?: boolean
+  /** The plan of a shared copy (a share link's plan, never saved): checked with `validatePlan` when it is used. */
+  shared?: unknown
 }
 
 const KEY = 'sunpatch.session'
