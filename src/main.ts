@@ -1102,6 +1102,12 @@ function setView(next: View) {
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   if (next === 'garden' && !ensurePlan(true)) return // the camera stays where it is
+  // Walking belongs to the 3D view: Panels and Garden pick and place from outside, so leaving the 3D tab ends the walk
+  // (the camera goes back to the orbit view, then is framed for the tab).
+  if (walking && next !== '3d') {
+    sunScene.stopWalk()
+    if (next === 'garden' || next === 'panels') chip.done(t('shell.leftWalk', { tab: t(next === 'garden' ? 'shell.tabGarden' : 'shell.tabPanels') }))
+  }
   if (view === 'garden' && next !== 'garden') {
     clearGardenSpot()
     clearFind()
@@ -1112,6 +1118,7 @@ function setView(next: View) {
   heightRuler.hide()
   const scene3d = next === '3d' || next === 'panels' || next === 'garden' // one scene and one camera for all three
   sunScene.setGardenPicking(next === 'garden')
+  sunScene.setWalkOnDoubleClick(next === '3d')
   app.hidden = !scene3d
   mapView.setVisible(next === 'map')
   editor.setVisible(next === 'plan')
