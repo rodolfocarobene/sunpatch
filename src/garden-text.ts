@@ -101,7 +101,7 @@ const NO_MONTH = t('garden.noMonth')
 
 export const RATING_LABEL: Record<Rating, string> = { good: t('garden.rateGood'), ok: t('garden.rateOk'), poor: t('garden.ratePoor') }
 
-const KIND_LABEL: Record<PlantKind, Key> = {
+export const KIND_LABEL: Record<PlantKind, Key> = {
   vegetable: 'garden.kindVegetable',
   fruit: 'garden.kindFruit',
   herb: 'garden.kindHerb',
@@ -153,6 +153,7 @@ export function ratingLabel(result: PlantResult, month: number | null): string {
 }
 
 export interface PlantRow {
+  id: string
   name: string
   kind: string
   rating: Rating
@@ -168,7 +169,7 @@ export function plantRow(result: PlantResult, month: number | null): PlantRow {
   const sow = plant.life === 'annual' && summary.sowMonth !== undefined ? t('garden.sow', { month: fmtMonth(summary.sowMonth) }) : ''
   const months = monthsText(summary.months)
   const growing = months === NO_MONTH ? t('garden.growsNowhere') : `${t('garden.grows', { months })}${sow}`
-  return { name: upFirst(plantName(plant)), kind: t(KIND_LABEL[plant.kind]), rating: result.rating, label: ratingLabel(result, month), growing, reason: reasonText(result, month) }
+  return { id: plant.id, name: upFirst(plantName(plant)), kind: t(KIND_LABEL[plant.kind]), rating: result.rating, label: ratingLabel(result, month), growing, reason: reasonText(result, month) }
 }
 
 /** Ranked results split for the card: the ones worth growing, and the poor ones kept behind "Why not others?". */

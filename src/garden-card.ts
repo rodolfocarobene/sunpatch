@@ -53,7 +53,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** Indoor spots ignore the weather; this only satisfies the signature. */
 const NO_CLIMATE: Pick<Climate, 'tMean' | 'tMin' | 'tMax' | 'tLow'> = { tMean: Array(12).fill(0), tMin: Array(12).fill(0), tMax: Array(12).fill(0), tLow: Array(12).fill(0) }
 
-export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void; onToggle: () => void }): GardenCard {
+export function createGardenCard(options: { onRetryClimate: () => void; onRetryTrace: () => void; onClose: () => void; onMonth: (month: number) => void; onToggle: () => void; onPlant: (id: string) => void; onRanked: (ranked: PlantResult[] | null) => void }): GardenCard {
   const root = el('div', 'panelCard gardenCard')
   root.setAttribute('role', 'region')
   root.setAttribute('aria-label', t('garden.cardAria'))
@@ -145,10 +145,20 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return wrap
   }
 
+  const pickName = (pick: HTMLElement): HTMLElement => {
+    const strong = el('strong')
+    strong.append(pick)
+    return strong
+  }
+
   function rowItem(row: PlantRow, withGrowing: boolean): HTMLElement {
     const li = el('li', 'plantRow')
     const top = el('div', 'plantTop')
-    top.append(el('strong', '', row.name), el('span', 'plantKind', row.kind), el('span', `rate ${row.rating}`, row.label))
+    const pick = el('button', 'plantPick', row.name)
+    pick.type = 'button'
+    pick.title = t('plant.pick')
+    pick.addEventListener('click', () => options.onPlant(row.id))
+    top.append(pickName(pick), el('span', 'plantKind', row.kind), el('span', `rate ${row.rating}`, row.label))
     li.append(top)
     if (withGrowing) li.append(el('span', 'plantGrowing', row.growing))
     li.append(el('span', 'plantReason', row.reason))
@@ -160,6 +170,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     const indoor = input.kind === 'indoor'
     const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
     const { fit, poor } = splitPlants(ranked)
+    options.onRanked(ranked)
     const answer = el('div', 'gardenPlants gardenAnswer')
     const box = el('div', 'gardenPlants')
     const when = input.month === null ? '' : t('garden.inMonth', { month: fmtMonth(input.month) })
@@ -271,6 +282,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
         head.replaceChildren(el('p', 'gardenPrompt', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
         body.replaceChildren()
+        options.onRanked(null)
         return
       }
       close.hidden = false
@@ -282,8 +294,15 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       const { trace } = input
       if (input.collapsed) {
         body.replaceChildren()
+        // Folded, the plant card still wants this spot's verdict.
+        const indoor = input.kind === 'indoor'
+        const ready = trace.status === 'done' && (indoor || (input.weather === 'ready' && input.climate !== undefined))
+        options.onRanked(
+          ready ? rankPlants({ indoor, sunMinutes: trace.sunMinutes }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month }) : null,
+        )
         return
       }
+      if (trace.status !== 'done') options.onRanked(null)
       if (trace.status === 'idle' || trace.status === 'running') {
         body.replaceChildren(busy(t('garden.measuring'), trace.status === 'running' ? trace.progress : 0))
         return
@@ -295,6 +314,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       const charts: HTMLElement[] = [sunChart(trace.sunMinutes, input.month)]
       const parts: HTMLElement[] = []
       const outdoor = input.kind !== 'indoor'
+      if (outdoor && (input.weather !== 'ready' || !input.climate)) options.onRanked(null)
       if (outdoor && input.weather === 'error') {
         parts.push(...charts, problem(t('garden.noTemps'), t('garden.retryTemps'), options.onRetryClimate))
       } else if (outdoor && (input.weather !== 'ready' || !input.climate)) {

@@ -55,10 +55,12 @@ import { insideOutline } from './walk-geom'
 import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCounts, kindsFor, kindStats, stepOf, surfaceY, type Scored } from './garden-find'
 import { createFindPanel } from './garden-find-panel'
 import type { DeadEnd } from './garden-text'
-import { scoreSpots } from './garden'
+import { scoreSpots, type PlantResult } from './garden'
 import { plantById, plantName, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
 import { createGardenCard, type GardenCardInput } from './garden-card'
+import { createPlantCard } from './plant-card'
+import { plantRow } from './garden-text'
 import { IRRADIATION_STRIDE, panelFor, rampScale, surfaceEnergy, surfaceSamples, suitabilityColor, suitabilityText, type SurfaceEnergy } from './suitability'
 import { createSunMapPopover } from './sunmap-popover'
 import { CELL, sampleAt, sampleMinutes, spotStats, type SunMapResult } from './sunmap'
@@ -171,8 +173,40 @@ const gardenCard = createGardenCard({
     gardenCardOpen = !gardenCardOpen
     renderGarden()
   },
+  onPlant: (id) => {
+    plantCardAuto = false
+    plantCardId = id
+    renderPlantCard()
+  },
+  onRanked: (ranked) => {
+    spotRanked = ranked
+    if (plantCardAuto && ranked) plantCardId = ranked.find((r) => r.rating !== 'poor')?.plant.id
+    renderPlantCard()
+  },
 })
 ui.gardenSlot.appendChild(gardenCard.el)
+
+// The plant card: the picked plant (finder) or the best plant of the clicked spot, with a spot row click switching it. Floats on
+// the right; on a phone it sits at the top of the sheet's Garden slot instead.
+let plantCardId: string | undefined
+/** The card follows the spot's top-ranked plant until the user picks one. */
+let plantCardAuto = false
+let spotRanked: PlantResult[] | null = null
+const plantCard = createPlantCard({ onClose: () => closePlantCard() })
+const narrow = window.matchMedia('(max-width: 700px)')
+const placePlantCard = () => (narrow.matches ? ui.gardenSlot.prepend(plantCard.el) : document.body.appendChild(plantCard.el))
+placePlantCard()
+narrow.addEventListener('change', placePlantCard)
+function renderPlantCard() {
+  const plant = plantCardId ? plantById(plantCardId) : undefined
+  const result = plant && gardenSpot ? spotRanked?.find((r) => r.plant.id === plant.id) : undefined
+  plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined } : null)
+}
+function closePlantCard() {
+  plantCardId = undefined
+  plantCardAuto = false
+  renderPlantCard()
+}
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
 let gardenTrace: GardenCardInput['trace'] = { status: 'idle' }
 let gardenMonth: number | null = null
@@ -224,6 +258,8 @@ function setFindPlant(plant: Plant | undefined) {
   gardenHint = undefined // a note about the last click is not about this
   findPainted = ''
   gardenCardOpen = plant === undefined
+  plantCardAuto = !plant && gardenSpot !== undefined
+  plantCardId = plant ? plant.id : plantCardAuto ? spotRanked?.find((r) => r.rating !== 'poor')?.plant.id : undefined
   if (!plant) {
     findJob.stop()
     findResult = undefined
@@ -343,6 +379,8 @@ renderGarden() // the hint, until a spot is picked
 
 function clearGardenSpot() {
   gardenSpot = undefined
+  spotRanked = null
+  if (plantCardAuto) closePlantCard()
   gardenHint = undefined
   gardenTrace = { status: 'idle' }
   gardenJob.stop()
@@ -416,6 +454,9 @@ function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number, ope
   // A roof outside the picked building's footprints belongs to a neighbour.
   const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
   gardenSpot = { kind, x, y, z, neighbourRoof: kind === 'roof' && !own }
+  spotRanked = null
+  plantCardAuto = findPlant === undefined
+  plantCardId = findPlant?.id
   gardenTrace = { status: 'running', progress: 0 }
   sunScene.setGardenMark({ x, y, z })
   sunScene.revealPoint({ x, y, z })
@@ -874,6 +915,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || walking) return
   if (heightPopover.isOpen) return heightPopover.hide()
   if (suitPopover.open) return closeSuitPick()
+  if (plantCardId) return closePlantCard()
   if (view === 'garden' && gardenSpot) clearGardenSpot()
   else if (view === 'panels' && selectedPanel && !popover.open) selectPanel(null)
   else escape() // walking, the walk controls report Esc themselves
