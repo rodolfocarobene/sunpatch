@@ -686,7 +686,9 @@ ui.onSuitability((on) => {
 ui.onReframe(() => {
   if (!sunScene.frameView(frameTargetFor(view))) ui.flashReframed()
 })
-sunScene.setFrameInset(() => document.getElementById('panel')?.getBoundingClientRect().right ?? 0)
+// A side panel leaves the canvas its right part; the narrow bottom sheet takes none of the width.
+const narrowScreen = window.matchMedia('(max-width: 700px)')
+sunScene.setFrameInset(() => (narrowScreen.matches ? 0 : document.getElementById('panel')?.getBoundingClientRect().right ?? 0))
 sunScene.onSuitabilityClick((index) => {
   suitPicked = index
   if (index === null) closeSuitPick()

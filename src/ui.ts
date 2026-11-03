@@ -131,6 +131,7 @@ export function createUI(
   const panel = document.createElement('div')
   panel.id = 'panel'
   panel.innerHTML = `
+    <button id="sheetGrip" type="button" aria-controls="panel" aria-expanded="true"><span class="gripBar" aria-hidden="true"></span><span class="gripLabel">${t('shell.sheetHide')}</span></button>
     <div id="panelTop">
       <a id="about" href="../" title="${t('shell.aboutTitle')}">&larr; ${t('shell.back')}</a>
     </div>
@@ -167,7 +168,7 @@ export function createUI(
     <p class="hint" data-views="plan"><span id="planNext"></span> <button id="planToThree" class="link next" type="button" hidden>${t('shell.see3d')}</button></p>
     <section data-views="3d">
       <button id="nextStep" class="link next" type="button"></button>
-      <div id="sunHeadline" hidden role="status"></div>
+      <div id="sunHeadline" class="sheetKeep" hidden role="status"></div>
       <div id="aptTools">
         <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">
@@ -208,10 +209,10 @@ export function createUI(
         <ul id="panelRows" hidden></ul>
         <p id="panelEmpty" class="hint">${t('shell.panelEmptyBefore')}<button id="emptyToPlan" class="link" type="button">${t('shell.tabPlan')}</button>${t('shell.panelEmptyAfter')}</p>
       </div>
-      <div id="cardSlot"></div>
+      <div id="cardSlot" class="sheetKeep"></div>
     </section>
     <section data-views="garden" id="gardenSection">
-      <div id="gardenSlot"></div>
+      <div id="gardenSlot" class="sheetKeep"></div>
       <div id="gardenMonthSlot"></div>
       <div class="field findGroup">
         <h3 class="groupHead">${t('shell.gardenFind')}</h3>
@@ -272,6 +273,17 @@ export function createUI(
     date.value = chip.dataset.date!
     refresh()
   })
+  // Narrow screens: the panel is a bottom sheet, folded to the tabs and the headline or card, or open (see style.css).
+  const grip = $<HTMLButtonElement>('sheetGrip')
+  const setSheet = (open: boolean) => {
+    panel.dataset.sheet = open ? 'open' : 'closed'
+    grip.setAttribute('aria-expanded', String(open))
+    grip.querySelector('.gripLabel')!.textContent = t(open ? 'shell.sheetHide' : 'shell.sheetShow')
+  }
+  setSheet(true)
+  grip.addEventListener('click', () => setSheet(panel.dataset.sheet !== 'open'))
+  // The dock and the floating buttons sit above the sheet, whatever its height.
+  new ResizeObserver(() => document.documentElement.style.setProperty('--sheet-h', `${panel.offsetHeight}px`)).observe(panel)
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const hood = $<HTMLSelectElement>('hood')
@@ -534,6 +546,7 @@ export function createUI(
         el.hidden = !el.dataset.views!.split(' ').includes(view)
       }
       panel.dataset.view = view
+      setSheet(view === 'map')
       dock.hidden = view !== '3d'
       reframe.hidden = view !== '3d' && view !== 'panels' && view !== 'garden'
       if (view === 'map') updateMapHint()
