@@ -91,19 +91,43 @@ export function traceSun(
   return lit
 }
 
-/** How many of the slots (three numbers each in `dirs`) have at least one sample in the sun: the headline's count, stopping at the first lit sample of a slot. */
-export function litSlots(bvh: MeshBVH, points: Float32Array, floorY: number, dirs: Float32Array): number {
+/**
+ * How many of `n` slots have a true flag, asking `test` for every `stride`-th slot only and for the slots between
+ * two asked ones only when their answers differ. Stretches of sun (or shade) shorter than `stride` slots that fall
+ * between two asked slots with the same answer are missed; edges are exact.
+ */
+export function countSparse(n: number, stride: number, test: (slot: number) => boolean): number {
+  const flags = new Int8Array(n).fill(-1)
+  const ask = (i: number) => (flags[i] = flags[i] >= 0 ? flags[i] : test(i) ? 1 : 0)
+  const asked: number[] = []
+  for (let i = 0; i < n; i += stride) asked.push(i)
+  if (n > 0 && asked[asked.length - 1] !== n - 1) asked.push(n - 1)
+  for (const i of asked) ask(i)
+  for (let k = 1; k < asked.length; k++) {
+    const a = asked[k - 1]
+    const b = asked[k]
+    for (let i = a + 1; i < b; i++) flags[i] = flags[a] === flags[b] ? flags[a] : ask(i)
+  }
+  return flags.reduce((sum, f) => sum + f, 0)
+}
+
+/**
+ * How many of the slots (three numbers each in `dirs`) have at least one sample in the sun: the headline's count,
+ * stopping at the first lit sample of a slot (the one that was lit in the last slot is tried first) and, in
+ * stretches where the answer does not change, asking only every `stride`-th slot (see `countSparse`).
+ */
+export function litSlots(bvh: MeshBVH, points: Float32Array, floorY: number, dirs: Float32Array, stride = 1): number {
   const samples = points.length / 2
-  const slots = dirs.length / 3
   const ray = new Ray()
-  let count = 0
-  for (let i = 0; i < slots; i++) {
-    for (let s = 0; s < samples; s++) {
+  let hit = 0
+  return countSparse(dirs.length / 3, stride, (i) => {
+    for (let k = 0; k < samples; k++) {
+      const s = (hit + k) % samples
       if (seesSun(bvh, ray, points[s * 2], floorY + SAMPLE_LIFT, points[s * 2 + 1], dirs, i * 3)) {
-        count++
-        break
+        hit = s
+        return true
       }
     }
-  }
-  return count
+    return false
+  })
 }

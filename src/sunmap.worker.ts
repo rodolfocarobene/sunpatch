@@ -33,6 +33,8 @@ const GARDEN_CHUNK = 100
 let suitId = -1
 let gardenId = -1
 let yearId = -1
+/** The year chart asks every 3rd 5-minute slot and the ones between only where the answer changes. */
+const YEAR_STRIDE = 3
 
 const reply = (message: WorkerOut, transfer: Transferable[] = []) => self.postMessage(message, { transfer })
 
@@ -134,7 +136,7 @@ function year(m: Extract<WorkerIn, { kind: 'year' }>) {
     try {
       if (!bvh || bvhKey !== m.key) throw new Error('scene changed')
       const n = m.counts[lit.length]
-      lit.push(litSlots(bvh, m.points, m.floorY, m.dirs.subarray(slot * 3, (slot + n) * 3)))
+      lit.push(litSlots(bvh, m.points, m.floorY, m.dirs.subarray(slot * 3, (slot + n) * 3), YEAR_STRIDE))
       slot += n
     } catch (err) {
       reply({ kind: 'error', id: m.id, message: (err as Error).message })

@@ -4,6 +4,9 @@ import { barFractions, extremeMonth, monthRuns, yearDays, yearSummary } from './
 
 afterEach(() => useLang('en'))
 
+/** Summary durations keep their units together. */
+const nb = (text: string) => text.replace(/\(([^)]*)\)/g, (_, d: string) => `(${d.replace(/ /g, '\u00a0')})`)
+
 const milan = [190, 230, 290, 340, 400, 430, 420, 370, 310, 250, 200, 195]
 
 describe('yearDays', () => {
@@ -47,24 +50,24 @@ describe('monthRuns', () => {
 
 describe('yearSummary', () => {
   it('names the best and worst month', () => {
-    expect(yearSummary(milan)).toBe('Most sun in June (7 h 10 min), least in January (3 h 10 min)')
+    expect(yearSummary(milan)).toBe(nb('Most sun in June (7 h 10 min), least in January (3 h 10 min)'))
   })
   it('says which months get no sun, across the new year', () => {
     const m = [0, 100, 200, 300, 400, 500, 450, 350, 250, 150, 0, 0]
-    expect(yearSummary(m)).toBe('Most sun in June (8 h 20 min). No direct sun from November to January')
+    expect(yearSummary(m)).toBe(nb('Most sun in June (8 h 20 min). No direct sun from November to January'))
   })
   it('says it for a single month', () => {
     const m = milan.slice()
     m[11] = 0
-    expect(yearSummary(m)).toBe('Most sun in June (7 h 10 min). No direct sun in December')
+    expect(yearSummary(m)).toBe(nb('Most sun in June (7 h 10 min). No direct sun in December'))
   })
   it('says so when no month has sun', () => {
-    expect(yearSummary(Array(12).fill(0))).toBe('No direct sun inside in any month')
+    expect(yearSummary(Array(12).fill(0))).toBe(nb('No direct sun inside in any month'))
   })
   it('is in Italian too', () => {
     useLang('it')
     const m = [0, 100, 200, 300, 400, 500, 450, 350, 250, 150, 0, 0]
-    expect(yearSummary(m)).toBe('Più sole a giugno (8 h 20 min). Nessun sole diretto da novembre a gennaio')
-    expect(yearSummary(milan)).toBe('Più sole a giugno (7 h 10 min), meno a gennaio (3 h 10 min)')
+    expect(yearSummary(m)).toBe(nb('Più sole a giugno (8 h 20 min). Nessun sole diretto da novembre a gennaio'))
+    expect(yearSummary(milan)).toBe(nb('Più sole a giugno (7 h 10 min), meno a gennaio (3 h 10 min)'))
   })
 })

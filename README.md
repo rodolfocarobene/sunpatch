@@ -52,6 +52,9 @@ five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
 - **Share** (3D tab) copies a link that opens the same apartment, date, time and tab in another browser. Everything is in
   the URL hash (deflated JSON, about 500 characters for the Milan example) and goes to no server; it does include the
   building's location. The recipient sees it as a shared copy (never saved over their own plan) with a "Save as mine" button.
+- **Through the year** (3D tab, under the headline, collapsed until opened): 12 bars, the total minutes of direct sun
+  inside on the 21st of each month, so winter and summer compare at a glance. Click a bar to jump to that day. It is
+  only worked out while open (a few seconds, in a background worker) and is cached per scene and place.
 
 | | |
 |---|---|

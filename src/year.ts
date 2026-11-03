@@ -45,6 +45,8 @@ export function monthRuns(has: boolean[]): [number, number][] {
 }
 
 const monthName = (m: number) => fmtMonth(m)
+/** A duration that does not break across lines inside the sentence. */
+const dur = (minutes: number) => duration(minutes).replace(/ /g, '\u00a0')
 
 /** "No direct sun from November to January": the months without sun, as the sentence's tail. */
 function noSunText(minutes: number[]): string {
@@ -59,7 +61,7 @@ export function yearSummary(minutes: number[]): string {
   const max = extremeMonth(minutes, true)
   const min = extremeMonth(minutes, false)
   if (minutes[max] === 0) return t('year.never')
-  const most = t('year.most', { month: monthName(max), duration: duration(minutes[max]) })
+  const most = t('year.most', { month: monthName(max), duration: dur(minutes[max]) })
   if (minutes[min] === 0) return `${most}. ${noSunText(minutes)}`
-  return t('year.mostLeast', { most: monthName(max), mostDuration: duration(minutes[max]), least: monthName(min), leastDuration: duration(minutes[min]) })
+  return t('year.mostLeast', { most: monthName(max), mostDuration: dur(minutes[max]), least: monthName(min), leastDuration: dur(minutes[min]) })
 }
