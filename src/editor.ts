@@ -94,11 +94,31 @@ export function loadSavedPlan(buildingId: string): Plan | null {
   }
 }
 
+/** Saved plans carry no heights: those live in the height store (`height-store.ts`), which expires them. */
 export function savePlan(plan: Plan): void {
   try {
-    localStorage.setItem(storageKey(plan.buildingId), JSON.stringify(plan))
+    const { heights: _, ...own } = plan
+    localStorage.setItem(storageKey(plan.buildingId), JSON.stringify(own))
   } catch {
     // storage unavailable or full: the plan just isn't remembered
+  }
+}
+
+/** Drops the heights older versions saved inside plans (Reset all must not let them come back). */
+export function stripSavedHeights(): void {
+  try {
+    const prefix = storageKey('')
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(prefix)) continue
+      const raw = JSON.parse(localStorage.getItem(key) ?? 'null')
+      if (raw && typeof raw === 'object' && 'heights' in raw) {
+        delete raw.heights
+        localStorage.setItem(key, JSON.stringify(raw))
+      }
+    }
+  } catch {
+    // storage unavailable: nothing to strip
   }
 }
 

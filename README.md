@@ -98,7 +98,10 @@ The output in `dist/` can be served by any static host; the app is at `dist/app/
    appears beside it: the handle snaps to whole floors, **Shift** gives 0.5 m steps, **Esc** cancels, and the height is
    set when you let go (the Height box stays the exact way to type it). The ruler is only in the 3D tab, not in Panels
    or Garden, where a click on a roof means something else. The shadows, the sun map and the panel results follow at once, and the
-   heights are saved with your plan (they are part of its export).
+   changes are kept on this device by building, not by plan, so they apply wherever that building appears. The first
+   time you change a height Sunpatch asks whether to keep them for 30 days or for this session only; Details shows the
+   choice, with *Change* and *Reset all*. A height expires 30 days after you last edited it. A share link carries its
+   heights, and a shared copy only shows them: they are stored on the recipient's device when they press *Save as mine*.
 2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
    OpenStreetMap data. Then:
    - **Outline**: click the corners of your apartment; double-click or click the first point to close it.

@@ -3,7 +3,7 @@ import { createMapView } from './map'
 import { createStatusChip, type ChipAction } from './chip'
 import { buildingClickAction, createUndoSlot, NEIGHBOUR_NOTE } from './switch-undo'
 import { buildingLine } from './building-line'
-import { createPlanEditor, loadSavedPlan, savePlan } from './editor'
+import { createPlanEditor, loadSavedPlan, savePlan, stripSavedHeights } from './editor'
 import { EXAMPLE_RADIUS_M, EXAMPLE_WHEN, loadExample } from './example'
 import {
   distanceToRing,
@@ -24,6 +24,8 @@ import { countBuildings, covers, neighborhoodLine, neighborhoodRadius, withinRad
 import { nextStep } from './next-step'
 import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
+import { createHeightStore, resolveHeights } from './height-store'
+import { createKeepChip } from './keep-chip'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
 import { createHeightRuler, cycleOrder, nextInCycle } from './height-ruler'
@@ -978,6 +980,15 @@ sunScene.onBuildingClick((id, at) => {
   else if (action === 'explain') chip.done(NEIGHBOUR_NOTE)
 })
 const chip = createStatusChip(app, () => last && void refine(last, current))
+/** The user's height changes, kept by polygon id (30 days, on this device or just this session): see height-store.ts. */
+const heightStore = createHeightStore()
+const keepChip = createKeepChip(app, (mode) => {
+  heightStore.setMode(mode)
+  showHeightsLine()
+})
+function showHeightsLine() {
+  ui.setHeightsLine({ keep: heightStore.mode(), count: heightStore.count() })
+}
 
 // Starts on the map: there is nothing to show in 3D until a building is picked.
 let view: View = 'map'
@@ -1022,6 +1033,8 @@ function saveShared() {
   const mine = loadSavedPlan(plan.buildingId)
   if (mine && !confirm(t('shell.sharedSaveFirst'))) return
   savePlan(plan)
+  heightStore.put(plan.heights)
+  showHeightsLine()
   setSharedMode(false)
   exampleMode = false
   ui.setExample(false)
@@ -1230,14 +1243,18 @@ function show(full: Building[], picked: Building, origin: Origin, keepCamera: bo
   // The OSM refinement replaces the tile preview of the same building: carry its plan over.
   const carried = plan && site && plan.buildingId === site.selected.id && keepCamera
   const saved = carried ? null : planFor(picked)
-  heights = keepKnown({ ...heights, ...(carried ? plan!.heights : saved?.heights) }, raw) ?? {}
+  // The store is the truth (a share link's heights are shown over it, never written to it); a refinement keeps the edits made on its preview.
+  const resolved = carried ? { ...heightStore.load(), ...heights, ...plan!.heights } : resolveHeights(heightStore, saved?.heights, !!sharedPlan)
+  heights = keepKnown(resolved, raw) ?? {}
   const buildings = applyHeights(raw, heights)
   const selected = reselect(buildings, picked)
   site = { full, raw, buildings, selected, origin }
   sunScene.setBuildings(buildings, selected, { keepCamera, radiusM: hoodRadius })
   ui.setNeighborhoodLine(neighborhoodLine(countBuildings(buildings), hoodRadius))
-  if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
-  else setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
+  if (carried) setPlan({ ...withHeights(rebasePlan(plan!, origin)), buildingId: selected.id, selection: selected.sources })
+  else setPlan(saved ? withHeights(rebasePlan(withoutKey(saved), origin)) : undefined)
+  if (saved?.heights && !sharedPlan && !carried && plan) savePlan(plan) // older plans handed their heights to the store: saved without them now
+  showHeightsLine()
   if (saved && sharedPlan && !carried) {
     setSharedMode(true)
     sharedChip.showShared(saveShared, startOwn)
@@ -1279,6 +1296,35 @@ function setNeighborhood(id: NeighborhoodId) {
   }
 }
 ui.onNeighborhood(setNeighborhood)
+ui.onHeightsChange(() => keepChip.ask())
+ui.onHeightsReset(() => {
+  const n = heightStore.count()
+  if (!n || !confirm(t('shell.heightsResetConfirm', { n }))) return
+  heightStore.clear()
+  stripSavedHeights()
+  keepChip.hide()
+  heights = {}
+  if (site) {
+    const before = site.selected
+    site.buildings = applyHeights(site.raw, {})
+    site.selected = reselect(site.buildings, before)
+    sunScene.setBuildings(site.buildings, site.selected, { keepCamera: true })
+    ui.setBuildingInfo(site.selected)
+    if (plan) {
+      const now = site.selected
+      let updated = withHeights(plan)
+      if (before.height !== now.height || before.minHeight !== now.minHeight || before.levels !== now.levels) {
+        updated = { ...updated, floorHeight: defaultFloorHeight(now), floor: Math.min(updated.floor, levelCount(now) - 1) }
+      }
+      editingHeight = true
+      setPlan(updated, true)
+      editingHeight = false
+      if (!ephemeral()) savePlan(updated)
+    }
+  }
+  showHeightsLine()
+  chip.done(t('shell.heightsResetDone'))
+})
 
 /** The building at the click: the flood fill, or the parts a saved plan recorded (older plans have none). */
 function choose(buildings: Building[], origin: Origin, clicked: { lat: number; lon: number }): Building | undefined {
@@ -1410,6 +1456,12 @@ function openEditor(): boolean {
   return true
 }
 
+/** The plan with the heights now in the scene (what a share link carries). */
+function withHeights(p: Plan): Plan {
+  const { heights: _, ...rest } = p
+  return { ...rest, ...(Object.keys(heights).length ? { heights } : {}) }
+}
+
 /** The whole floor of the selected building, carrying the heights set so far. */
 function newPlan(): Plan {
   return { ...defaultPlan(site!.selected, site!.origin), ...(Object.keys(heights).length ? { heights } : {}) }
@@ -1434,6 +1486,13 @@ function setHeight(id: string, override: HeightOverride | null) {
   if (override) next[id] = override
   else delete next[id]
   heights = next
+  if (!sharedMode) {
+    // A shared copy is only looked at: its heights reach the store with "Save as mine".
+    const firstTime = override && heightStore.mode() === undefined
+    heightStore.set(id, override)
+    if (firstTime) keepChip.ask()
+    showHeightsLine()
+  }
   const before = site.selected
   site.buildings = applyHeights(site.raw, heights)
   site.selected = reselect(site.buildings, before)
@@ -1445,16 +1504,22 @@ function setHeight(id: string, override: HeightOverride | null) {
   if (before.height !== now.height || before.minHeight !== now.minHeight || before.levels !== now.levels) {
     updated = { ...updated, floorHeight: defaultFloorHeight(now), floor: Math.min(updated.floor, levelCount(now) - 1) }
   }
+  editingHeight = true
   setPlan(updated, true)
+  editingHeight = false
   if (!ephemeral()) savePlan(updated)
   chip.done(override ? t(touchOnly() ? 'shell.heightSetTouch' : 'shell.heightSet') : t('shell.heightReset'))
 }
 
+/** A height edit is on its way through setPlan: the plan already says what the heights are. */
+let editingHeight = false
+
 /** keepView leaves the camera where it is; otherwise the first plan of a building is framed. */
 function setPlan(next: Plan | undefined, keepView = false) {
-  // A plan imported with other heights brings them in.
-  if (next && site && !sameHeights(next.heights, heights)) {
-    heights = keepKnown(next.heights, site.raw) ?? {}
+  // A plan imported with other heights brings them in (over the stored ones, which every plan sees).
+  const wanted = next && site && !editingHeight ? keepKnown({ ...heightStore.load(), ...next.heights }, site.raw) : undefined
+  if (next && site && !editingHeight && !sameHeights(wanted, heights)) {
+    heights = wanted ?? {}
     site.buildings = applyHeights(site.raw, heights)
     site.selected = reselect(site.buildings, site.selected)
     sunScene.setBuildings(site.buildings, site.selected, { keepCamera: true })
