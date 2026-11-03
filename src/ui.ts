@@ -11,7 +11,7 @@ import { headlineText, sunBandGradient, timeText, type DayHeadline } from './hea
 import type { Interval } from './sunmap'
 import { ACCURACY_URL } from './panel-card'
 import { duration, sunGradient } from './sunmap'
-import { rangeText } from './suitability'
+import { rangeText, suitabilityGradient } from './suitability'
 import { buildingLine } from './building-line'
 import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
 
@@ -846,7 +846,7 @@ function suitabilityLegendHtml(status: SuitabilityStatus, updatingPct?: number):
     (updatingPct === undefined
       ? `<span class="legendHead">${t(status.weather ? 'sun.suitHeadWeather' : 'sun.suitHeadClear')}</span>`
       : `<span class="legendHead" role="status">${t('sun.suitUpdating')}\u2026 ${updatingPct}%</span>`) +
-    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${sunGradient()}"></div>` +
+    `<div class="legendBar${updatingPct === undefined ? '' : ' stale'}" style="background:${suitabilityGradient()}"></div>` +
     `<div class="legendTicks scaled${updatingPct === undefined ? '' : ' stale'}">${status.ticks.map(tick).join('')}</div>` +
     `<span class="legendUnit">${rangeText(status.observed)}</span>` +
     `<span class="legendHint">${t('sun.suitHint', { n: status.count })}${status.clamped ? ' ' + t('sun.suitClamped') : ''}</span>`
