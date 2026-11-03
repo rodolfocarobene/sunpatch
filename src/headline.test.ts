@@ -87,7 +87,7 @@ describe('next sun and the slider band', () => {
   it('says when the sun comes in, or that there is no more, outside the stretches', () => {
     const h = { minutes: 110, runs, shown: runs, more: false, peak: 660 }
     expect(headlineText(h, day, 12 * 60 + 30).detail).toBe('Sun comes in at 14:00')
-    expect(headlineText(h, day, 16 * 60).detail).toBe('No more sun inside today')
+    expect(headlineText(h, day, 16 * 60).detail).toBe('No more sun inside this day')
     expect(headlineText(h, day, 650).detail).toBe('Most of the floor is lit around 11:00.')
     expect(headlineText(h, day).detail).toBe('Most of the floor is lit around 11:00.')
     useLang('it')
