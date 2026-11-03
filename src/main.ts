@@ -903,6 +903,11 @@ let exampleMode = !shareHash && (fromQuery || (restored?.example === true && res
  * building untouched) until "Save as mine". `sharedPlan` is what the building load applies, and is dropped when the load ends.
  */
 let sharedMode = false
+/** The recipient of a shared copy has nothing of their own to share yet, so the Share box hides with it. */
+function setSharedMode(on: boolean) {
+  sharedMode = on
+  ui.setShared(on)
+}
 let sharedPlan: Plan | undefined
 const ephemeral = () => exampleMode || sharedMode
 const sharedChip = createSharedChip(document.body)
@@ -983,10 +988,19 @@ function saveShared() {
   const mine = loadSavedPlan(plan.buildingId)
   if (mine && !confirm(t('shell.sharedSaveFirst'))) return
   savePlan(plan)
-  sharedMode = false
+  setSharedMode(false)
   exampleMode = false
   ui.setExample(false)
   sharedChip.notice(t('shell.sharedSaved'))
+}
+
+/** Start my own: leave the shared copy (the building keeps the recipient's own saved plan, if any) and go to the Map. */
+function startOwn() {
+  if (!site) return
+  endShared()
+  const mine = savedPlanFor(site.selected)
+  setPlan(mine ? rebasePlan(withoutKey(mine), site.origin) : undefined)
+  setView('map')
 }
 
 ui.onShare(() => void shareLink())
@@ -1008,7 +1022,7 @@ async function shareLink() {
       }
     } else await navigator.clipboard.writeText(url)
     ui.setShareResult(t('shell.shareCopied'))
-    window.setTimeout(() => ui.setShareResult(null), 5000)
+    window.setTimeout(() => ui.setShareResult(null), 4000)
   } catch {
     ui.setShareResult(t('shell.shareManual'), url) // no clipboard access: the link, selected, for the user to copy
   }
@@ -1022,8 +1036,8 @@ async function openExample(over?: Plan, shared?: { date: string; minutes: number
   placeTrees(elements, origin, site!.buildings)
   if (over) {
     setPlan(rebasePlan({ ...over, buildingId: selected.id, ...(selected.sources && { selection: selected.sources }) }, origin))
-    sharedMode = true
-    sharedChip.showShared(saveShared)
+    setSharedMode(true)
+    sharedChip.showShared(saveShared, startOwn)
   } else setPlan(examplePlan)
   ui.setWhen(shared?.date ?? EXAMPLE_WHEN.date, shared?.minutes ?? EXAMPLE_WHEN.minutes)
   ui.setExample(!over)
@@ -1183,8 +1197,8 @@ function show(full: Building[], picked: Building, origin: Origin, keepCamera: bo
   if (carried) setPlan({ ...rebasePlan(plan!, origin), buildingId: selected.id, selection: selected.sources })
   else setPlan(saved ? rebasePlan(withoutKey(saved), origin) : undefined)
   if (saved && sharedPlan && !carried) {
-    sharedMode = true
-    sharedChip.showShared(saveShared)
+    setSharedMode(true)
+    sharedChip.showShared(saveShared, startOwn)
   }
   ui.setLocation(origin.lat, origin.lon)
   ui.setBuildingInfo(selected)
@@ -1294,9 +1308,9 @@ function undoSwitch() {
     setPlan(rebasePlan(back.plan, site.origin), true)
   }
   if (back.sharedMode && back.plan && site) {
-    sharedMode = true
+    setSharedMode(true)
     setPlan(rebasePlan(back.plan, site.origin), true)
-    sharedChip.showShared(saveShared)
+    sharedChip.showShared(saveShared, startOwn)
   }
   if (back.view !== view) setView(back.view)
   chip.done(t('shell.switchedBack'))
@@ -1324,7 +1338,7 @@ function planFor(b: Building): (Plan & { originalId: string }) | null {
 /** The user left the shared copy (another building, another pick): back to plans that save as usual. */
 function endShared() {
   sharedPlan = undefined
-  sharedMode = false
+  setSharedMode(false)
   sharedChip.hide()
 }
 

@@ -64,6 +64,8 @@ export interface UI {
   /** Shows the sample-apartment note (Plan and 3D views) until it is dismissed. */
   setExample(on: boolean): void
   /** Shows the cutaway toggle and the Share button while an apartment plan is in the 3D scene. */
+  /** A shared copy is on screen: the Share box hides. */
+  setShared(on: boolean): void
   setPlanActive(active: boolean): void
   /** The Share button was pressed: the caller builds the link and answers through `setShareResult`. */
   onShare(listener: () => void): void
@@ -188,8 +190,9 @@ export function createUI(
           </div>
         </div>
         <div id="shareBox" class="field" hidden>
-          <button id="shareBtn" class="link" type="button" title="${t('shell.shareTitle')}">${t('shell.share')}</button>
+          <button id="shareBtn" type="button" title="${t('shell.shareTitle')}">${t('shell.share')}</button>
           <p id="shareNote" class="legendNote">${t('shell.shareNote')}</p>
+          <p id="shareStatus" class="legendNote" role="status" hidden></p>
           <input id="shareField" type="text" readonly hidden aria-label="${t('shell.shareField')}">
         </div>
       </div>
@@ -422,6 +425,8 @@ export function createUI(
   })
   let hintGone = false
   let hasBuilding = false
+  let planActive = false
+  let shared = false
   try {
     hintGone = localStorage.getItem(SWITCH_HINT_KEY) === 'gone'
   } catch { /* storage blocked: the hint shows every time */ }
@@ -667,7 +672,9 @@ export function createUI(
     },
     setShareResult(text, link) {
       const field = $<HTMLInputElement>('shareField')
-      $('shareNote').textContent = text ?? t('shell.shareNote')
+      const status = $('shareStatus')
+      status.textContent = text ?? ''
+      status.hidden = text === null
       field.hidden = link === undefined
       if (link !== undefined) {
         field.value = link
@@ -675,8 +682,13 @@ export function createUI(
         field.select()
       }
     },
+    setShared(on) {
+      shared = on
+      $('shareBox').hidden = !planActive || shared
+    },
     setPlanActive(active) {
-      $('shareBox').hidden = !active
+      planActive = active
+      $('shareBox').hidden = !active || shared
       $('aptShow').hidden = !active
       if (active) applyCutaway()
     },
