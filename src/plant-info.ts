@@ -41,9 +41,12 @@ export const commonsFileUrl = (file: string): string => `https://commons.wikimed
 export const commonsInfoUrl = (file: string): string =>
   `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(`File:${underscored(file)}`)}&prop=imageinfo&iiprop=extmetadata&format=json&origin=*`
 
-/** The Commons file name behind an upload.wikimedia.org picture URL (original or thumbnail), or undefined for a non-Commons file. */
+/** Wikimedia picture hosts: upload.wikimedia.org, and thumb.wikimedia.org where the summary API now points thumbnails. */
+const WIKIMEDIA_IMAGE = /^https:\/\/(upload|thumb)\.wikimedia\.org\//
+
+/** The Commons file name behind a Wikimedia picture URL (original or thumbnail), or undefined for a non-Commons file. */
 export function commonsFileName(src: string): string | undefined {
-  const m = /^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/(thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/.exec(src)
+  const m = /^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/(thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/?]+)/.exec(src)
   if (!m) return undefined
   try {
     return decodeURIComponent(m[2])
@@ -86,7 +89,7 @@ export function creditFrom(extmetadata: unknown, fileUrl?: string): Credit {
   }
   const url = text('LicenseUrl')
   return {
-    artist: text('Artist'),
+    artist: text('Artist')?.replace(/^(photo(graph)?\s+)?by\s+/i, ''), // "Photo by X" would read "Photo: Photo by X"
     license: text('LicenseShortName'),
     licenseUrl: url && /^https?:\/\//.test(url) ? url : undefined,
     fileUrl,
@@ -109,7 +112,8 @@ interface Summary {
 
 const memory = new Map<string, PlantInfo>()
 const pending = new Map<string, Promise<PlantInfo>>()
-const cacheKey = (lang: Lang, title: string): string => `sunpatch.wiki.${lang}.${title}`
+// v2: entries cached before thumb.wikimedia.org pictures were accepted have no picture.
+const cacheKey = (lang: Lang, title: string): string => `sunpatch.wiki.v2.${lang}.${title}`
 
 function readSession(key: string): PlantInfo | undefined {
   try {
@@ -140,7 +144,7 @@ async function fetchInfo(lang: Lang, title: string, fetchFn: Fetch): Promise<Pla
   if (extract === '') throw new Error('no summary')
   const info: PlantInfo = { title: s.title ?? title, extract, pageUrl: s.content_urls?.desktop?.page ?? articleUrl(lang, title) }
   const thumb = s.thumbnail
-  if (thumb?.source && /^https:\/\/upload\.wikimedia\.org\//.test(thumb.source)) {
+  if (thumb?.source && WIKIMEDIA_IMAGE.test(thumb.source)) {
     info.image = { src: thumb.source, width: thumb.width ?? 320, height: thumb.height ?? 240 }
     const file = commonsFileName(thumb.source)
     if (file) {

@@ -45,6 +45,10 @@ describe('urls', () => {
     expect(commonsFileName(SUMMARY.thumbnail.source)).toBe('Basil.jpg')
     expect(commonsFileName('https://upload.wikimedia.org/wikipedia/commons/a/ab/Ocimum%20basilicum%20(1).jpg')).toBe('Ocimum basilicum (1).jpg')
     expect(commonsFileName('https://upload.wikimedia.org/wikipedia/en/thumb/a/ab/Logo.png/100px-Logo.png')).toBeUndefined()
+    // The summary API now points thumbnails at thumb.wikimedia.org, with tracking query parameters.
+    expect(
+      commonsFileName('https://thumb.wikimedia.org/wikipedia/commons/thumb/9/97/Ocimum_basilicum_8zz.jpg/330px-Ocimum_basilicum_8zz.jpg?utm_source=en.wikipedia.org'),
+    ).toBe('Ocimum_basilicum_8zz.jpg')
     const url = commonsInfoUrl('Ocimum basilicum (1).jpg')
     expect(url).toBe(
       'https://commons.wikimedia.org/w/api.php?action=query&titles=File%3AOcimum_basilicum_(1).jpg&prop=imageinfo&iiprop=extmetadata&format=json&origin=*',
@@ -82,6 +86,7 @@ describe('credit', () => {
 
   it('ignores a licence url that is not http(s)', () => {
     expect(creditFrom({ LicenseUrl: { value: 'javascript:alert(1)' } }).licenseUrl).toBeUndefined()
+    expect(creditFrom({ Artist: { value: 'Photo by David J. Stang' } }).artist).toBe('David J. Stang')
   })
 })
 
