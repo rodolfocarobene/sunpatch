@@ -65,7 +65,7 @@ import { POT_HEIGHT } from './garden-spots'
 import { CELL_SIZE, OK_CELL_SCALE, stepColor, type FindKind, type Step } from './garden-find'
 import { hatchedMaterial, hatchStrength } from './hatch'
 import { isGuessed } from './heights'
-import type { RulerAnchor } from './height-ruler'
+import { rulerOffered, type RulerAnchor, type RulerContext } from './height-ruler'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
 
 // Test scene: 200 m ground. Real data: the extent follows the neighbourhood radius (dataExtent in neighborhood.ts).
@@ -193,6 +193,8 @@ export interface SunScene {
   onBuildingMenu(handler: (polygonId: string, at: { x: number; y: number }) => void): void
   /** Where the height ruler stands for a polygon (the on-screen roof corner nearest the screen point `near`, in screen pixels); null when it would be hidden, behind the camera or too small to use. */
   rulerAnchor(polygon: Building, near: { x: number; y: number }): RulerAnchor | null
+  /** What the ruler may do on this building now (selected, floors hidden, floor overlay, walking). */
+  rulerContext(polygon: Building): RulerContext
   /** Shows a polygon at another height without rebuilding the world (its mesh is stretched, shadows follow); null puts it back. */
   previewHeight(polygonId: string, height: number | null): void
   /** Called with a plain click (not a drag) on a building that is not selected: its polygon id and the scene point hit. */
@@ -1328,8 +1330,9 @@ export function createScene(container: HTMLElement): SunScene {
   })
   // The height ruler's helpers: where it stands, and a cheap preview of a new height while its handle moves.
   const MIN_RULER_PX_PER_M = 0.8
+  const rulerContext = (b: Building): RulerContext => ({ selected: selectedIds.has(b.id), cutaway: cutawayNow(), floorOverlay: sunMapOn, walking })
   function rulerAnchor(b: Building, near: { x: number; y: number }): RulerAnchor | null {
-    if (walking || (selectedIds.has(b.id) && cutawayNow())) return null
+    if (!rulerOffered(rulerContext(b))) return null
     const rect = renderer.domElement.getBoundingClientRect()
     const toScreen = (x: number, y: number, z: number) => {
       const v = new Vector3(x, y, z).project(camera)
@@ -1515,6 +1518,7 @@ export function createScene(container: HTMLElement): SunScene {
       menuClick = handler
     },
     rulerAnchor,
+    rulerContext,
     previewHeight,
     sceneVersion: () => version,
     occluders: () => collectOccluders([world, treeGroup]),

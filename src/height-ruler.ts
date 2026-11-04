@@ -69,6 +69,30 @@ export function nextInCycle(order: string[], current: string | undefined): strin
   return order[(at + 1) % order.length]
 }
 
+/** What decides whether the ruler (and its hover note) may stand on a building. */
+export interface RulerContext {
+  selected: boolean
+  /** The floors above the apartment are hidden: the floor is what the pointer is over. */
+  cutaway: boolean
+  /** The sun map or daylight paints on the floor: clicks there are questions about the floor. */
+  floorOverlay: boolean
+  walking: boolean
+}
+
+/** The ruler may stand on a building unless it is the selected one and its floor is on show or being probed: there a click is for the floor. */
+export function rulerOffered(c: RulerContext): boolean {
+  return !c.walking && !(c.selected && (c.cutaway || c.floorOverlay))
+}
+
+/**
+ * The line a hover note ends with: how to change the height, or none. The selected building says nothing in the Panels and Garden
+ * tabs, or where the ruler is not offered, so the note never sits on a floor that a click is about to use.
+ */
+export function hoverNoteKind(c: RulerContext, view3d: boolean): 'ruler' | 'edit' | null {
+  if (!c.selected) return view3d && rulerOffered(c) ? 'ruler' : 'edit'
+  return view3d && rulerOffered(c) ? 'ruler' : null
+}
+
 /** Where the ruler stands on screen (pixels): the roof corner nearest the camera, its base, and the size of a metre there. */
 export interface RulerAnchor {
   x: number

@@ -164,7 +164,9 @@ deal with it:
   the on-screen roof corner nearest the pointer, or, when no corner is in view (close camera), a spot beside the pointer
   with the metre scale taken at the surface under it. Hidden for the selected building while its floors above are cut
   away, while walking, and on any press elsewhere or wheel. It stays put once shown (a grace delay lets the pointer reach
-  it). Dragging uses pure helpers (`snapHeight`, `heightFromDrag`, `rulerLabel`, `overrideFromRuler`): whole floors from
+  it). `rulerOffered`/`hoverNoteKind` (pure) decide it: never on the selected
+  building while its floors are hidden or the sun map / Daylight paints its floor (a click there is a floor probe), and the hover
+  note says nothing on the selected building in Panels/Garden or there; toggling those layers hides the ruler. Dragging uses pure helpers (`snapHeight`, `heightFromDrag`, `rulerLabel`, `overrideFromRuler`): whole floors from
   `minHeight`, Shift 0.5 m, a 3 px dead zone. While dragging, `scene.previewHeight` only stretches that polygon's mesh
   (`userData.polygonId`; an outline is drawn for the selected building with its apartment): no rebuild, no scene version
   bump, no re-trace. On release `onCommit` calls `setHeight` (the same override path as the Height box, so `plan.heights`,
