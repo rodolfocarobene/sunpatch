@@ -1,6 +1,7 @@
 import { edgeOpenings } from './apartment'
 import { clampWindowT, projectOnSegment } from './editor-geom'
-import { internalReflected, roomSurfaces } from './dayfactor'
+import { internalReflected, meanReflectance, roomSurfaces } from './dayfactor'
+import type { IrcCalibration, IrcInput } from './irc-gather'
 import { SLAB_THICKNESS, ringOf, type Plan } from './plan'
 import { insideOutline } from './walk-geom'
 
@@ -56,6 +57,31 @@ export function roomIrc(room: Room): number {
 export function ircAt(rooms: Rooms, x: number, z: number): number {
   const i = rooms.roomAt(x, z)
   return i < 0 ? 0 : roomIrc(rooms.rooms[i])
+}
+
+/**
+ * What the worker needs for the gathered IRC: each room's BRE value and mean reflectance, the room of each calibration
+ * point (`calib`, x and z each) and, when given, of the points to report, and the total surface (for the patch size).
+ */
+export function ircInput(rooms: Rooms, floorY: number, calib: Float32Array, points: Float32Array | undefined, cacheKey: string, sceneVersion: number): IrcInput {
+  const roomOf = (p: Float32Array) => Int32Array.from({ length: p.length / 2 }, (_, i) => rooms.roomAt(p[i * 2], p[i * 2 + 1]))
+  return {
+    floorY,
+    rooms: rooms.rooms.map((r) => ({ target: roomIrc(r), reflectance: meanReflectance(r) })),
+    calib: { points: calib, room: roomOf(calib) },
+    ...(points ? { points, room: roomOf(points) } : {}),
+    area: rooms.rooms.reduce((sum, r) => sum + 2 * r.floor + r.walls, 0),
+    cacheKey,
+    ...(points && known.has(`${sceneVersion}|${cacheKey}`) ? { known: known.get(`${sceneVersion}|${cacheKey}`) } : {}),
+  }
+}
+
+/** The room means a worker found, kept here so another job (the clicked Garden spot, after the whole-area run) need not find them again. */
+const known = new Map<string, IrcCalibration[]>()
+export function rememberIrc(sceneVersion: number, cacheKey: string, calibration: IrcCalibration[] | undefined): void {
+  if (!calibration) return
+  known.set(`${sceneVersion}|${cacheKey}`, calibration)
+  if (known.size > 8) known.delete(known.keys().next().value!)
 }
 
 export function buildRooms(plan: Plan): Rooms {
@@ -212,6 +238,14 @@ export function buildRooms(plan: Plan): Rooms {
 }
 
 let last: { key: string; rooms: Rooms } | undefined
+
+/** A short fingerprint of everything the rooms (and so their IRC) depend on in a plan. */
+export function roomsKey(plan: Plan): string {
+  const text = JSON.stringify([plan.outline, plan.walls, plan.windows, plan.floorHeight])
+  let h = 5381
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
+  return `${(h >>> 0).toString(36)}.${text.length}`
+}
 
 /** `buildRooms`, remembering the last plan: the key is every part of the plan the rooms depend on. */
 export function roomsOf(plan: Plan): Rooms {

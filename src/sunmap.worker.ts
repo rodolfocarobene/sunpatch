@@ -3,17 +3,18 @@ import type { Panel } from './plan'
 import { shadePanel, type PanelShade, type YearSlots } from './panel-shade'
 import { traceMonthly } from './garden-trace'
 import { traceDaylight } from './dayfactor-trace'
+import { IrcRun, PatchField, patchCellFor, type IrcCalibration, type IrcInput } from './irc-gather'
 import { buildBvh, litSlots, traceSun } from './sunmap-trace'
 import { IRRADIATION_STRIDE, traceSamples } from './suitability'
 
 export type WorkerIn =
   | { kind: 'scene'; key: number; triangles: Float32Array }
   | { kind: 'glass'; key: number; triangles: Float32Array }
-  | { kind: 'daylight'; id: number; key: number; points: Float32Array; floorY: number; samples: number }
+  | { kind: 'daylight'; id: number; key: number; points: Float32Array; floorY: number; samples: number; irc?: IrcInput }
   | { kind: 'trace'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array }
   | { kind: 'shade'; id: number; key: number; panel: Panel; slots: YearSlots }
   | { kind: 'suit'; id: number; key: number; inputs: Float32Array; slots: YearSlots; step: number }
-  | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number; day?: { points: Float32Array; floorY: number; samples: number } }
+  | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number; day?: { points: Float32Array; floorY: number; samples: number; irc?: IrcInput } }
   | { kind: 'year'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array; counts: number[] }
 
 export type WorkerOut =
@@ -21,9 +22,9 @@ export type WorkerOut =
   | { kind: 'done'; id: number; lit: Uint8Array; ms: number; bvhMs: number }
   | { kind: 'shaded'; id: number; shade: PanelShade; bvhMs: number }
   | { kind: 'suited'; id: number; irradiation: Float32Array; ms: number; bvhMs: number }
-  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array }
+  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array; irc?: Float32Array; ircRooms?: IrcCalibration[] }
   | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
-  | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number }
+  | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number; irc?: Float32Array; ircRooms?: IrcCalibration[]; ircMs?: number; ircPatches?: number }
   | { kind: 'error'; id: number; message: string }
 
 // The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
@@ -33,6 +34,22 @@ let bvhMs = 0
 // The window panes, for the daylight estimate only (they are not shadow casters, so they are not in `bvh`).
 let glassBvh: MeshBVH | undefined
 let glassKey = -1
+// The surface patches of the gathered IRC (kept per scene and patch size) and the room scales found for a plan.
+let ircField: { key: number; cell: number; field: PatchField } | undefined
+const ircCalibrations = new Map<string, IrcCalibration[]>()
+const IRC_CHUNK = 6
+
+function newIrcRun(key: number, input: IrcInput): IrcRun {
+  const cell = patchCellFor(input.area)
+  if (!ircField || ircField.key !== key || ircField.cell !== cell) ircField = { key, cell, field: new PatchField(bvh!, glassBvh!, cell) }
+  // With the calibration known (a Garden run after the daylight layer), only the points to report are traced.
+  const known = input.points ? (input.known ?? ircCalibrations.get(`${key}|${input.cacheKey}`)) : undefined
+  return new IrcRun(bvh!, glassBvh!, ircField.field, input, known)
+}
+function finishIrc(key: number, input: IrcInput, run: IrcRun) {
+  ircCalibrations.set(`${key}|${input.cacheKey}`, run.rooms)
+  if (ircCalibrations.size > 8) ircCalibrations.delete(ircCalibrations.keys().next().value!)
+}
 
 /** Samples traced per turn of the suitability map and the garden analysis; between turns the worker can take a newer request. */
 const SUIT_CHUNK = 400
@@ -55,11 +72,15 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     bvh = buildBvh(m.triangles)
     bvhMs = performance.now() - built
     bvhKey = m.key
+    ircField = undefined
+    ircCalibrations.clear()
     return
   }
   if (m.kind === 'glass') {
     glassBvh = m.triangles.length ? buildBvh(m.triangles) : undefined
     glassKey = m.key
+    ircField = undefined
+    ircCalibrations.clear()
     return
   }
   try {
@@ -120,7 +141,7 @@ function suit(m: Extract<WorkerIn, { kind: 'suit' }>) {
 
 /**
  * The garden analysis in chunks, reporting progress; a newer 'garden' request (or scene) stops this one. With `day`, the
- * daylight (SC + ERC) of the indoor points follows the sun minutes, in the same run.
+ * daylight (SC + ERC, then the gathered IRC) of the indoor points follows the sun minutes, in the same run.
  */
 function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
   gardenId = m.id
@@ -131,6 +152,7 @@ function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
   const started = performance.now()
   let at = 0
   let dayAt = 0
+  let irc: IrcRun | undefined
   const turn = () => {
     if (gardenId !== m.id) return
     try {
@@ -141,19 +163,29 @@ function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
         at = to
       } else if (m.day) {
         if (!glassBvh || glassKey !== m.key) throw new Error('scene changed')
-        const to = Math.min(dayTotal, dayAt + DAYLIGHT_CHUNK)
-        traceDaylight(bvh, glassBvh, m.day.points, m.day.floorY, m.day.samples, dayAt, to, direct)
-        dayAt = to
+        if (dayAt < dayTotal) {
+          const to = Math.min(dayTotal, dayAt + DAYLIGHT_CHUNK)
+          traceDaylight(bvh, glassBvh, m.day.points, m.day.floorY, m.day.samples, dayAt, to, direct)
+          dayAt = to
+        } else if (m.day.irc) {
+          irc ??= newIrcRun(m.key, m.day.irc)
+          if (!irc.done) irc.step(IRC_CHUNK)
+        }
       }
     } catch (err) {
       reply({ kind: 'error', id: m.id, message: (err as Error).message })
       return
     }
-    if (at < total || dayAt < dayTotal) {
-      reply({ kind: 'progress', id: m.id, done: (at + dayAt) / (total + dayTotal) })
+    const ircUnits = m.day?.irc ? (irc?.units ?? 1) : 0
+    const ircDone = irc ? irc.units * (irc.done ? 1 : irc.progress) : 0
+    if (at < total || dayAt < dayTotal || (m.day?.irc && !irc?.done)) {
+      reply({ kind: 'progress', id: m.id, done: (at + dayAt + ircDone) / (total + dayTotal + ircUnits) })
       setTimeout(turn, 0)
-    } else if (m.day) reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs, direct }, [out.buffer, direct.buffer])
-    else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
+    } else if (m.day) {
+      if (irc) finishIrc(m.key, m.day.irc!, irc)
+      const ircOut = irc?.result()
+      reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs, direct, irc: ircOut, ircRooms: irc?.rooms }, [out.buffer, direct.buffer, ...(ircOut ? [ircOut.buffer] : [])])
+    } else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
   }
   turn()
 }
@@ -183,28 +215,49 @@ function year(m: Extract<WorkerIn, { kind: 'year' }>) {
   turn()
 }
 
-/** The daylight estimate (SC + ERC per point) in chunks, reporting progress; a newer 'daylight' request (or scene) stops it. */
+/**
+ * The daylight estimate in chunks, reporting progress; a newer 'daylight' request (or scene) stops it. SC and ERC are traced
+ * per point first, then (with `irc`) the gathered internally reflected light.
+ */
 function daylight(m: Extract<WorkerIn, { kind: 'daylight' }>) {
   daylightId = m.id
   const total = m.points.length / 2
   const out = new Float32Array(total)
   const started = performance.now()
   let at = 0
+  let irc: IrcRun | undefined
+  let ircStart = 0
   const turn = () => {
     if (daylightId !== m.id) return
     try {
       if (!bvh || bvhKey !== m.key || glassKey !== m.key) throw new Error('scene changed')
-      const to = Math.min(total, at + DAYLIGHT_CHUNK)
-      if (glassBvh) traceDaylight(bvh, glassBvh, m.points, m.floorY, m.samples, at, to, out)
-      at = to
+      if (at < total) {
+        const to = Math.min(total, at + DAYLIGHT_CHUNK)
+        if (glassBvh) traceDaylight(bvh, glassBvh, m.points, m.floorY, m.samples, at, to, out)
+        at = to
+      } else if (m.irc && glassBvh) {
+        if (!irc) {
+          irc = newIrcRun(m.key, m.irc)
+          ircStart = performance.now()
+        }
+        if (!irc.done) irc.step(IRC_CHUNK)
+      }
     } catch (err) {
       reply({ kind: 'error', id: m.id, message: (err as Error).message })
       return
     }
-    if (at < total) {
-      reply({ kind: 'progress', id: m.id, done: at / total })
+    const ircUnits = m.irc ? m.points.length / 2 : 0
+    if (at < total || (m.irc && glassBvh && !irc?.done)) {
+      reply({ kind: 'progress', id: m.id, done: (at + (irc ? irc.units * irc.progress : 0)) / (total + ircUnits) })
       setTimeout(turn, 0)
-    } else reply({ kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs }, [out.buffer])
+    } else {
+      if (irc && m.irc) finishIrc(m.key, m.irc, irc)
+      const ircOut = irc?.result()
+      reply(
+        { kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs, irc: ircOut, ircRooms: irc?.rooms, ircMs: irc ? performance.now() - ircStart : undefined, ircPatches: ircField?.field.size },
+        [out.buffer, ...(ircOut ? [ircOut.buffer] : [])],
+      )
+    }
   }
   turn()
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heightFromDrag, keyHeight, cycleOrder, nextInCycle, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
+import { hoverNoteKind, rulerOffered, heightFromDrag, keyHeight, cycleOrder, nextInCycle, overrideFromRuler, rulerLabel, snapHeight } from './height-ruler'
 import type { Building } from './osm'
 
 const building = { id: 'way/1', minHeight: 0, height: 9, heightSource: 'default', outer: [], holes: [], tags: {} } as unknown as Building
@@ -89,5 +89,23 @@ describe('cycleOrder', () => {
     expect(nextInCycle(order, 'c')).toBe('a')
     expect(nextInCycle(order, 'gone')).toBe('a')
     expect(nextInCycle([], 'a')).toBeUndefined()
+  })
+})
+
+describe('ruler offered and hover note', () => {
+  const base = { selected: false, cutaway: false, floorOverlay: false, walking: false }
+  it('is never offered on the selected building while its floor is on show or probed', () => {
+    expect(rulerOffered({ ...base, selected: true, cutaway: true })).toBe(false)
+    expect(rulerOffered({ ...base, selected: true, floorOverlay: true })).toBe(false)
+    expect(rulerOffered({ ...base, selected: true })).toBe(true)
+    expect(rulerOffered({ ...base, cutaway: true, floorOverlay: true })).toBe(true)
+    expect(rulerOffered({ ...base, walking: true })).toBe(false)
+  })
+  it('keeps the ruler hint off the selected building floor and out of the Panels and Garden tabs', () => {
+    expect(hoverNoteKind({ ...base, selected: true, cutaway: true }, true)).toBeNull()
+    expect(hoverNoteKind({ ...base, selected: true }, false)).toBeNull()
+    expect(hoverNoteKind({ ...base, selected: true }, true)).toBe('ruler')
+    expect(hoverNoteKind(base, true)).toBe('ruler')
+    expect(hoverNoteKind(base, false)).toBe('edit')
   })
 })

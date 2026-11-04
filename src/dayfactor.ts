@@ -101,6 +101,12 @@ export function internalReflected(glassArea: number, room: RoomSurfaces, c = C_U
   return ((0.85 * glassArea) / (total * (1 - mean))) * (c * fw + 5 * cw) * (glazing / CLEAN_GLASS)
 }
 
+/** The area-weighted mean reflectance of a room's surfaces (floor, ceiling, walls): the R of the split-flux series. */
+export function meanReflectance(room: RoomSurfaces, r = REFLECTANCE): number {
+  const total = 2 * room.floor + room.walls
+  return total > 0 ? (r.floor * room.floor + r.ceiling * room.floor + r.walls * room.walls) / total : 0
+}
+
 /** The rays' contribution at one point, in %: SC from sky seen through glass, ERC from obstructions seen through glass. */
 export function sampleDaylight(skyWeights: number, obstructedFraction: number, glazing = GLAZING): { sc: number; erc: number } {
   return { sc: 100 * glazing * skyWeights, erc: 100 * glazing * EXTERNAL_REFLECTANCE * obstructedFraction }

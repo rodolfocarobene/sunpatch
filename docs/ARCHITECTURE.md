@@ -70,7 +70,7 @@ Daylight switch / scene change ──► main.ts ──► dayfactor-job.ts ─�
 | `suitability.ts`, `suitability-job.ts`, `suitability-popover.ts` | Panel suitability map: facade, roof and ground samples, their tracing and kWh/kWp figures (shown per standard panel, 0.4 kW; per kW under Details), the worker job that runs it progressively, the click popover. |
 | `year.ts`, `year-job.ts`, `year-card.ts` | "Through the year" chart in the 3D tab: the 21st of each month, bar fractions, the summary sentence (pure); its own worker job (the `year` worker message traces 12 days on the 0.5 m headline grid, asking every 3rd 5-minute slot and the ones between only where the answer changes, `countSparse` in `sunmap-trace.ts`; only while the disclosure is open, cached per scene, floor, place and year, cancelled by a scene change); the disclosure with its bar buttons. |
 | `sunmap-popover.ts` | The popover on a clicked floor point: the sentence and the day strip with the sunny intervals (or, for the daylight layer, two lines of text). |
-| `dayfactor.ts`, `dayfactor-trace.ts`, `dayfactor-job.ts` | Daylight (estimate) layer: constants, CIE overcast weights, hemisphere directions, BRE internally reflected component, bands, cool colour ramp (pure); window-pane triangles and the SC + ERC ray tracing; the worker job that caches per scene version and cancels on a scene change. See "Daylight estimate". |
+| `dayfactor.ts`, `dayfactor-trace.ts`, `dayfactor-job.ts`, `irc-gather.ts` | Daylight (estimate) layer: constants, CIE overcast weights, hemisphere directions, BRE internally reflected component, bands, cool colour ramp (pure); window-pane triangles and the SC + ERC ray tracing; the worker job that caches per scene version and cancels on a scene change. See "Daylight estimate". |
 
 ## The selection model
 
@@ -164,7 +164,9 @@ deal with it:
   the on-screen roof corner nearest the pointer, or, when no corner is in view (close camera), a spot beside the pointer
   with the metre scale taken at the surface under it. Hidden for the selected building while its floors above are cut
   away, while walking, and on any press elsewhere or wheel. It stays put once shown (a grace delay lets the pointer reach
-  it). Dragging uses pure helpers (`snapHeight`, `heightFromDrag`, `rulerLabel`, `overrideFromRuler`): whole floors from
+  it). `rulerOffered`/`hoverNoteKind` (pure) decide it: never on the selected
+  building while its floors are hidden or the sun map / Daylight paints its floor (a click there is a floor probe), and the hover
+  note says nothing on the selected building in Panels/Garden or there; toggling those layers hides the ruler. Dragging uses pure helpers (`snapHeight`, `heightFromDrag`, `rulerLabel`, `overrideFromRuler`): whole floors from
   `minHeight`, Shift 0.5 m, a 3 px dead zone. While dragging, `scene.previewHeight` only stretches that polygon's mesh
   (`userData.polygonId`; an outline is drawn for the selected building with its apartment): no rebuild, no scene version
   bump, no re-trace. On release `onCommit` calls `setHeight` (the same override path as the Height box, so `plan.heights`,
@@ -242,17 +244,46 @@ illuminance outdoors on open ground:
   obstructed-through-window ray adds 0.2 x glazing (the common simple rule; no ground term, rays never go below the
   horizon and the glass is above the work plane).
 - **Glazing**: transmittance 0.7 and frame/dirt 0.8, factor 0.56, applied to SC, ERC and IRC.
-- **IRC** (`internalReflected`, per room): `0.85 W / (A (1 - R)) (C R_fw + 5 R_cw)`, constant within a room and evaluated
-  with that room's own figures (`rooms.ts`, below). W is the glass area of the windows on the room's boundary, A the room's
-  floor and ceiling plus its wall faces x floor height (facade, courtyard and both faces of interior walls);
-  R the area-weighted mean reflectance (floor 0.3, walls 0.5, ceiling 0.7); R_fw the floor with the lower half of the
-  walls, R_cw the ceiling with the upper half. C is 39, the unobstructed value, always: C falls with the obstruction angle
-  but the angle is not measured, so IRC is a little high for a facade with a tall neighbour. The 0.85 in the formula
-  is clean-glass transmittance, so the glazing factor (0.7 x 0.8) enters relative to it (x 0.56 / 0.85), not on top.
+- **IRC** (`irc-gather.ts`, per point; worker): the BRE split-flux value of each room is the room MEAN, and a one-bounce
+  gather gives the distribution, so places far from the windows get less. The BRE value (`internalReflected`, per room):
+  `0.85 W / (A (1 - R)) (C R_fw + 5 R_cw)` with W the glass area of the windows on the room's boundary, A the room's
+  floor and ceiling plus its wall faces x floor height (facade, courtyard and both faces of interior walls); R the
+  area-weighted mean reflectance (floor 0.3, walls 0.5, ceiling 0.7); R_fw the floor with the lower half of the walls,
+  R_cw the ceiling with the upper half. C is 39, the unobstructed value, always (the obstruction angle is not measured, so
+  IRC is a little high for a facade with a tall neighbour). The 0.85 is clean-glass transmittance, so the glazing factor
+  (0.7 x 0.8) enters relative to it (x 0.56 / 0.85). The gather, after SC and ERC in the same worker run:
+  - *Patches* (`PatchField`): where a gather ray lands on a surface, that surface belongs to a patch, made on demand and
+    cached: ceiling and floor patches by a 0.5 m cell and height, wall patches by a 0.5 m cell along and up the wall,
+    the wall's offset (5 cm) and facing (16 buckets), which keeps the two faces of a thin interior wall apart. The cell grows
+    as `sqrt(room surface / 2000)` when the rooms have more than 2000 m2 of surface (so about 2000 patches at most).
+    `E_patch` is what the patch receives directly through the glass, % of the outdoor horizontal illuminance: 64
+    cosine rays about the patch NORMAL (not up), the same CIE weight `3 (1 + 2 sin a) / 7` (only rays above the horizon
+    count as sky: the ground adds nothing), the same ERC rule (0.2 per obstructed ray) and the same glazing factor as SC and ERC.
+  - *First bounce* (`gatherFirstBounce`): from the work-plane point 128 cosine rays go up. Each takes the first surface
+    it meets in the occluder BVH (the apartment's walls and ceiling); a ray that crosses a pane first leaves the room and
+    adds 0 (that light is SC/ERC). `L = rho E_patch / pi`, `E1 = pi mean(L) = mean(rho E_patch)` over all rays (tested:
+    under an infinite uniform ceiling `E1 = rho E`, under a disc `rho E F`). rho by normal: ceiling 0.7, walls 0.5, floor 0.3.
+  - *Higher bounces*: `E2 = mean(E1) R / (1 - R)`, uniform in the room, the split-flux series; `mean(E1)` is the mean over the
+    room's floor points and stands in for the flux density of the first bounce. (Light first reflected by the floor, the
+    biggest first reflector, reaches an upward-facing work plane only via the ceiling and walls, so it is in E2 rather than E1.)
+  - *Calibration* (`calibrate`): `scale = BRE / mean(E1 + E2)` per room, over the room's floor grid points, and
+    `IRC = scale (E1 + E2)`, so the room mean is exactly the BRE value and the gather only supplies the distribution. The
+    raw gather mean runs at about a third of BRE in the Milan example (scale about 3.0; the missing part is the
+    floor-first light), so the scale is not a small correction: read the spatial shape (about 2.6 x from the window wall to
+    the rear in the example) as the model's output and the level as BRE's. A room without glass has `target` 0 and so IRC 0;
+    a room whose gather finds no light at all falls back to its uniform BRE value. Near the wall that faces the windows the
+    value rises again over about a metre (that wall is itself lit directly and fills the point's view): a real effect.
+  - *Where it runs*: `sunmap.worker.ts` `daylight` (and the Garden run's `day`) after the direct trace, `IRC_CHUNK` = 6
+    points per turn with progress; the patch cache lives for the scene version (a new scene or glass clears it), and the
+    room means are remembered per (scene, plan, cell) in the worker and in `rooms.ts` (`rememberIrc`), so a clicked Garden
+    spot after the whole-area run traces only its own points. Garden calibrates over the same floor grid as the layer, so a
+    spot gets the layer's value. Milan example: 427 points, about 1050 patches, IRC about 2.3 s in the worker on top of
+    about 0.5 s of rays and 0.1 s of BVH (headless Chromium); the first Garden spot click without a whole-area run before
+    it pays the same calibration once.
 - **Grid and cost**: 0.5 m cells (`DAYLIGHT_CELL`), 40 points per worker turn with progress, a newer request or a new
   scene version stops the run (`dayfactor-job.ts` aborts its own worker; the worker also refuses a scene key it does not
-  hold). The Milan example's 427 points take about 1.0 to 2.0 s end to end in headless Chromium on 4 cores (rays 250 to
-  600 ms, BVH about 50 ms).
+  hold). The Milan example's 427 points take about 3.5 s end to end in headless Chromium on 4 cores (SC + ERC rays 0.4 s,
+  IRC gather 2.2 s, BVH about 70 ms).
 - **Bands** (`bandOf`): under 1 % dim, 1-2 % fair, 2-5 % bright (well daylit), over 5 % very bright. The colour ramp
   gives each band a quarter, so the band edges sit at fixed places (0, 1, 2, 5, 8 % and above).
 - **Rooms** (`rooms.ts`, pure, tested): the outline minus courtyards is rasterised on a 0.1 m grid (`ROOM_CELL`, coarser
@@ -269,7 +300,7 @@ illuminance outdoors on open ground:
   faces), glass (the window rectangles, as in the panes, credited to the room the window's edge looks into). A room
   without glass has IRC 0. `roomAt(x, z)` labels every cell of the bounding box (wall bands and points outside the outline take
   the nearest room), so a point always has a room. `roomsOf(plan)` remembers the last plan by its outline, walls, windows and
-  floor height. Both the daylight job and Garden's indoor spots add `ircAt(rooms, x, z)` per point instead of one number. A
+  floor height. `roomIrc` is each room's BRE target; `ircInput` hands the worker the targets, mean reflectances and each point's room, and both the daylight job and Garden's indoor spots use the gathered per-point IRC (`ircAt` is the room's flat value, kept for reference and tests). A
   single-room plan gives the old whole-apartment figures (tested). Slivers (closets under a few cells wide) become tiny rooms
   of their own; there is no merging.
 - **Limits**: furniture, curtains and the thickness of reveals beyond the facade wall are

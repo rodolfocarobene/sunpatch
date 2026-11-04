@@ -219,8 +219,10 @@ building data.
 - The sun map and the headline are direct sunlight only. The general brightness of the rooms in the 3D view is a
   simple stand-in for light bouncing around, not a measurement. The separate **Daylight (estimate)** layer is the
   BRE split-flux daylight factor under a CIE overcast sky: sky seen through the windows, a flat 20 % reflectance for
-  neighbours seen through them, and an internal-reflection value per room (interior walls close rooms; a gap wider than a
-  narrow door joins them, and light between closed rooms is ignored). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
+  neighbours seen through them, and the internally reflected light: the BRE value per room (interior walls close rooms; a gap wider than a
+  narrow door joins them, and light between closed rooms is ignored) spread over the room by a one-bounce gather from its
+  own walls and ceiling, so places far from the windows get less (the room average stays the BRE value; the spread is a
+  rough shape, not a measurement). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
   surfaces beyond the three default reflectances. Treat it as a rough ranking of spots, good to a factor of about
   two.
 - Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
@@ -255,7 +257,8 @@ building data.
 7. **Daylight estimate**: from each floor point (every 50 cm, 85 cm above the floor) 384 rays go up in a
    cosine-weighted spread; those that pass a window pane count as sky weighted by the CIE overcast luminance, or as
    an obstruction at 20 % of the average sky luminance if something stands in the way, and the internally reflected
-   light comes from the BRE split-flux formula. Window transmittance 0.7, frame and dirt 0.8.
+   light is the BRE split-flux value of the room, distributed by a one-bounce gather over the room's own surfaces (it falls
+   off away from the windows, and its room mean stays the BRE value). Window transmittance 0.7, frame and dirt 0.8.
 
 More detail for contributors is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

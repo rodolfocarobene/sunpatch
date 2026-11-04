@@ -28,7 +28,7 @@ import { createHeightStore, resolveHeights } from './height-store'
 import { createKeepChip } from './keep-chip'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
-import { createHeightRuler, cycleOrder, nextInCycle } from './height-ruler'
+import { createHeightRuler, cycleOrder, hoverNoteKind, nextInCycle } from './height-ruler'
 import { hoverLines } from './building-line'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
@@ -899,6 +899,7 @@ daylightJob.onState((state) => {
   } else if (state.status === 'error') ui.setDaylightStatus({ kind: 'error', message: state.message })
 })
 ui.onDaylight((on) => {
+  heightRuler.hide()
   daylightOn = on
   if (on) {
     if (sunMapOn) ui.setSunMap(false) // both paint on the same floor overlay; one at a time
@@ -914,6 +915,7 @@ ui.onDaylight((on) => {
   }
 })
 ui.onSunMap((on) => {
+  heightRuler.hide()
   sunMapOn = on
   if (on && suitOn) ui.setSuitability(false)
   if (on && daylightOn) ui.setDaylight(false)
@@ -1072,10 +1074,10 @@ ui.onPanelPick(selectPanel)
 sunScene.onPartClick(togglePartAt)
 // The ruler is a 3D-view tool: Panels and Garden use a click on the roof for their own picks, which a ruler there would block.
 sunScene.onBuildingHover((b, at) => {
-  const ruler = view === '3d' && !heightPopover.isOpen
-  if (b && !heightPopover.isOpen && !heightRuler.dragging) hoverTip.show(hoverLines(b, ruler), at)
+  const note = b && !heightPopover.isOpen ? hoverNoteKind(sunScene.rulerContext(b), view === '3d') : null
+  if (b && note && !heightRuler.dragging) hoverTip.show(hoverLines(b, note === 'ruler'), at)
   else hoverTip.hide()
-  if (b && ruler) heightRuler.follow(b, at)
+  if (b && note === 'ruler') heightRuler.follow(b, at)
   else heightRuler.release()
 })
 sunScene.onBuildingMenu((id, at) => openHeight(site?.buildings.find((b) => b.id === id), at))
@@ -1337,6 +1339,7 @@ function pick(lat: number, lon: number, fromShare = false) {
 let site: { /** Every polygon the data has around the origin, however far. */ full: Building[]; /** `full` within the neighbourhood radius, as the data has them. */ raw: Building[]; /** `raw` with the user's heights applied: what the scene shows. */ buildings: Building[]; selected: Building; origin: Origin } | undefined
 siteDeclared = true
 ui.onCutaway((hidden) => {
+  heightRuler.hide() // its handle must not sit over a floor that is now the target
   floorsHidden = hidden
   gardenHint = undefined // the roof note asked for exactly this
   renderGarden() // the roof counts of the plant map follow
