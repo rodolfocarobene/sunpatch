@@ -2,7 +2,8 @@ import { DAYLIGHT_CELL, HEMISPHERE_SAMPLES } from './dayfactor'
 import { trianglesArea } from './dayfactor-trace'
 import { t } from './i18n'
 import type { Plan } from './plan'
-import { ircAt, roomsOf } from './rooms'
+import type { IrcCalibration } from './irc-gather'
+import { ircInput, roomsKey, roomsOf } from './rooms'
 import { floorGrid, type Grid } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
@@ -24,8 +25,10 @@ export interface DaylightResult {
   grid: Grid
   /** Daylight factor in %, per grid sample. */
   df: Float32Array
-  /** The internally reflected part, %, per grid sample: constant within a room, 0 in a room without glass. */
+  /** The internally reflected part, %, per grid sample: gathered from the room's own surfaces, so it falls off away from the windows; 0 in a room without glass. */
   irc: Float32Array
+  /** Per room: the raw gather mean, its scale to the BRE room mean, and the BRE value (empty without glass). */
+  ircRooms: IrcCalibration[]
   glassArea: number
   ms: number
 }
@@ -58,7 +61,7 @@ export function createDaylightJob(): DaylightJob {
   let workerScene = -1
   let listener: ((state: DaylightState) => void) | undefined
   let latest: DaylightRequest | undefined
-  let running: { id: number; key: string; grid: Grid; irc: Float32Array; glassArea: number; start: number } | undefined
+  let running: { id: number; key: string; grid: Grid; glassArea: number; start: number } | undefined
   let nextId = 0
 
   const emit = (state: DaylightState) => listener?.(state)
@@ -93,10 +96,11 @@ export function createDaylightJob(): DaylightJob {
       return
     }
     const df = m.direct
-    for (let i = 0; i < df.length; i++) df[i] += job.irc[i]
+    const irc = m.irc ?? new Float32Array(df.length)
+    for (let i = 0; i < df.length; i++) df[i] += irc[i]
     const ms = performance.now() - job.start
-    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms), IRC ${Math.max(...job.irc).toFixed(2)} % at most`)
-    const result = { grid: job.grid, df, irc: job.irc, glassArea: job.glassArea, ms }
+    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms, IRC gather ${(m.ircMs ?? 0).toFixed(0)} ms), IRC ${Math.max(...irc).toFixed(2)} % at most`)
+    const result = { grid: job.grid, df, irc, ircRooms: m.ircRooms ?? [], glassArea: job.glassArea, ms }
     cache.set(job.key, result)
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
     if (!latest || keyOf(latest) === job.key) emit({ status: 'ready', result })
@@ -113,10 +117,8 @@ export function createDaylightJob(): DaylightJob {
       const grid = floorGrid(req.plan, req.cell ?? DAYLIGHT_CELL)
       const glass = req.glass()
       const glassArea = trianglesArea(glass)
-      const rooms = roomsOf(req.plan)
-      const irc = Float32Array.from({ length: grid.count }, (_, i) => ircAt(rooms, grid.xs[i], grid.zs[i]))
       if (!grid.count || !glass.length) {
-        const result = { grid, df: new Float32Array(grid.count), irc: new Float32Array(grid.count), glassArea, ms: 0 }
+        const result = { grid, df: new Float32Array(grid.count), irc: new Float32Array(grid.count), ircRooms: [], glassArea, ms: 0 }
         cache.set(key, result)
         return emit({ status: 'ready', result })
       }
@@ -132,9 +134,11 @@ export function createDaylightJob(): DaylightJob {
         const points = new Float32Array(grid.count * 2)
         for (let s = 0; s < grid.count; s++) points.set([grid.xs[s], grid.zs[s]], s * 2)
         const id = ++nextId
-        running = { id, key, grid, irc, glassArea, start: performance.now() }
+        running = { id, key, grid, glassArea, start: performance.now() }
+        const calib = Float32Array.from(points)
+        const irc = ircInput(roomsOf(req.plan), req.floorY, calib, undefined, `${roomsKey(req.plan)}|${req.cell ?? DAYLIGHT_CELL}`)
         w.postMessage(
-          { kind: 'daylight', id, key: req.sceneVersion, points, floorY: req.floorY, samples: req.samples ?? HEMISPHERE_SAMPLES } satisfies WorkerIn,
+          { kind: 'daylight', id, key: req.sceneVersion, points, floorY: req.floorY, samples: req.samples ?? HEMISPHERE_SAMPLES, irc } satisfies WorkerIn,
           { transfer: [points.buffer] },
         )
       } catch (err) {

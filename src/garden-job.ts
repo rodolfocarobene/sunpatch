@@ -1,9 +1,10 @@
 import { t } from './i18n'
 import { yearSlots } from './panel-shade'
-import { HEMISPHERE_SAMPLES } from './dayfactor'
+import { DAYLIGHT_CELL, HEMISPHERE_SAMPLES } from './dayfactor'
 import { indoorPoints, spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
 import type { Plan } from './plan'
-import { ircAt, roomsOf } from './rooms'
+import { ircInput, roomsKey, roomsOf } from './rooms'
+import { floorGrid } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
 const DEBOUNCE_MS = 250
@@ -73,7 +74,7 @@ export function createGardenJob(): GardenJob {
   let listener: ((state: GardenState) => void) | undefined
   let timer: number | undefined
   let latest: GardenRequest | undefined
-  let running: { id: number; key: string; spots: GardenSpot[]; irc: number[]; noGlass: boolean } | undefined
+  let running: { id: number; key: string; spots: GardenSpot[]; noGlass: boolean } | undefined
   let nextId = 0
 
   const emit = (state: GardenState) => listener?.(state)
@@ -105,7 +106,7 @@ export function createGardenJob(): GardenJob {
     } else {
       console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms)`)
       const dark = job.noGlass ? job.spots.filter((s) => s.indoor).map(() => 0) : undefined // no windows: no daylight
-      const daylight = m.direct ? Array.from(m.direct, (d, i) => d + job.irc[i]) : dark
+      const daylight = m.direct ? Array.from(m.direct, (d, i) => d + (m.irc?.[i] ?? 0)) : dark
       const result = { spots: withSun(job.spots, m.minutes, daylight), ms: m.ms, bvhMs: m.bvhMs }
       cache.set(job.key, result)
       if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
@@ -139,25 +140,27 @@ export function createGardenJob(): GardenJob {
       const spots = req.spots()
       const step = req.slotMinutes ?? GARDEN_SLOT_MINUTES
       const id = ++nextId
-      // Daylight of the indoor spots: SC + ERC are traced in the worker, IRC is a closed formula per room (rooms.ts) added when the result arrives.
+      // Daylight of the indoor spots: SC + ERC and the gathered IRC (irc-gather.ts) are all traced in the worker, in the same run.
       const indoor = indoorPoints(spots)
       let day: Extract<WorkerIn, { kind: 'garden' }>['day']
-      let irc: number[] = []
       let noGlass = false
       if (req.glass && indoor.points.length > 0 && req.plan) {
         const glass = req.glass()
-        const rooms = roomsOf(req.plan)
-        irc = Array.from({ length: indoor.points.length / 2 }, (_, i) => ircAt(rooms, indoor.points[i * 2], indoor.points[i * 2 + 1]))
         if (glass.length === 0) noGlass = true // no windows: no daylight, and the worker has nothing to trace
         else {
           if (workerGlass !== req.sceneVersion) {
             w.postMessage({ kind: 'glass', key: req.sceneVersion, triangles: glass } satisfies WorkerIn, { transfer: [glass.buffer] })
             workerGlass = req.sceneVersion
           }
-          day = { points: indoor.points, floorY: indoor.floorY, samples: HEMISPHERE_SAMPLES }
+          // The room means are held to BRE over the same floor grid as the daylight layer, so a spot gets the layer's value.
+          const grid = floorGrid(req.plan, DAYLIGHT_CELL)
+          const calib = new Float32Array(grid.count * 2)
+          for (let i = 0; i < grid.count; i++) calib.set([grid.xs[i], grid.zs[i]], i * 2)
+          const irc = ircInput(roomsOf(req.plan), indoor.floorY, calib, Float32Array.from(indoor.points), `${roomsKey(req.plan)}|${DAYLIGHT_CELL}`)
+          day = { points: indoor.points, floorY: indoor.floorY, samples: HEMISPHERE_SAMPLES, irc }
         }
       }
-      running = { id, key, spots, irc, noGlass }
+      running = { id, key, spots, noGlass }
       w.postMessage({
         kind: 'garden', id, key: req.sceneVersion, points: spotPoints(spots),
         slots: yearSlots(req.lat, req.lon, req.year, step), step, day,
