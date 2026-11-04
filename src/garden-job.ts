@@ -1,9 +1,9 @@
 import { t } from './i18n'
 import { yearSlots } from './panel-shade'
-import { HEMISPHERE_SAMPLES, internalReflected, roomSurfaces } from './dayfactor'
-import { trianglesArea } from './dayfactor-trace'
+import { HEMISPHERE_SAMPLES } from './dayfactor'
 import { indoorPoints, spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
 import type { Plan } from './plan'
+import { ircAt, roomsOf } from './rooms'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
 const DEBOUNCE_MS = 250
@@ -73,7 +73,7 @@ export function createGardenJob(): GardenJob {
   let listener: ((state: GardenState) => void) | undefined
   let timer: number | undefined
   let latest: GardenRequest | undefined
-  let running: { id: number; key: string; spots: GardenSpot[]; irc: number; noGlass: boolean } | undefined
+  let running: { id: number; key: string; spots: GardenSpot[]; irc: number[]; noGlass: boolean } | undefined
   let nextId = 0
 
   const emit = (state: GardenState) => listener?.(state)
@@ -105,7 +105,7 @@ export function createGardenJob(): GardenJob {
     } else {
       console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms)`)
       const dark = job.noGlass ? job.spots.filter((s) => s.indoor).map(() => 0) : undefined // no windows: no daylight
-      const daylight = m.direct ? Array.from(m.direct, (d) => d + job.irc) : dark
+      const daylight = m.direct ? Array.from(m.direct, (d, i) => d + job.irc[i]) : dark
       const result = { spots: withSun(job.spots, m.minutes, daylight), ms: m.ms, bvhMs: m.bvhMs }
       cache.set(job.key, result)
       if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
@@ -139,14 +139,15 @@ export function createGardenJob(): GardenJob {
       const spots = req.spots()
       const step = req.slotMinutes ?? GARDEN_SLOT_MINUTES
       const id = ++nextId
-      // Daylight of the indoor spots: SC + ERC are traced in the worker, IRC is a closed formula added when the result arrives.
+      // Daylight of the indoor spots: SC + ERC are traced in the worker, IRC is a closed formula per room (rooms.ts) added when the result arrives.
       const indoor = indoorPoints(spots)
       let day: Extract<WorkerIn, { kind: 'garden' }>['day']
-      let irc = 0
+      let irc: number[] = []
       let noGlass = false
       if (req.glass && indoor.points.length > 0 && req.plan) {
         const glass = req.glass()
-        irc = internalReflected(trianglesArea(glass), roomSurfaces(req.plan))
+        const rooms = roomsOf(req.plan)
+        irc = Array.from({ length: indoor.points.length / 2 }, (_, i) => ircAt(rooms, indoor.points[i * 2], indoor.points[i * 2 + 1]))
         if (glass.length === 0) noGlass = true // no windows: no daylight, and the worker has nothing to trace
         else {
           if (workerGlass !== req.sceneVersion) {

@@ -1,7 +1,8 @@
-import { DAYLIGHT_CELL, HEMISPHERE_SAMPLES, internalReflected, roomSurfaces } from './dayfactor'
+import { DAYLIGHT_CELL, HEMISPHERE_SAMPLES } from './dayfactor'
 import { trianglesArea } from './dayfactor-trace'
 import { t } from './i18n'
 import type { Plan } from './plan'
+import { ircAt, roomsOf } from './rooms'
 import { floorGrid, type Grid } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
@@ -23,8 +24,8 @@ export interface DaylightResult {
   grid: Grid
   /** Daylight factor in %, per grid sample. */
   df: Float32Array
-  /** The part that is constant over the room, %. */
-  irc: number
+  /** The internally reflected part, %, per grid sample: constant within a room, 0 in a room without glass. */
+  irc: Float32Array
   glassArea: number
   ms: number
 }
@@ -48,7 +49,7 @@ const keyOf = (r: DaylightRequest) => `${r.sceneVersion}|${r.cell ?? DAYLIGHT_CE
 
 /**
  * The daylight estimate in a Web Worker of its own, freed when the layer is switched off: SC and ERC are traced per
- * floor point there; IRC is a closed formula, added here. Cached per (scene, grid, samples), and a request with another
+ * floor point there; IRC is a closed formula per room (rooms.ts), added here. Cached per (scene, grid, samples), and a request with another
  * key (a scene change) stops the run in progress.
  */
 export function createDaylightJob(): DaylightJob {
@@ -57,7 +58,7 @@ export function createDaylightJob(): DaylightJob {
   let workerScene = -1
   let listener: ((state: DaylightState) => void) | undefined
   let latest: DaylightRequest | undefined
-  let running: { id: number; key: string; grid: Grid; irc: number; glassArea: number; start: number } | undefined
+  let running: { id: number; key: string; grid: Grid; irc: Float32Array; glassArea: number; start: number } | undefined
   let nextId = 0
 
   const emit = (state: DaylightState) => listener?.(state)
@@ -92,9 +93,9 @@ export function createDaylightJob(): DaylightJob {
       return
     }
     const df = m.direct
-    for (let i = 0; i < df.length; i++) df[i] += job.irc
+    for (let i = 0; i < df.length; i++) df[i] += job.irc[i]
     const ms = performance.now() - job.start
-    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms), IRC ${job.irc.toFixed(2)} %`)
+    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms), IRC ${Math.max(...job.irc).toFixed(2)} % at most`)
     const result = { grid: job.grid, df, irc: job.irc, glassArea: job.glassArea, ms }
     cache.set(job.key, result)
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
@@ -112,9 +113,10 @@ export function createDaylightJob(): DaylightJob {
       const grid = floorGrid(req.plan, req.cell ?? DAYLIGHT_CELL)
       const glass = req.glass()
       const glassArea = trianglesArea(glass)
-      const irc = internalReflected(glassArea, roomSurfaces(req.plan))
+      const rooms = roomsOf(req.plan)
+      const irc = Float32Array.from({ length: grid.count }, (_, i) => ircAt(rooms, grid.xs[i], grid.zs[i]))
       if (!grid.count || !glass.length) {
-        const result = { grid, df: new Float32Array(grid.count), irc: 0, glassArea, ms: 0 }
+        const result = { grid, df: new Float32Array(grid.count), irc: new Float32Array(grid.count), glassArea, ms: 0 }
         cache.set(key, result)
         return emit({ status: 'ready', result })
       }

@@ -219,8 +219,8 @@ building data.
 - The sun map and the headline are direct sunlight only. The general brightness of the rooms in the 3D view is a
   simple stand-in for light bouncing around, not a measurement. The separate **Daylight (estimate)** layer is the
   BRE split-flux daylight factor under a CIE overcast sky: sky seen through the windows, a flat 20 % reflectance for
-  neighbours seen through them, and one internal-reflection value for the whole apartment (interior walls are not
-  rooms to it). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
+  neighbours seen through them, and an internal-reflection value per room (interior walls close rooms; a gap wider than a
+  narrow door joins them, and light between closed rooms is ignored). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
   surfaces beyond the three default reflectances. Treat it as a rough ranking of spots, good to a factor of about
   two.
 - Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
