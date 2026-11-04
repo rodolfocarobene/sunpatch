@@ -3,7 +3,7 @@ import { trianglesArea } from './dayfactor-trace'
 import { t } from './i18n'
 import type { Plan } from './plan'
 import type { IrcCalibration } from './irc-gather'
-import { ircInput, roomsKey, roomsOf } from './rooms'
+import { ircInput, rememberIrc, roomsKey, roomsOf } from './rooms'
 import { floorGrid, type Grid } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
@@ -61,7 +61,7 @@ export function createDaylightJob(): DaylightJob {
   let workerScene = -1
   let listener: ((state: DaylightState) => void) | undefined
   let latest: DaylightRequest | undefined
-  let running: { id: number; key: string; grid: Grid; glassArea: number; start: number } | undefined
+  let running: { id: number; key: string; grid: Grid; glassArea: number; start: number; irc: { scene: number; key: string } } | undefined
   let nextId = 0
 
   const emit = (state: DaylightState) => listener?.(state)
@@ -97,9 +97,10 @@ export function createDaylightJob(): DaylightJob {
     }
     const df = m.direct
     const irc = m.irc ?? new Float32Array(df.length)
+    rememberIrc(job.irc.scene, job.irc.key, m.ircRooms)
     for (let i = 0; i < df.length; i++) df[i] += irc[i]
     const ms = performance.now() - job.start
-    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms, IRC gather ${(m.ircMs ?? 0).toFixed(0)} ms), IRC ${Math.max(...irc).toFixed(2)} % at most`)
+    console.debug(`daylight: ${job.grid.count} points in ${ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms, rays ${m.ms.toFixed(0)} ms, IRC gather ${(m.ircMs ?? 0).toFixed(0)} ms, ${m.ircPatches ?? 0} patches), IRC ${Math.max(...irc).toFixed(2)} % at most`)
     const result = { grid: job.grid, df, irc, ircRooms: m.ircRooms ?? [], glassArea: job.glassArea, ms }
     cache.set(job.key, result)
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!)
@@ -134,9 +135,9 @@ export function createDaylightJob(): DaylightJob {
         const points = new Float32Array(grid.count * 2)
         for (let s = 0; s < grid.count; s++) points.set([grid.xs[s], grid.zs[s]], s * 2)
         const id = ++nextId
-        running = { id, key, grid, glassArea, start: performance.now() }
-        const calib = Float32Array.from(points)
-        const irc = ircInput(roomsOf(req.plan), req.floorY, calib, undefined, `${roomsKey(req.plan)}|${req.cell ?? DAYLIGHT_CELL}`)
+        const ircKey = `${roomsKey(req.plan)}|${req.cell ?? DAYLIGHT_CELL}`
+        running = { id, key, grid, glassArea, start: performance.now(), irc: { scene: req.sceneVersion, key: ircKey } }
+        const irc = ircInput(roomsOf(req.plan), req.floorY, Float32Array.from(points), undefined, ircKey, req.sceneVersion)
         w.postMessage(
           { kind: 'daylight', id, key: req.sceneVersion, points, floorY: req.floorY, samples: req.samples ?? HEMISPHERE_SAMPLES, irc } satisfies WorkerIn,
           { transfer: [points.buffer] },

@@ -22,9 +22,9 @@ export type WorkerOut =
   | { kind: 'done'; id: number; lit: Uint8Array; ms: number; bvhMs: number }
   | { kind: 'shaded'; id: number; shade: PanelShade; bvhMs: number }
   | { kind: 'suited'; id: number; irradiation: Float32Array; ms: number; bvhMs: number }
-  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array; irc?: Float32Array }
+  | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array; irc?: Float32Array; ircRooms?: IrcCalibration[] }
   | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
-  | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number; irc?: Float32Array; ircRooms?: IrcCalibration[]; ircMs?: number }
+  | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number; irc?: Float32Array; ircRooms?: IrcCalibration[]; ircMs?: number; ircPatches?: number }
   | { kind: 'error'; id: number; message: string }
 
 // The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
@@ -43,7 +43,7 @@ function newIrcRun(key: number, input: IrcInput): IrcRun {
   const cell = patchCellFor(input.area)
   if (!ircField || ircField.key !== key || ircField.cell !== cell) ircField = { key, cell, field: new PatchField(bvh!, glassBvh!, cell) }
   // With the calibration known (a Garden run after the daylight layer), only the points to report are traced.
-  const known = input.points ? ircCalibrations.get(`${key}|${input.cacheKey}`) : undefined
+  const known = input.points ? (input.known ?? ircCalibrations.get(`${key}|${input.cacheKey}`)) : undefined
   return new IrcRun(bvh!, glassBvh!, ircField.field, input, known)
 }
 function finishIrc(key: number, input: IrcInput, run: IrcRun) {
@@ -184,7 +184,7 @@ function garden(m: Extract<WorkerIn, { kind: 'garden' }>) {
     } else if (m.day) {
       if (irc) finishIrc(m.key, m.day.irc!, irc)
       const ircOut = irc?.result()
-      reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs, direct, irc: ircOut }, [out.buffer, direct.buffer, ...(ircOut ? [ircOut.buffer] : [])])
+      reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs, direct, irc: ircOut, ircRooms: irc?.rooms }, [out.buffer, direct.buffer, ...(ircOut ? [ircOut.buffer] : [])])
     } else reply({ kind: 'gardened', id: m.id, minutes: out, ms: performance.now() - started, bvhMs }, [out.buffer])
   }
   turn()
@@ -254,7 +254,7 @@ function daylight(m: Extract<WorkerIn, { kind: 'daylight' }>) {
       if (irc && m.irc) finishIrc(m.key, m.irc, irc)
       const ircOut = irc?.result()
       reply(
-        { kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs, irc: ircOut, ircRooms: irc?.rooms, ircMs: irc ? performance.now() - ircStart : undefined },
+        { kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs, irc: ircOut, ircRooms: irc?.rooms, ircMs: irc ? performance.now() - ircStart : undefined, ircPatches: ircField?.field.size },
         [out.buffer, ...(ircOut ? [ircOut.buffer] : [])],
       )
     }

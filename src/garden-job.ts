@@ -3,7 +3,7 @@ import { yearSlots } from './panel-shade'
 import { DAYLIGHT_CELL, HEMISPHERE_SAMPLES } from './dayfactor'
 import { indoorPoints, spotPoints, withSun, type GardenSpot, type SunnySpot } from './garden-spots'
 import type { Plan } from './plan'
-import { ircInput, roomsKey, roomsOf } from './rooms'
+import { ircInput, rememberIrc, roomsKey, roomsOf } from './rooms'
 import { floorGrid } from './sunmap'
 import type { WorkerIn, WorkerOut } from './sunmap.worker'
 
@@ -74,7 +74,7 @@ export function createGardenJob(): GardenJob {
   let listener: ((state: GardenState) => void) | undefined
   let timer: number | undefined
   let latest: GardenRequest | undefined
-  let running: { id: number; key: string; spots: GardenSpot[]; noGlass: boolean } | undefined
+  let running: { id: number; key: string; spots: GardenSpot[]; noGlass: boolean; irc?: { scene: number; key: string } } | undefined
   let nextId = 0
 
   const emit = (state: GardenState) => listener?.(state)
@@ -106,6 +106,7 @@ export function createGardenJob(): GardenJob {
     } else {
       console.debug(`garden: ${job.spots.length} spots in ${m.ms.toFixed(0)} ms (BVH ${m.bvhMs.toFixed(0)} ms)`)
       const dark = job.noGlass ? job.spots.filter((s) => s.indoor).map(() => 0) : undefined // no windows: no daylight
+      if (job.irc) rememberIrc(job.irc.scene, job.irc.key, m.ircRooms)
       const daylight = m.direct ? Array.from(m.direct, (d, i) => d + (m.irc?.[i] ?? 0)) : dark
       const result = { spots: withSun(job.spots, m.minutes, daylight), ms: m.ms, bvhMs: m.bvhMs }
       cache.set(job.key, result)
@@ -144,6 +145,7 @@ export function createGardenJob(): GardenJob {
       const indoor = indoorPoints(spots)
       let day: Extract<WorkerIn, { kind: 'garden' }>['day']
       let noGlass = false
+      let ircRun: { scene: number; key: string } | undefined
       if (req.glass && indoor.points.length > 0 && req.plan) {
         const glass = req.glass()
         if (glass.length === 0) noGlass = true // no windows: no daylight, and the worker has nothing to trace
@@ -156,11 +158,13 @@ export function createGardenJob(): GardenJob {
           const grid = floorGrid(req.plan, DAYLIGHT_CELL)
           const calib = new Float32Array(grid.count * 2)
           for (let i = 0; i < grid.count; i++) calib.set([grid.xs[i], grid.zs[i]], i * 2)
-          const irc = ircInput(roomsOf(req.plan), indoor.floorY, calib, Float32Array.from(indoor.points), `${roomsKey(req.plan)}|${DAYLIGHT_CELL}`)
+          const ircKey = `${roomsKey(req.plan)}|${DAYLIGHT_CELL}`
+          const irc = ircInput(roomsOf(req.plan), indoor.floorY, calib, Float32Array.from(indoor.points), ircKey, req.sceneVersion)
+          ircRun = { scene: req.sceneVersion, key: ircKey }
           day = { points: indoor.points, floorY: indoor.floorY, samples: HEMISPHERE_SAMPLES, irc }
         }
       }
-      running = { id, key, spots, noGlass }
+      running = { id, key, spots, noGlass, irc: ircRun }
       w.postMessage({
         kind: 'garden', id, key: req.sceneVersion, points: spotPoints(spots),
         slots: yearSlots(req.lat, req.lon, req.year, step), step, day,

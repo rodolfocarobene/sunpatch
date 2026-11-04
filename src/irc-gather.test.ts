@@ -6,7 +6,7 @@ import {
 } from './irc-gather'
 import type { Point } from './osm'
 import type { Plan } from './plan'
-import { buildRooms, ircInput, roomIrc } from './rooms'
+import { buildRooms, ircInput, rememberIrc, roomIrc } from './rooms'
 import { buildBvh } from './sunmap-trace'
 
 // Triangle soups (nine numbers each) for small test rooms.
@@ -207,11 +207,21 @@ describe('single room regression', () => {
     expect(rooms.rooms).toHaveLength(1)
     const surfaces = roomSurfaces(plan)
     const glass = rooms.rooms[0].glass
-    const input = ircInput(rooms, 0, Float32Array.from([1, 1, 4, 2]), undefined, 'k')
+    const input = ircInput(rooms, 0, Float32Array.from([1, 1, 4, 2]), undefined, 'k', 7)
     expect(input.rooms[0].target).toBeCloseTo(internalReflected(glass, surfaces), 9)
     expect(input.rooms[0].target).toBeCloseTo(roomIrc(rooms.rooms[0]), 9)
     expect(input.rooms[0].reflectance).toBeCloseTo(meanReflectance(surfaces), 9)
     expect(input.area).toBeCloseTo(2 * surfaces.floor + surfaces.walls, 6)
     expect([...input.calib.room]).toEqual([0, 0])
+  })
+
+  it('hands a Garden run the room means an earlier run found, for the same scene and plan only', () => {
+    const rooms = buildRooms(plan)
+    const calib = Float32Array.from([1, 1, 4, 2])
+    const found = [{ rawMean: 0.1, e2: 0.1, scale: 3, target: 0.6, offset: 0 }]
+    rememberIrc(7, 'k2', found)
+    expect(ircInput(rooms, 0, calib, Float32Array.from([2, 2]), 'k2', 7).known).toEqual(found)
+    expect(ircInput(rooms, 0, calib, Float32Array.from([2, 2]), 'k2', 8).known).toBeUndefined()
+    expect(ircInput(rooms, 0, calib, undefined, 'k2', 7).known).toBeUndefined() // the layer itself traces every point
   })
 })

@@ -17,8 +17,8 @@ import { cieWeight, EXTERNAL_REFLECTANCE, GLAZING, hemisphereDirs, REFLECTANCE, 
 export const IRC_PATCH_CELL = 0.5
 export const IRC_MAX_PATCHES = 2000
 /** Rays per patch (its direct light) and per floor point (the gather). */
-export const IRC_PATCH_RAYS = 128
-export const IRC_GATHER_RAYS = 256
+export const IRC_PATCH_RAYS = 64
+export const IRC_GATHER_RAYS = 128
 /** Patches are measured this far off their surface, clear of it. */
 const LIFT = 0.02
 /** Wall patches tell facing directions apart by this many buckets of the full circle. */
@@ -56,6 +56,8 @@ export interface IrcInput {
   area: number
   /** Identifies the room means for reuse when only other points change (a new Garden run on the same plan). */
   cacheKey: string
+  /** Room means already found for this scene and plan (by another worker): with them only `points` are traced. */
+  known?: IrcCalibration[]
 }
 
 /** The reflectance of a surface seen with this normal: the ceiling when it faces down, the floor when up, else a wall. */
