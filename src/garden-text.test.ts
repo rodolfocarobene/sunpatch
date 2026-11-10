@@ -115,7 +115,7 @@ describe('spotDeadEnd', () => {
   })
 
   it('says so plainly when every plant is poor in every month', () => {
-    const arctic = { ...milan, tMean: milan.tMean.map((t) => t - 40), tMin: milan.tMin.map((t) => t - 40), tMax: milan.tMax.map((t) => t - 40), tLow: milan.tLow.map((t) => t - 40) }
+    const arctic = { ...milan, tMean: milan.tMean.map((t) => t - 60), tMin: milan.tMin.map((t) => t - 60), tMax: milan.tMax.map((t) => t - 60), tLow: milan.tLow.map((t) => t - 60) }
     const byYear = rankPlants({ indoor: false, sunMinutes: Array(12).fill(300) }, arctic)
     const out = spotDeadEnd(byYear, 5)!
     expect(out.switchMonth).toBeUndefined()

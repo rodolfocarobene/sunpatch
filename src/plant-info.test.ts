@@ -23,7 +23,7 @@ const META = {
 
 describe('catalogue', () => {
   it('has Wikipedia titles in both languages for every plant', () => {
-    expect(PLANTS).toHaveLength(73)
+    expect(PLANTS).toHaveLength(118)
     for (const p of PLANTS) {
       expect(p.wiki.en.trim(), p.id).not.toBe('')
       expect(p.wiki.it.trim(), p.id).not.toBe('')
