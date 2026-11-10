@@ -707,10 +707,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
   #gardenSlot .plantCard { position: relative; top: auto; right: auto; bottom: auto; width: auto; max-height: none; height: auto; padding: 10px 0 0; overflow: visible; border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   #panel .plantCard .cardClose { top: 6px; right: 0; padding: 4px; min-height: 0; background: transparent; border-color: transparent; }
   #panel .plantCard .cardClose:hover:not(:disabled) { background: var(--bg-band); }
-  .plantPhoto { float: right; width: 96px; height: 72px; margin: 0 0 4px 10px; }
-  .plantWiki { display: block; }
+  .plantPhoto { width: 100%; max-height: 140px; }
+  .plantWiki { gap: 4px; }
+  .plantWiki .plantExtract { order: 1; margin-top: 2px; }
+  .plantWiki .photoCredit { order: 2; }
+  .plantWiki .plantCredit:not(.photoCredit) { order: 3; }
   .plantExtract { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-  .plantWiki .plantCredit { clear: none; }
 
   #reframe { top: 12px; bottom: auto; left: 12px; right: auto; }
   #mapStatus { bottom: calc(var(--sheet-h, 0px) + 12px); max-width: calc(100% - 24px); }
