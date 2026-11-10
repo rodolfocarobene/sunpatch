@@ -439,6 +439,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
   font-variant-numeric: tabular-nums;
 }
 #walkCompass .compassBand { position: relative; width: 100%; height: 47px; overflow: hidden; }
+/* The strip's ends fade into the band so an edge label is never cut mid-glyph; the edge arrows stay above the fade. */
+#walkCompass .compassBand::before, #walkCompass .compassBand::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 18%; z-index: 1; pointer-events: none;
+}
+#walkCompass .compassBand::before { left: 0; background: linear-gradient(to right, var(--text) 15%, transparent); }
+#walkCompass .compassBand::after { right: 0; background: linear-gradient(to left, var(--text) 15%, transparent); }
 #walkCompass .compassStrip { position: absolute; top: 0; left: 0; height: 100%; will-change: transform; }
 #walkCompass .tick { font-style: normal; position: absolute; top: 22px; width: 1px; height: 5px; background: currentColor; opacity: 0.45; }
 #walkCompass .tick.half { height: 8px; opacity: 0.75; }
@@ -455,7 +461,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #walkCompass .compassBand[data-up='false'] .sunMark { fill: none; opacity: 0.55; }
 #walkCompass .compassBand[data-up='false'] .sunMark circle { stroke: var(--sun-red); stroke-width: 1.6; }
 #walkCompass .edgeArrow {
-  display: none; position: absolute; top: 5px; fill: none; stroke: var(--sun-red); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  display: none; position: absolute; top: 5px; z-index: 2; fill: none; stroke: var(--sun-red); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
 #walkCompass .edgeArrow[data-side='left'] { left: 1px; }
 #walkCompass .edgeArrow[data-side='right'] { right: 1px; }
