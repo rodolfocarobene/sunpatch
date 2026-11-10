@@ -209,7 +209,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* Building heights: the guessed-height legend, the Edit height line, the right-click box and the hover note. */
 #aptShow, #guessedBox, #hoodBox, #heightsBox { display: flex; flex-direction: column; gap: 4px; }
 #panel label.hoodRow { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); }
-#hood { font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
+#hood { flex: 0 1 auto; min-width: 0; font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
 #hoodLine:empty { display: none; }
 #panel .legendNote { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
 .hatchKey {
