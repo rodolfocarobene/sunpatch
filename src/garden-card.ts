@@ -1,5 +1,5 @@
 import { rankPlants, type PlantResult } from './garden'
-import { fmtMonth, fmtNumber, t, upFirst } from './i18n'
+import { fmtMonth, fmtNumber, t } from './i18n'
 import { KIND_FILTERS, filterByKind, getKindFilter, setKindFilter } from './garden-kind'
 import type { PickedKind } from './garden-pick'
 import {
@@ -203,8 +203,8 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
           ? t('garden.leadNone', { when })
           : t('garden.leadFit', { n: fit.length, total: ranked.length, when })
         : fit.length === 0
-          ? t('garden.leadNoneKind', { kinds, when })
-          : t('garden.leadFitKind', { n: fit.length, total: ranked.length, kinds, Kinds: upFirst(kinds), when })
+          ? t('garden.leadNoneKind', { when })
+          : t('garden.leadFitKind', { n: fit.length, total: ranked.length, kinds, when })
     answer.append(kindChips(kind), el('p', 'plantsLead', lead))
     if (fit.length === 0) {
       const rated = filterByKind(input.month === null ? all : rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!), kind)
