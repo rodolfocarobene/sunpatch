@@ -168,6 +168,7 @@ const findPanel = createFindPanel({
   onPlant: (id) => setFindPlant(id ? plantById(id) : undefined),
   onMonth: setGardenMonth,
   onBest: () => showBestSpot(),
+  onClear: () => clearFind(),
   onRetryClimate: () => retryGardenClimate(),
   onRetryTrace: () => requestFind(true),
 })

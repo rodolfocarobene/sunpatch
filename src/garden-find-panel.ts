@@ -52,6 +52,7 @@ export function createFindPanel(options: {
   onPlant: (id: string | null) => void
   onMonth: (month: number | null) => void
   onBest: () => void
+  onClear: () => void
   onRetryClimate: () => void
   onRetryTrace: () => void
 }): FindPanel {
@@ -121,6 +122,16 @@ export function createFindPanel(options: {
     s.append(box, text)
     return s
   }
+  const clearButton = (): HTMLButtonElement => {
+    const b = el('button', 'link findClear', t('garden.clear'))
+    b.type = 'button'
+    b.addEventListener('click', () => {
+      search.value = ''
+      fillPlants('')
+      options.onClear()
+    })
+    return b
+  }
   const withRole = <T extends HTMLElement>(node: T, role: string): T => {
     node.setAttribute('role', role)
     return node
@@ -147,7 +158,7 @@ export function createFindPanel(options: {
         const pct = trace.status === 'running' ? Math.round(trace.progress * 100) : 0
         const bar = el('div', 'gardenBar')
         bar.style.setProperty('--progress', `${pct}%`)
-        parts.push(withRole(el('p', 'cardBusy', t('garden.findMeasuring', { pct })), 'status'), bar)
+        parts.push(withRole(el('p', 'cardBusy', t('garden.findMeasuring', { pct })), 'status'), bar, clearButton())
       } else if (trace.status === 'error') {
         parts.push(withRole(el('p', 'cardVerdict warn', trace.message), 'alert'), button(t('garden.tryAgain'), options.onRetryTrace))
       } else {
@@ -159,11 +170,14 @@ export function createFindPanel(options: {
         } else if (input.needsClimate && input.weather !== 'ready') {
           parts.push(withRole(el('p', 'cardBusy', t('garden.loadingTemps')), 'status'))
         }
+        if (input.summary) parts.push(withRole(el('p', 'findSummary', input.summary), 'status'))
         const legend = el('div', 'findLegend')
         legend.setAttribute('aria-label', t('garden.legendAria'))
         legend.append(swatch('good', t('garden.legendGood')), swatch('ok', t('garden.legendOk')), swatch('none', t('garden.legendPoor')))
         parts.push(legend)
-        if (input.summary) parts.push(withRole(el('p', 'findSummary', input.summary), 'status'))
+        const hint = el('div', 'findHint')
+        hint.append(el('span', 'cardNote small', t('garden.findHint')), clearButton())
+        parts.push(hint)
         if (input.deadEnd) {
           const line = el('p', 'findNext', input.deadEnd.text)
           const m = input.deadEnd.switchMonth

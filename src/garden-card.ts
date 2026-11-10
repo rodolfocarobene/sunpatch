@@ -303,13 +303,16 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     set(input) {
       lastInput = input
       if (input.kind === null) {
-        head.replaceChildren(el('p', 'gardenPrompt', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
+        // While a plant map is showing, the find panel says what to click: the generic prompt would contradict it.
+        head.replaceChildren(...(input.collapsed === null ? [el('p', 'gardenPrompt', NO_SPOT_HINT)] : []), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
+        root.hidden = head.childElementCount === 0
         body.replaceChildren()
         options.onRanked(null)
         return
       }
       close.hidden = false
+      root.hidden = false
       const where = el('h4', '', input.place ?? whereText(input.kind, input.neighbourRoof))
       const toggle = Object.assign(el('button', 'link cardToggle', t(input.collapsed ? 'garden.showHere' : 'garden.hideDetails')), { type: 'button' })
       toggle.setAttribute('aria-expanded', String(!input.collapsed))
