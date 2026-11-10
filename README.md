@@ -1,312 +1,76 @@
 # Sunpatch
 
 See where the sun comes into your home: pick your building on a map, sketch your apartment and its windows,
-then walk inside in 3D and watch the sun patches move across the floor for any day of the year. The same sun
-model also tells you what a balcony solar panel would make in a year and which plants would grow on your balcony,
-roof or garden.
+then walk inside in 3D and watch the sun patches move across the floor for any day of the year.
+
+**Try it: <https://rodolfocarobene.github.io/sunpatch/>** ·
+[sample apartment in Milan](https://rodolfocarobene.github.io/sunpatch/app/?example=milan) ·
+[in italiano](https://rodolfocarobene.github.io/sunpatch/it/)
 
 [![Demo: pick a building, sketch the apartment, watch the sun move and step inside](docs/demo.gif)](docs/demo.mp4)
 
-*Click the animation for the full video (45 s).*
-
-Sunpatch runs entirely in the browser. Building footprints, heights and trees come from
-[OpenStreetMap](https://www.openstreetmap.org/), the sun position from [SunCalc](https://github.com/mourner/suncalc),
-and the 3D scene is rendered with [three.js](https://threejs.org/). No account or API key is needed. The app has
-five tabs: **Map**, **Plan**, **3D**, **Panels** and **Garden**.
+Free, in the browser, no account or API key. Plans stay on your device.
 
 ## Features
 
-- **Find your building** on an OpenStreetMap map, by address search or by clicking it. The 3D view opens at once
-  from the map's own building data, and the detailed OpenStreetMap buildings load in the background.
-- **Real neighbourhood shadows**: every building within about 300 m is modelled, so the blocks across the street
-  shade your windows just like in reality. Trees mapped in OpenStreetMap, and parks and woods filled with trees,
-  cast shadows too. Buildings made of several mapped parts are merged into one.
-- **Honest heights**: where OpenStreetMap has no height, Sunpatch assumes 9 m and draws the building with faint
-  stripes. Right-click any building, yours or a neighbour's, to set its real height.
-- **Sketch your apartment** in a top-down plan editor: choose the floor, draw the outline (it snaps to the
-  building's walls), add interior walls and place windows with their width, sill and height.
-- **Fix the building** where OpenStreetMap is incomplete: add a missing balcony or a protruding wall, or cut away a
-  recess. Fixes cast shadows like the rest of the building.
-- **Watch the sun move**: pick a date and a time, or press Play to run through the day. A cutaway view hides the
-  floors above so you can look into your rooms from outside.
-- **Solar panels** in their own **Panels** tab: place panels on a facade, roof or the ground and read, in one
-  sentence, how much energy each makes a year and how that compares with an unshaded panel, with the shading and
-  the month-by-month figures one click away.
-  Figures come in two flavours: the ideal clear-sky energy and one weighted by the local weather
-  ([NASA POWER](https://power.larc.nasa.gov/) climate averages).
-- **Panel suitability**: a map of where panels would do best, on the facade, the roof and the ground around the
-  building, in kWh a year for one standard panel (400 W), with local weather. Click a spot and place a panel there.
-- **Garden**: click a spot (your apartment floor, a balcony, the ground or a roof) and see the direct sun it gets
-  each month and which plants of a built-in catalogue of about 70 would grow there, month by month, with a reason
-  for each. Or pick a plant and see a map of the best spots around the building. Plant figures are typical values,
-  not checked plant by plant; indoors it assumes a heated home at 18-24 degrees C. Houseplants that live on indirect
-  light are also rated by the estimated daylight factor at the spot (a rough estimate, see Daylight below), so a pothos
-  by a north window is no longer "low light" just because it gets no direct sun.
-- **Headline answer**: under the building line the 3D tab says when direct sun reaches the apartment floor on the chosen
-  date, e.g. "Sun inside on 21 Dec: 10:20–13:35 · 3 h 15 min", with the time when most of the floor is lit. It follows
-  the date and presets of the sun bar.
-- **Sun map**: switch it on and the floor is coloured by the hours of direct sun it gets on the chosen date, from
-  slate (none) through amber to pale yellow (6 hours or more). Click any spot for its hours, the share of the
-  day's daylight and the times, drawn on a day strip like the time slider's.
-- **Daylight (estimate)**: a separate layer, never mixed into the sun numbers. Tick it and the floor is coloured by an
-  estimated daylight factor (the share of the light outdoors under an overcast sky that reaches that spot, direct sun
-  excluded) from dark slate to pale blue, in four bands: dim (under 1 %), fair (1-2 %), bright (2-5 %), very
-  bright (over 5 %). Click a spot for its value. It is a textbook estimate with typical reflectances (floor 30 %,
-  walls 50 %, ceiling 70 %), exclusive with **Sun map**.
-- **Walk inside** in first person at eye height, see the sun disc through the windows and step the time while you
-  look around.
-- Plans are saved in the browser automatically and can be exported and imported as JSON.
-- **Share** (3D tab) copies a link that opens the same apartment, date, time and tab in another browser. Everything is in
-  the URL hash (deflated JSON, about 500 characters for the Milan example) and goes to no server; it does include the
-  building's location. The recipient sees it as a shared copy (never saved over their own plan) with a "Save as mine" button.
-- **Through the year** (3D tab, under the headline, collapsed until opened): 12 bars, the total minutes of direct sun
-  inside on the 21st of each month, so winter and summer compare at a glance. Click a bar to jump to that day. It is
-  only worked out while open (a few seconds, in a background worker) and is cached per scene and place.
+- **Map**: find your building on an OpenStreetMap map by address or by clicking it.
+- **Plan**: sketch the apartment on the building's footprint: floor, outline, interior walls, windows, and fixes
+  for balconies or recesses that OpenStreetMap is missing.
+- **3D**: real neighbourhood shadows (buildings and trees within about 300 m) for any date and time, with a
+  one-line answer such as "Sun inside on 21 Dec: 10:20–13:35 · 3 h 15 min", a sun-hours map of the floor, a
+  month-by-month chart and a first-person walk inside.
+- **Panels**: a map of where solar panels would do best on the roof, facades and ground, and the yearly energy of
+  each panel you place, with local weather.
+- **Garden**: click a spot to see which of about 120 plants would grow there, month by month, or pick a plant and
+  see the best spots for it.
+- **Daylight (estimate)**: a separate, clearly labelled overcast-sky estimate, never mixed into the direct-sun
+  numbers.
+- Wrong building height? Right-click any building in 3D to correct it.
+- Share a plan as a link (everything is in the URL, nothing is uploaded), or export and import it as JSON.
+- English and Italian; works on phones except walking.
 
 | | |
 |---|---|
 | ![Pick a building on the map](docs/screenshot-map.png) | ![Sketch the floor plan and windows](docs/screenshot-plan.png) |
-| Pick a building on the map | Sketch the floor plan and windows |
 | ![3D cutaway with neighbourhood shadows](docs/screenshot-cutaway.png) | ![First-person view with sun through the windows](docs/screenshot-walk.png) |
-| 3D cutaway with neighbourhood shadows | Walk inside and see the sun patches |
 | ![Panel suitability map and a panel card](docs/screenshot-panels.png) | ![Garden: plants that grow at a spot](docs/screenshot-garden.png) |
-| Where solar panels would do best | What grows at a spot, month by month |
 
-## Quick start
+## Accuracy and limits
 
-You need [Node.js](https://nodejs.org/) 22.12 or newer.
+The sun position and direct-sun geometry are accurate; the result mostly depends on the building data.
+
+- Heights come from OpenStreetMap; where missing, 9 m is assumed and the building is drawn striped.
+- Roofs are flat, trees are rough, and distant terrain (hills, mountains) is not modelled yet.
+- Panel energy, plant ratings and the daylight layer are estimates from typical values.
+- Times are in your browser's time zone.
+
+## Run it locally
+
+Needs [Node.js](https://nodejs.org/) 22.12 or newer.
 
 ```sh
 git clone https://github.com/rodolfocarobene/sunpatch.git
 cd sunpatch
 npm install
-npm run dev
-```
-
-Then open the address Vite prints (normally <http://localhost:5173>). That is the landing page; the app is at
-`/app/`, and `/app/?example=milan` opens a bundled sample apartment in 3D without any map click or network request
-for buildings.
-
-To build a static site, run `npm run build` (add `-- --base=./` to host it under a sub-path, as GitHub Pages does).
-The output in `dist/` can be served by any static host; the app is at `dist/app/`.
-
-## How to use it
-
-1. **Map**: search an address or move the map, then click your building. The app switches to the 3D view.
-   Your building is every outline that touches the one you clicked, so it may include neighbours of other
-   heights. In 3D, **Shift-click** a building to add it to the selection or take it out.
-   To work on another building, click it in 3D (it lights up when you point at it), or click a grey neighbour in Plan with the Select tool.
-   Your plan is saved first.
-   **Heights.** Many OpenStreetMap buildings have no height, and Sunpatch then assumes 9 m. Those are drawn with
-   faint diagonal stripes (switch it off with *Mark guessed heights*), and pointing at a building tells you where its
-   height came from. To correct one, right-click it in 3D (or press *Edit height* under the selected building's name),
-   enter its height in floors (3 m each) or in metres, and press *Set*. This works for neighbours as well as your own
-   building; *Reset to the data* undoes it. In 3D you can also point at a building and drag the **height ruler** that
-   appears beside it: the handle snaps to whole floors, **Shift** gives 0.5 m steps, **Esc** cancels, and the height is
-   set when you let go (the Height box stays the exact way to type it). The ruler is only in the 3D tab, not in Panels
-   or Garden, where a click on a roof means something else. The shadows, the sun map and the panel results follow at once, and the
-   changes are kept on this device by building, not by plan, so they apply wherever that building appears. The first
-   time you change a height Sunpatch asks whether to keep them for 30 days or for this session only; Details shows the
-   choice, with *Change* and *Reset all*. A height expires 30 days after you last edited it. A share link carries its
-   heights, and a shared copy only shows them: they are stored on the recipient's device when they press *Save as mine*.
-2. **Plan**: set the floor (0 is the ground floor) and check the floor height, which is estimated from the
-   OpenStreetMap data. Then:
-   - **Outline**: click the corners of your apartment; double-click or click the first point to close it.
-     **Whole floor** resets it to the full footprint.
-   - **Wall**: two clicks per interior wall; hold Shift for right angles.
-   - **Window**: click on an outline edge. With **Select** you can drag a window along its wall and edit its size.
-   - **Fix building**: draw a shape, choose Add or Cut, and set its heights or use a preset such as
-     *Balcony slab on this floor*. To change how tall a whole building is, right-click it in 3D instead (below).
-   - **Panel** (`P`): click to place a solar panel anywhere, inside or outside the outline. Near a wall it snaps and
-     faces outward (vertical); elsewhere it faces south at 30 degrees. Drag to move, drag the white dot to turn,
-     and set tilt, facing, height and modules in the box (presets: *Balcony railing*, *Roof stand*, *Ground*).
-     Panels show in 3D, cast shadows, and count in the sun map. Snapping only uses the building's outside walls,
-     never an apartment wall inside it.
-   - Select a panel to see a one-sentence summary under its properties, with **Open in Panels** for the full card.
-   - The camera symbol shows where **Walk inside** will put you. Drag it to move it and drag its white dot to
-     turn it.
-3. **3D**: drag to orbit, scroll to zoom, right-drag to pan. The bar at the bottom holds the date (Winter,
-   Equinox, Summer and Today chips, or any date), the time slider with its daylight strip, **Play** and where the
-   sun is. Keep **Hide floors above** on to see inside. Opening 3D or Garden frames your apartment (about half the
-   free screen); Panels frames the whole building. Once you have orbited or zoomed, the camera stays where you left
-   it when you switch between 3D, Panels and Garden; picking another building frames it again.
-   Tick **Sun map** to colour the floor by hours of direct sun on that date. The legend is one line from 0 h to
-   6 h+; *Share of daylight* opens the percentages. Click a spot on the floor to read its hours and times, for
-   example *3 h 10 min of direct sun, 42% of daylight, 16:00 to 19:10*; click elsewhere or press `Esc` to close it.
-   Changing the date recomputes the map (a few seconds, in the background); moving the time slider does not.
-   The map stays on while you walk.
-   Tick **Daylight (estimate)** instead for the overcast-sky daylight factor: the legend gives the four bands, the
-   average over the floor and the share that is dim, and a click on the floor shows the value at that spot. It does not
-   depend on the date or time, so it only recomputes when the building, plan or edits change (about a second).
-   The left panel names the building on one line, for example *OpenStreetMap ↗ · 9 m · 3 levels* (the link opens
-   the building's page, and its tooltip gives the OSM id). **Details** is folded away: it holds *Mark guessed heights*,
-   the *Neighbourhood* size (Small 150 m, Medium 300 m, Large 500 m, remembered in the browser, with a count such as
-   *76 buildings within 300 m*) and the location and accuracy fields. One note covers the sample apartment and how to switch buildings.
-   Panels are drawn and cast shadows here too, but the solar controls live in the Panels tab.
-4. **Panels**: the same 3D scene and camera as the 3D tab, with the solar tools in the left panel (the date and
-   time do not matter here: everything is a year).
-   - **Panel suitability**: off until you tick it (the Panels tab opens with a line saying so); tick it to colour the outside of the building and its surroundings by the yearly energy a
-   panel would make there, in kWh a year for one standard panel (400 W; the per-kW figure is under Details). The colours stretch over the range found around your building, and the legend
-   gives that range, for example *Across these spots: 260 … 560 kWh a year*. The facade is sampled every metre (panels
-   vertical, facing out), the roof of each part of the building at its own height, and the ground within 18 m on a
-   2 m grid; roofs and ground use a 30 degree stand facing south (north in the southern hemisphere). It takes a
-   few seconds to a minute for a big building (a progress bar shows), runs only when ticked, and is kept for
-   the same scene and place. Click a spot for its figure with local weather, the ideal clear-sky one and the loss to
-   shading, and press **Place a panel here** to add a panel with the matching preset to your plan, selected so its
-   card opens. The camera stays where you left it; if the building is out of view the legend offers **Frame the
-   building**. The floors above stay visible while the map shows (the legend says so), and it is exclusive with **Sun map**. Esc closes the popover. It switches off when you leave the tab.
-   - **Your panels**: a list with each panel's yearly energy and the total, for example *3 panels, ~1,050 kWh a
-     year with local weather*. A panel inside the building is listed as excluded and not counted in the total. Click a row, or a panel in the view, to open its card. Add panels with **Place a panel
-     here** or with the Panel tool in Plan.
-   - **The card** leads with one sentence, for example *About 568 kWh a year with local weather, 76% of the ideal.
-     Shading costs under 1%.*, and a yardstick: what an unshaded panel of the same size, tilted 30 degrees and facing
-     south, would make at this place. A panel inside the building, or one that loses 95% or more to shading, gets a
-     warning instead. **Details** holds the ideal clear-sky figure, the bars by month, the direct-sun hours, the loss
-     to shading, the month by hour chart (hover a cell for the figure) and the *Assumptions* (module efficiency 21%,
-     system losses 14%; kWp is the panel's rated power, and 1 kWp is about 5 m² of panels). It is an estimate: direct sun is
-     traced in 3D, diffuse light is approximated and not shaded.
-5. **Garden**: the same 3D scene and camera again, to see what would grow at a spot. Click the apartment floor
-   (an indoor spot), the ground, a roof or a terrace (outdoor spots); a ring marks the spot. The card traces the direct
-   sun around there (a small disc of points about 30 cm across, averaged) for the 21st of each month and shows it as twelve bars, then lists the plants of a built-in catalogue
-   of about 70 best first, with a rating (good, OK), the months it grows, the month to sow an annual crop, and one
-   sentence of reason. The **Month** control under the plant picker rates the plants for that month only. The poor ones are kept behind **Why not
-   others?**, each with its reason. Outdoor spots also show the typical night and day temperature by month (a bar from low to high, blue where nights are near or below freezing) and need
-   the local climate from NASA POWER; if it cannot load, the card says so and offers **Retry** instead of ratings.
-   Indoors the card assumes a heated home at 18-24 degrees C all year, which real rooms may not match. A click on a
-   wall (a facade) makes no spot and the card says to pick a floor, ground or roof spot. To click the roof, untick **Hide floors
-   above** (a line under the switch says so when the building has a roof). The card says whether a roof is the building's own or a neighbour's. Esc or the close button removes the spot. Plant figures are typical values for a common variety, not checked plant by plant,
-   and only direct sun is counted.
-   **Find a place for...** goes the other way: pick a plant (and a month, or all year) and every spot around the
-   building, on its apartment floor and on its roof is coloured green (good) or amber (OK); poor spots stay uncoloured.
-   A summary says where it grows best (for example "the ground south-west of the building and the roof"), with counts
-   per kind of spot, and **Show the best spot** opens that spot's card. Clicking a spot still opens the card while a
-   plant is picked. Indoor-only plants skip outdoor spots and outdoor-only plants skip the floor, with a line saying so;
-   if the temperatures cannot load, outdoor spots are left uncoloured. The area is traced once per scene (a few
-   seconds), then changing plant or month only scores again.
-6. **Walk inside** (or double-click the apartment floor): drag to look, WASD or arrow keys to walk, Shift to go
-   faster, `[` and `]` to move the time by 15 minutes, `P` to play or pause, `Esc` to leave. The same date and
-   time bar stays at the bottom, with the key hints above it, and the small panel on
-   the left keeps **Hide floors above** (`H`) and **Sun map** (`M`) with its legend; they are the same switches as
-   in the 3D panel. Hidden, you see the sky through the ceiling, and the sun still comes in only through the
-   windows. Click the floor to read the hours of direct sun at that spot (this turns the sun map on if it is
-   off); the first `Esc` closes that box, the next one leaves the walk.
-
-**On a phone** (windows up to 700 px wide) the left panel becomes a bottom sheet: tap its grip to fold it to the
-tabs and the one-line answer, or open it to 60% of the height. The sun bar rides above the folded sheet and hides
-while the sheet is open. Orbit, tap to select, Garden spots and Panels all work by touch. Walking needs a keyboard,
-so the Walk button is hidden on touch-only devices; the height ruler and the hover tooltips have no touch version
-(use **Edit height** in the panel).
-
-Times are in your browser's time zone, so use the app from the same time zone as the place you are looking at.
-
-## Accuracy and limitations
-
-The sun position and the direct-sun geometry are accurate; how good the result is mostly depends on the
-building data.
-
-- Heights come from OpenStreetMap `height` tags when present, otherwise from the number of floors × 3 m,
-  otherwise a 9 m default. The selected building's info box says which one was used, and buildings whose height is
-  a guess are striped in 3D. Wrong heights move shadows by metres, so correct the ones that matter near you
-  (right-click a building in 3D). Your own heights are exact only as far as you know them: 3 m a floor is a
-  typical value, not a measurement.
-- Roofs are flat, and awnings and most balconies are missing. Use **Fix building** for the ones that matter to
-  you.
-- Trees are rough: those mapped one by one in OpenStreetMap are placed exactly, but parks, gardens and woods are
-  filled with a random scatter of trees (at most 1,500 within 300 m), and every tree is a simple trunk with a
-  round crown. A tree casts the same solid shadow all year, with or without leaves.
-- The sun map is sampled every 25 cm and every 5 minutes, so hours are good to a few minutes and patch edges to
-  about a hand's width. It counts the sun as a point, so the soft edge of a shadow is a sharp line.
-- The sun map and the headline are direct sunlight only. The general brightness of the rooms in the 3D view is a
-  simple stand-in for light bouncing around, not a measurement. The separate **Daylight (estimate)** layer is the
-  BRE split-flux daylight factor under a CIE overcast sky: sky seen through the windows, a flat 20 % reflectance for
-  neighbours seen through them, and the internally reflected light: the BRE value per room (interior walls close rooms; a gap wider than a
-  narrow door joins them, and light between closed rooms is ignored) spread over the room by a one-bounce gather from its
-  own walls and ceiling, so places far from the windows get less (the room average stays the BRE value; the spread is a
-  rough shape, not a measurement). It ignores furniture, curtains, window depth beyond the wall's thickness, and the colour of
-  surfaces beyond the three default reflectances. Treat it as a rough ranking of spots, good to a factor of about
-  two.
-- Solar energy and plant ratings are estimates: panel energy uses fixed module efficiency (21%) and losses (14%)
-  and approximates diffuse light without shading it; the plant catalogue holds typical values for a common
-  variety, and Garden needs the local climate from NASA POWER for outdoor spots. Garden traces the direct sun in
-  3D on the 21st of each month and uses NASA POWER's typical temperatures (averages, not a forecast).
-- Distant terrain (hills, mountains) is not modelled yet, so very low sun near sunrise and sunset may be
-  reported as reaching you when a ridge would block it.
-- The public Overpass servers are sometimes busy. When they fail you keep the map-tile buildings, which have
-  heights but no floor counts, and can retry.
-
-## How it works
-
-1. **Picking**: MapLibre GL JS shows OpenFreeMap vector tiles. On a click, the buildings already loaded in the
-   tiles are turned into an instant 3D preview. The app then asks the Overpass API for the OpenStreetMap
-   buildings within the chosen Neighbourhood radius (300 m by default, plus a 100 m margin so a nearby click reuses the answer),
-   trying several mirrors in turn, and swaps them in without moving the camera.
-2. **Scene**: footprints are projected to local metres around the selected building (x east, y up, z south)
-   and extruded with three.js. Buildings with separately mapped parts (`building:part`) are drawn from their
-   parts.
-3. **Sun**: SunCalc gives the sun's azimuth and altitude for the chosen place and time. A directional light
-   placed in that direction casts shadow maps.
-4. **Apartment**: the plan replaces the selected building with the floors below, the floors above, the rest of
-   your storey, and your apartment's walls with real window openings. Building fixes are added or carved out
-   per height range with `polygon-clipping`.
-5. **Sharp patches**: a second, narrow sun light covers only your building with a high-resolution shadow map,
-   rendered in a second pass so the room gets centimetre-level sun patches without lighting anything twice.
-6. **Sun map**: the floor is sampled every 25 cm, and from each sample a ray goes toward the sun every 5 minutes
-   from sunrise to sunset. A ray counts as lit when it reaches the sky past every shadow caster in the scene (a
-   BVH from [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) in a Web Worker); window glass lets it
-   through.
-7. **Daylight estimate**: from each floor point (every 50 cm, 85 cm above the floor) 384 rays go up in a
-   cosine-weighted spread; those that pass a window pane count as sky weighted by the CIE overcast luminance, or as
-   an obstruction at 20 % of the average sky luminance if something stands in the way, and the internally reflected
-   light is the BRE split-flux value of the room, distributed by a one-bounce gather over the room's own surfaces (it falls
-   off away from the windows, and its room mean stays the BRE value). Window transmittance 0.7, frame and dirt 0.8.
-
-More detail for contributors is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Development
-
-```sh
+npm run dev       # landing page at /, app at /app/
 npm test          # unit tests (Vitest)
-npm run build     # type-check and production build
-npm run shots:install   # once: download a headless Chromium into .browsers/
-npm run shots -- out/   # render the main flow to PNGs (uses a recorded Overpass response)
-npm run demo      # re-record the demo video and screenshots in docs/ (needs ffmpeg)
+npm run build     # type-check and static build in dist/
 ```
 
-The landing page (`index.html`, `src/landing.css`, media in `public/media/`) and the app (`app/index.html`) are
-separate pages of one Vite multi-page build (`vite.config.ts`). `src/example.ts` builds the Milan example from the
-bundled fixture; its edits are never autosaved.
-
-`npm run dev` also serves two pages that are handy while working on one part in isolation:
-`/dev/editor.html` (plan editor on a test building) and `/dev/apartment.html` (a test apartment; try
-`?walk=1&edits=1`).
-
-The app is in English and Italian: the language is the stored choice (`sunpatch.lang`, set by the EN / IT switch at
-the top of the left panel), else the browser's. The landing page has an Italian twin at `/it/` (`it/index.html`);
-the EN / IT link in its header sets the same choice, so the app opens in that language. Edit both landing pages together. Text lives in `src/i18n/*.ts`; the header of `src/i18n.ts` says how to add some.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
-
-## Roadmap
-
-- Terrain horizon from an elevation model, so hills and mountains block the low sun.
-- Time zone of the chosen place instead of the browser's.
+How it works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); conventions are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Data and attribution
 
-- Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the
-  [Open Database License](https://opendatacommons.org/licenses/odbl/). This includes the recorded test data in
-  `fixtures/`.
-- Map tiles by [OpenFreeMap](https://openfreemap.org/), using the [OpenMapTiles](https://openmaptiles.org/) schema.
-- Address search by [Nominatim](https://nominatim.org/) and building data by the [Overpass API](https://overpass-api.de/)
-  and its mirrors. Please respect their usage policies: the app sends one search per submit and one Overpass
-  query per picked building, and caches the results.
-- Weather: monthly clear-sky index (panel energy) and air temperatures (Garden tab) from [NASA POWER](https://power.larc.nasa.gov/) climatology
-  (25-year averages). One request per place, rounded to 0.1 degrees, cached in the browser for a month, and made
-  only once a panel exists, the suitability map is on, or an outdoor Garden spot is picked. The recorded response in `fixtures/nasa-power-milan.json` is used by the tests.
-- Plant card (Garden tab): when it opens, the app asks [Wikipedia](https://www.wikipedia.org/) (REST summary, in the app language) for the plant's
-  article summary and picture, and [Wikimedia Commons](https://commons.wikimedia.org/) for the picture's author and licence. Only the plant's article title is sent,
-  never a location. The text is CC BY-SA and the picture keeps its own licence; the card shows both credits with links. Answers are cached for the session, and if
-  Wikipedia cannot be reached the card still shows the app's own facts and the care links. Test fixtures are in `fixtures/wiki/`.
+- Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), under the
+  [Open Database License](https://opendatacommons.org/licenses/odbl/) (including the test data in `fixtures/`).
+- Map tiles by [OpenFreeMap](https://openfreemap.org/) ([OpenMapTiles](https://openmaptiles.org/) schema).
+- Address search by [Nominatim](https://nominatim.org/), buildings by the [Overpass API](https://overpass-api.de/).
+- Climate averages from [NASA POWER](https://power.larc.nasa.gov/).
+- Plant summaries and pictures from [Wikipedia](https://www.wikipedia.org/) and
+  [Wikimedia Commons](https://commons.wikimedia.org/), credited on each card.
+- Built with [three.js](https://threejs.org/), [MapLibre GL JS](https://maplibre.org/),
+  [SunCalc](https://github.com/mourner/suncalc) and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh).
 
 ## License
 
