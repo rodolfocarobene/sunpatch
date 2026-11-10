@@ -58,6 +58,7 @@ import type { DeadEnd } from './garden-text'
 import { scoreSpots, type PlantResult } from './garden'
 import { plantById, plantName, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
+import { bestOfKind, getKindFilter } from './garden-kind'
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { createPlantCard } from './plant-card'
 import { plantRow } from './garden-text'
@@ -188,7 +189,7 @@ const gardenCard = createGardenCard({
   },
   onRanked: (ranked) => {
     spotRanked = ranked
-    if (plantCardAuto && ranked) plantCardId = ranked.find((r) => r.rating !== 'poor')?.plant.id
+    if (plantCardAuto && ranked) plantCardId = bestOfKind(ranked, getKindFilter())?.plant.id
     renderPlantCard()
   },
 })
@@ -267,7 +268,7 @@ function setFindPlant(plant: Plant | undefined) {
   findPainted = ''
   gardenCardOpen = plant === undefined
   plantCardAuto = !plant && gardenSpot !== undefined
-  plantCardId = plant ? plant.id : plantCardAuto ? spotRanked?.find((r) => r.rating !== 'poor')?.plant.id : undefined
+  plantCardId = plant ? plant.id : plantCardAuto && spotRanked ? bestOfKind(spotRanked, getKindFilter())?.plant.id : undefined
   if (!plant) {
     findJob.stop()
     findResult = undefined

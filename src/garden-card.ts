@@ -1,5 +1,6 @@
 import { rankPlants, type PlantResult } from './garden'
-import { fmtMonth, fmtNumber, t } from './i18n'
+import { fmtMonth, fmtNumber, t, upFirst } from './i18n'
+import { KIND_FILTERS, filterByKind, getKindFilter, setKindFilter } from './garden-kind'
 import type { PickedKind } from './garden-pick'
 import {
   INDOOR_NOTE, NO_SPOT_HINT, monthLabel, hoursText, plantRow, spotDeadEnd, splitPlants, sunStrip, topPlants, tempStrip, whereText, type PlantRow,
@@ -67,6 +68,7 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
   const body = el('div', 'cardBody')
   const results = el('div', 'gardenResults')
   root.append(head, close, body)
+  let lastInput: GardenCardInput | undefined
   let poorOpen = false
   let allOpen = false
   const CHARTS_KEY = 'sunpatch.gardenCharts'
@@ -165,26 +167,47 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return li
   }
 
+  /** One kind of plant at a time (or all): a row of toggle chips above the list. */
+  function kindChips(active: string): HTMLElement {
+    const row = el('div', 'kindChips')
+    row.setAttribute('role', 'group')
+    row.setAttribute('aria-label', t('garden.filterAria'))
+    for (const k of KIND_FILTERS) {
+      const b = Object.assign(el('button', 'kindChip', t(k.label)), { type: 'button' })
+      b.setAttribute('aria-pressed', String(k.value === active))
+      b.addEventListener('click', () => {
+        if (k.value === getKindFilter()) return
+        setKindFilter(k.value)
+        if (lastInput) api.set(lastInput)
+      })
+      row.append(b)
+    }
+    return row
+  }
+
   /** The spot's plants in two parts: the answer (lead, best rows, "Show all") shown first, and the poor ones kept after the strips. */
   function plants(input: GardenCardInput, sunMinutes: number[], daylight?: number): { answer: HTMLElement; rest: HTMLElement } {
     const indoor = input.kind === 'indoor'
-    const ranked: PlantResult[] = rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
+    const all: PlantResult[] = rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!, input.month === null ? {} : { month: input.month })
+    options.onRanked(all)
+    const kind = getKindFilter()
+    const ranked = filterByKind(all, kind)
     const { fit, poor } = splitPlants(ranked)
-    options.onRanked(ranked)
+    const kinds = t(KIND_FILTERS.find((k) => k.value === kind)!.label).toLowerCase()
     const answer = el('div', 'gardenPlants gardenAnswer')
     const box = el('div', 'gardenPlants')
     const when = input.month === null ? '' : t('garden.inMonth', { month: fmtMonth(input.month) })
-    answer.append(
-      el(
-        'p',
-        'plantsLead',
-        fit.length === 0
+    const lead =
+      kind === 'all'
+        ? fit.length === 0
           ? t('garden.leadNone', { when })
-          : t('garden.leadFit', { n: fit.length, total: ranked.length, when }),
-      ),
-    )
+          : t('garden.leadFit', { n: fit.length, total: ranked.length, when })
+        : fit.length === 0
+          ? t('garden.leadNoneKind', { kinds, when })
+          : t('garden.leadFitKind', { n: fit.length, total: ranked.length, kinds, Kinds: upFirst(kinds), when })
+    answer.append(kindChips(kind), el('p', 'plantsLead', lead))
     if (fit.length === 0) {
-      const rated = input.month === null ? ranked : rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!)
+      const rated = filterByKind(input.month === null ? all : rankPlants({ indoor, sunMinutes, daylight }, indoor ? NO_CLIMATE : input.climate!), kind)
       const out = spotDeadEnd(rated, input.month)
       if (out) {
         const line = el('p', 'plantsNext', out.text)
@@ -275,9 +298,10 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
     return p
   }
 
-  return {
+  const api: GardenCard = {
     el: root,
     set(input) {
+      lastInput = input
       if (input.kind === null) {
         head.replaceChildren(el('p', 'gardenPrompt', NO_SPOT_HINT), ...(input.hint ? [Object.assign(el('p', 'cardVerdict warn', input.hint), { role: 'status' })] : []))
         close.hidden = true
@@ -329,4 +353,5 @@ export function createGardenCard(options: { onRetryClimate: () => void; onRetryT
       body.replaceChildren(...parts)
     },
   }
+  return api
 }

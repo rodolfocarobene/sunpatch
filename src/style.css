@@ -585,6 +585,9 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .gardenCard .gardenBar { height: 8px; border-radius: 3px; border: 1px solid var(--line); box-sizing: border-box; background: linear-gradient(to right, var(--accent) var(--progress), var(--bg) var(--progress)); }
 .gardenCard .gardenBusy, .gardenCard .gardenProblem { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .gardenCard .gardenBusy .gardenBar { align-self: stretch; }
+.gardenCard .kindChips { display: flex; flex-wrap: wrap; gap: 4px; }
+.gardenCard .kindChip { padding: 3px 9px; font-size: var(--text-sm); }
+#panel .gardenCard .kindChip[aria-pressed='true'], #panel .gardenCard .kindChip[aria-pressed='true']:hover { background: var(--text); border-color: var(--text); color: var(--surface); }
 .gardenCard .plantsLead { margin: 0; font-weight: 600; text-wrap: pretty; }
 .gardenCard .plantsNext { margin: 0; text-wrap: pretty; }
 .gardenCard .gardenPlants { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
