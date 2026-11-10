@@ -342,7 +342,14 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .plantCard {
   position: fixed; top: 104px; right: 12px; bottom: 64px; z-index: 9; box-sizing: border-box; width: 300px; height: fit-content; max-height: calc(100dvh - 168px);
   padding: 12px; overflow-y: auto; font-size: var(--text-sm); line-height: 1.4;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
+  border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
+  /* A soft shadow at the top or bottom edge shows only while more content lies beyond it (the surface-coloured covers scroll with it). */
+  background:
+    linear-gradient(var(--surface) 30%, transparent) center top / 100% 28px local no-repeat,
+    linear-gradient(transparent, var(--surface) 70%) center bottom / 100% 28px local no-repeat,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.22), transparent) center top / 100% 10px scroll no-repeat,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.22), transparent) center bottom / 100% 10px scroll no-repeat,
+    var(--surface);
 }
 .plantCard[hidden] { display: none; }
 .plantCard .cardClose {

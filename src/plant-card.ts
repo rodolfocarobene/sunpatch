@@ -104,8 +104,11 @@ export function createPlantCard(options: { onClose: () => void }): PlantCard {
       img.referrerPolicy = 'no-referrer'
       img.loading = 'lazy'
       img.decoding = 'async'
-      box.append(img)
-      box.append(creditLine(info.credit ?? {}))
+      const credit = creditLine(info.credit ?? {})
+      credit.classList.add('photoCredit')
+      // No picture to show (it failed or is blocked): drop the empty box and its credit.
+      img.addEventListener('error', () => { img.remove(); credit.remove() })
+      box.append(img, credit)
     }
     const text = el('p', 'plantExtract', info.extract)
     const from = el('p', 'plantCredit')
