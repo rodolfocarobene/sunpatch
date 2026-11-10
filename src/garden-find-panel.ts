@@ -85,7 +85,11 @@ export function createFindPanel(options: {
     plantSelect.value = chosenId
   }
   fillPlants('')
-  search.addEventListener('input', () => fillPlants(search.value))
+  search.addEventListener('input', () => {
+    fillPlants(search.value)
+    // The list opens at the bottom of the scrolling panel: bring all of it into view.
+    if (search.value.trim() !== '') plantSelect.scrollIntoView({ block: 'nearest' })
+  })
   // Enter in the search box picks the plant when exactly one matches.
   search.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return
