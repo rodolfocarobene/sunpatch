@@ -244,8 +244,13 @@ export function createUI(
     <section data-views="panels">
       <p id="panelLead" class="panelLead">${t('shell.panelLead')}</p>
       <div class="field">
-        <label class="row" title="${t('shell.suitTitle')}"><input id="suit" type="checkbox"> ${t('shell.suit')}</label>
+        <div id="suitStart" class="suitStart">
+          <button id="suitGo" class="primary" type="button" title="${t('shell.suitTitle')}">${t('shell.suitGo')}</button>
+          <p class="hint">${t('shell.suitGoNote')}</p>
+        </div>
+        <label class="row" id="suitRow" title="${t('shell.suitTitle')}" hidden><input id="suit" type="checkbox"> ${t('shell.suit')}</label>
         <div id="suitLegend" hidden></div>
+        <button id="suitCancel" class="link" type="button" hidden>${t('sun.suitCancel')}</button>
       </div>
       <div id="panelList">
         <p id="panelTotals" class="hint" hidden></p>
@@ -425,13 +430,30 @@ export function createUI(
   const suitLegend = $('suitLegend')
   let lastSuitReady: Extract<SuitabilityStatus, { kind: 'ready' }> | undefined
   let suitListener: ((on: boolean) => void) | undefined
+  // Until the map has been asked for, a button starts it; after that the checkbox is the on/off switch.
+  let suitUsed = false
   const applySuit = () => {
+    if (suit.checked) suitUsed = true
+    $('suitStart').hidden = suitUsed
+    $('suitRow').hidden = !suitUsed
     $('panelLead').textContent = t(suit.checked ? 'shell.panelLeadOn' : 'shell.panelLead') // the lead only asks for what is still to do
     suitLegend.hidden = !suit.checked
+    if (!suit.checked) suitCancel.hidden = true
     if (!suit.checked) lastSuitReady = undefined
     suitListener?.(suit.checked)
   }
   suit.addEventListener('change', applySuit)
+  $('suitGo').addEventListener('click', () => {
+    suit.checked = true
+    applySuit()
+  })
+  // Cancel stops the first computation and goes back to the start button. It sits outside the legend, which is rebuilt on every progress step.
+  const suitCancel = $('suitCancel')
+  suitCancel.addEventListener('click', () => {
+    suitUsed = false
+    suit.checked = false
+    applySuit()
+  })
   const walk = $<HTMLButtonElement>('walk')
   walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
@@ -799,6 +821,7 @@ export function createUI(
       applySuit()
     },
     setSuitabilityStatus(status) {
+      suitCancel.hidden = !(status.kind === 'computing' && !status.updating)
       if (status.kind === 'ready') lastSuitReady = status
       // An update keeps the old ramp and numbers on view (the map under them stays too), marked and with its progress.
       suitLegend.innerHTML =

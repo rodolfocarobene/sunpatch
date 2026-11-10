@@ -827,6 +827,14 @@ sunScene.onSuitabilityClick((index) => {
   else showSuitPick()
 })
 sunScene.onSuitabilityScreen((at) => suitPopover.moveTo(at))
+// A click on the building in Panels while the map is off would do nothing: point at the button instead.
+let panelDown: { x: number; y: number; panel: string | null } | undefined
+sceneCanvas.addEventListener('pointerdown', (e) => (panelDown = { x: e.clientX, y: e.clientY, panel: selectedPanel }))
+sceneCanvas.addEventListener('click', (e) => {
+  if (view !== 'panels' || suitOn || !panelDown) return
+  const still = Math.hypot(e.clientX - panelDown.x, e.clientY - panelDown.y) < 5 // a drag is an orbit
+  if (still && panelDown.panel === selectedPanel) chip.done(t('shell.suitFirst'))
+})
 
 function closeProbe() {
   probePoint = undefined
