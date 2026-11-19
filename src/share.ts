@@ -1,4 +1,5 @@
 import { validatePlan } from './editor-geom'
+import { packFurniture, unpackFurniture } from './furniture'
 import type { Plan } from './plan'
 import type { View } from './ui'
 
@@ -58,9 +59,11 @@ async function run(data: Uint8Array, stream: CompressionStream | DecompressionSt
  * CompressionStream (the link is longer, and opens everywhere).
  */
 export async function encodeShare(s: Shared): Promise<string> {
-  const { version: _, ...plan } = s.plan
+  const { version: _, furniture, ...plan } = s.plan
   const ll = [s.lat, s.lon]
-  const json = JSON.stringify({ ll, d: s.date, m: s.minutes, t: s.view, ...(s.example && { x: 1 }), p: plan }, roundTo(ll))
+  // Furniture goes in packed form (`f`), not as the plan's own objects.
+  const f = furniture?.length ? { f: packFurniture(furniture) } : {}
+  const json = JSON.stringify({ ll, d: s.date, m: s.minutes, t: s.view, ...(s.example && { x: 1 }), ...f, p: plan }, roundTo(ll))
   const bytes = new TextEncoder().encode(json)
   if (!canCompress()) return `${PREFIX}${SHARE_VERSION}u.${toBase64Url(bytes)}`
   return `${PREFIX}${SHARE_VERSION}.${toBase64Url(await run(bytes, new CompressionStream('deflate-raw')))}`
@@ -87,7 +90,7 @@ export async function decodeShare(hash: string): Promise<{ share: Shared } | { e
 }
 
 function fromPayload(v: unknown): { share: Shared } | { error: ShareError } {
-  const o = v as { ll?: unknown; d?: unknown; m?: unknown; t?: unknown; x?: unknown; p?: unknown } | null
+  const o = v as { ll?: unknown; d?: unknown; m?: unknown; t?: unknown; x?: unknown; f?: unknown; p?: unknown } | null
   if (!o || typeof o !== 'object' || !Array.isArray(o.ll)) return { error: 'broken' }
   const [lat, lon] = o.ll as number[]
   const ok =
@@ -96,7 +99,7 @@ function fromPayload(v: unknown): { share: Shared } | { error: ShareError } {
     typeof o.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.d) &&
     typeof o.m === 'number' && Number.isFinite(o.m) && o.m >= 0 && o.m < 1440
   if (!ok) return { error: 'broken' }
-  const checked = validatePlan({ version: 1, ...(o.p as object) })
+  const checked = validatePlan({ version: 1, ...(o.p as object), ...(o.f !== undefined && { furniture: unpackFurniture(o.f) }) })
   if ('error' in checked) return { error: 'broken' }
   return { share: { lat, lon, view: o.t as View, date: o.d as string, minutes: o.m as number, plan: checked.plan, ...(o.x === 1 && { example: true }) } }
 }

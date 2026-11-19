@@ -1,5 +1,6 @@
 import { FACADE_THICKNESS, SLAB_THICKNESS, ringOf, type Plan, type Window } from './plan'
 import { buildingContains, pickBuilding, type Building, type Point } from './osm'
+import { checkFurniture } from './furniture'
 import { parseHeights } from './heights'
 import { t } from './i18n'
 
@@ -274,10 +275,16 @@ export function validatePlan(value: unknown): { plan: Plan } | { error: string }
     if (!isNum(q.tilt) || q.tilt < 0 || q.tilt > 90) return { error: t('editor.errPanelTilt') }
     if (q.count !== undefined && (!Number.isInteger(q.count) || q.count < 1)) return { error: t('editor.errPanelCount') }
   }
+  let furniture: Plan['furniture']
+  if (p.furniture !== undefined) {
+    const checked = checkFurniture(p.furniture)
+    if ('bad' in checked) return { error: t('editor.errFurniture') }
+    furniture = checked.furniture
+  }
   // Heights are the user's own; entries that are not usable are dropped rather than failing the whole plan.
-  const { heights: _, ...rest } = p
+  const { heights: _, furniture: __, ...rest } = p
   const heights = parseHeights(p.heights)
-  return { plan: { ...rest, panels, ...(heights && { heights }) } }
+  return { plan: { ...rest, panels, ...(furniture && { furniture }), ...(heights && { heights }) } }
 }
 
 export interface FitRect {
