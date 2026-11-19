@@ -6,8 +6,9 @@
     <title>Sunpatch: see where the sun comes into your home</title>
     <meta
       name="description"
-      content="Pick your building on a map, sketch your apartment and its windows, and watch the direct sun patches move across the floor for any date and time. Free, open source, runs in your browser."
+      content="See how many hours of sun your apartment gets and how neighbouring buildings shade it. Sketch your home on a real map. Free, in your browser."
     />
+    <link rel="canonical" href="https://rodolfocarobene.github.io/sunpatch/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Sunpatch: see where the sun comes into your home" />
@@ -17,11 +18,29 @@
     />
     <meta property="og:image" content="https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png" />
     <meta property="og:url" content="https://rodolfocarobene.github.io/sunpatch/" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:locale:alternate" content="it_IT" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
     <link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
     <link rel="alternate" hreflang="x-default" href="https://rodolfocarobene.github.io/sunpatch/" />
     <meta name="color-scheme" content="light dark" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Sunpatch",
+        "url": "https://rodolfocarobene.github.io/sunpatch/",
+        "description": "See how many hours of sun your apartment gets and how neighbouring buildings shade it. Sketch your home on a real map. Free, in your browser.",
+        "inLanguage": "en",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Any (web browser)",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
+        "author": { "@type": "Person", "name": "Rodolfo Carobene" }
+      }
+    </script>
     <link rel="stylesheet" href="/src/landing.css" />
   </head>
   <body>
@@ -163,6 +182,32 @@
           </div>
         </div>
         <p class="note">Treat it as a good estimate, not a survey. OpenStreetMap heights are sometimes missing or wrong.</p>
+      </section>
+
+      <section id="faq" class="faq">
+        <h2>Questions people ask</h2>
+        <div class="two">
+        <div>
+          <h3>How many hours of sun will my flat get in winter?</h3>
+          <p>Set the date to the winter solstice and switch on the sun map. Each spot of the floor is coloured by its hours of direct sun that day, and you can click it for the times.</p>
+        </div>
+        <div>
+          <h3>Which rooms get direct sun?</h3>
+          <p>Draw your flat with its windows and slide through the day. The patches of sun show which rooms are lit and when. Rooms that stay dark may still have daylight, because diffuse light is not modelled.</p>
+        </div>
+        <div>
+          <h3>Do neighbouring buildings shade my windows?</h3>
+          <p>Yes, if they are on the map. The buildings around yours come from OpenStreetMap and cast shadows. Their heights are sometimes missing or wrong, so you can correct them.</p>
+        </div>
+        <div>
+          <h3>Where should I put plants or a balcony solar panel?</h3>
+          <p>Click a spot in the Garden tab to see which plants suit its sun, or place a panel in the Panels tab and read its yearly energy. Both are estimates, not guarantees.</p>
+        </div>
+        <div>
+          <h3>Is it free, and do I need an account?</h3>
+          <p>It is free and open source, with no account and no install. Your plans stay in this browser and are not uploaded anywhere.</p>
+        </div>
+        </div>
       </section>
 
       <section class="split">

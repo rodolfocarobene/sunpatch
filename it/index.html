@@ -6,8 +6,9 @@
     <title>Sunpatch: scopri dove entra il sole in casa tua</title>
     <meta
       name="description"
-      content="Scegli il tuo edificio sulla mappa, disegna il tuo appartamento e le finestre, e guarda le macchie di sole diretto muoversi sul pavimento in qualsiasi giorno e a qualsiasi ora. Gratis, open source, funziona nel browser."
+      content="Scopri l'esposizione al sole del tuo appartamento: ore di sole in ogni stanza e ombre degli edifici vicini, per ogni giorno dell'anno. Gratis, nel browser."
     />
+    <link rel="canonical" href="https://rodolfocarobene.github.io/sunpatch/it/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Sunpatch: scopri dove entra il sole in casa tua" />
@@ -17,11 +18,29 @@
     />
     <meta property="og:image" content="https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png" />
     <meta property="og:url" content="https://rodolfocarobene.github.io/sunpatch/it/" />
+    <meta property="og:locale" content="it_IT" />
+    <meta property="og:locale:alternate" content="en_GB" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
     <link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
     <link rel="alternate" hreflang="x-default" href="https://rodolfocarobene.github.io/sunpatch/" />
     <meta name="color-scheme" content="light dark" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Sunpatch",
+        "url": "https://rodolfocarobene.github.io/sunpatch/it/",
+        "description": "Scopri l'esposizione al sole del tuo appartamento: ore di sole in ogni stanza e ombre degli edifici vicini, per ogni giorno dell'anno. Gratis, nel browser.",
+        "inLanguage": "it",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Any (web browser)",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
+        "author": { "@type": "Person", "name": "Rodolfo Carobene" }
+      }
+    </script>
     <link rel="stylesheet" href="/src/landing.css" />
   </head>
   <body>
@@ -160,6 +179,32 @@
           </div>
         </div>
         <p class="note">Prendilo come una buona stima, non come un rilievo. Le altezze di OpenStreetMap a volte mancano o sono sbagliate.</p>
+      </section>
+
+      <section id="faq" class="faq">
+        <h2>Domande frequenti</h2>
+        <div class="two">
+        <div>
+          <h3>Quante ore di sole prende il mio appartamento d'inverno?</h3>
+          <p>Imposta la data sul solstizio d'inverno e attiva la mappa del sole. Ogni punto del pavimento è colorato in base alle ore di sole diretto di quel giorno, e con un clic vedi gli orari.</p>
+        </div>
+        <div>
+          <h3>Quali stanze sono esposte al sole?</h3>
+          <p>Disegna l'appartamento con le finestre e scorri la giornata. Le macchie di sole mostrano quali stanze si illuminano e a che ora. Una stanza senza sole diretto può comunque avere luce, perché quella diffusa non è simulata.</p>
+        </div>
+        <div>
+          <h3>Gli edifici vicini fanno ombra alle finestre?</h3>
+          <p>Sì, se sono sulla mappa. Gli edifici intorno al tuo arrivano da OpenStreetMap e proiettano ombra. Le altezze a volte mancano o sono sbagliate, ma puoi correggerle.</p>
+        </div>
+        <div>
+          <h3>Dove mettere le piante o un pannello solare da balcone?</h3>
+          <p>Nella scheda Giardino clicchi un punto e vedi quali piante ci stanno bene, nella scheda Pannelli provi un pannello e leggi l'energia di un anno. Sono stime, non garanzie.</p>
+        </div>
+        <div>
+          <h3>È gratis?</h3>
+          <p>Sì, è gratis e open source, senza account e senza installare nulla. I tuoi progetti restano nel tuo browser e non vengono caricati da nessuna parte.</p>
+        </div>
+        </div>
       </section>
 
       <section class="split">
