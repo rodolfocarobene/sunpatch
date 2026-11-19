@@ -30,6 +30,7 @@ import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOver
 import { createHeightPopover, createHoverTip } from './height-popover'
 import { createHeightRuler, cycleOrder, hoverNoteKind, nextInCycle } from './height-ruler'
 import { hoverLines } from './building-line'
+import { onLofiChange } from './lofi-ui'
 import { createScene, type FrameTarget } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees, TREE_RADIUS_M } from './trees'
@@ -85,6 +86,7 @@ const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
+onLofiChange((on) => sunScene.setLofiPixelRatio(on))
 const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
 const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
