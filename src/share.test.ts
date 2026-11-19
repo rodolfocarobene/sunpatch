@@ -73,3 +73,29 @@ describe('share links', () => {
     for (const b of bad) expect(await decodeShare(b)).toEqual({ error: 'broken' })
   })
 })
+
+describe('share links with furniture', () => {
+  const five = [
+    { kind: 'bed2' as const, x: -2.35, z: 1.2, rot: 90 },
+    { kind: 'sofa' as const, x: 1.5, z: -0.9, rot: 15 },
+    { kind: 'table' as const, x: 0.25, z: 2.1, rot: 0 },
+    { kind: 'chair' as const, x: 0.8, z: 2.6, rot: 195 },
+    { kind: 'plant' as const, x: 3.05, z: 0.4, rot: 0 },
+  ]
+
+  it('round-trips the pieces, and a plan without any has no field', async () => {
+    const out = await decodeShare(await encodeShare({ ...share, plan: { ...plan, furniture: five } }))
+    if (!('share' in out)) throw new Error(out.error)
+    expect(out.share.plan.furniture).toEqual(five)
+    const none = await decodeShare(await encodeShare(share))
+    if (!('share' in none)) throw new Error(none.error)
+    expect('furniture' in none.share.plan).toBe(false)
+  })
+
+  it('adds only a little to the link', async () => {
+    const without = (await encodeShare(share)).length
+    const withFive = (await encodeShare({ ...share, plan: { ...plan, furniture: five } })).length
+    console.log(`Milan example share hash length: ${without} without furniture, ${withFive} with 5 pieces`)
+    expect(withFive - without).toBeLessThan(120)
+  })
+})

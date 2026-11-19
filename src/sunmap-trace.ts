@@ -3,6 +3,14 @@ import { MeshBVH } from 'three-mesh-bvh'
 import { SAMPLE_LIFT } from './sunmap'
 
 /**
+ * The groups every computed number (sun map, headline, year, daylight, garden, panels) takes its shadow casters from.
+ * Furniture is decoration and is left out unless `countFurniture` is set: this is the one place that decides it.
+ */
+export function occluderRoots(groups: { world: Object3D; trees: Object3D; furniture: Object3D }, countFurniture = false): Object3D[] {
+  return [groups.world, groups.trees, ...(countFurniture ? [groups.furniture] : [])]
+}
+
+/**
  * Triangles (nine numbers each, scene coordinates) of everything under `roots` that casts a shadow and is visible:
  * the same set the shadow maps draw. Glass panes never set castShadow, so they let the sun through. Instanced
  * meshes (trees) are expanded, one copy per instance.

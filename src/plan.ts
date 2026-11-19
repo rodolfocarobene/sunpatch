@@ -1,3 +1,4 @@
+import type { Furniture } from './furniture'
 import type { HeightOverrides } from './heights'
 import { project, unproject, type Building, type Origin, type Point } from './osm'
 
@@ -32,6 +33,8 @@ export interface Plan {
   heights?: HeightOverrides
   /** Solar panels, anywhere around the building (inside or outside the outline); [] for none. */
   panels: Panel[]
+  /** Furniture on the apartment's floor, for looks only: it never enters a computed number. Absent for none (and in older plans). */
+  furniture?: Furniture[]
 }
 
 /**
@@ -150,6 +153,7 @@ export function rebasePlan(plan: Plan, origin: Origin): Plan {
     walls: plan.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
     ...(plan.viewpoint && { viewpoint: { ...plan.viewpoint, ...move(plan.viewpoint) } }),
     panels: plan.panels.map((p) => ({ ...p, ...move(p) })),
+    ...(plan.furniture && { furniture: plan.furniture.map((f) => ({ ...f, ...move(f) })) }),
     ...(plan.edits && { edits: plan.edits.map((e) => ({ ...e, outline: e.outline.map(move) })) }),
   }
 }

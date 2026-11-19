@@ -6,6 +6,7 @@ import type { Snap } from './editor-geom'
 import { startPosition, windowYaw } from './walk-geom'
 import { fmt1Fixed, fmtNumber, t } from './i18n'
 import { panelFootprint, panelTip, facing, footprintDepth } from './panel'
+import { furnitureFootprint, furnitureTip, specOf, type Furniture } from './furniture'
 
 export interface View {
   /** Scene point shown at the centre of the SVG. */
@@ -18,7 +19,7 @@ export interface View {
 }
 
 export interface Selection {
-  kind: 'window' | 'wall' | 'edit' | 'viewpoint' | 'panel'
+  kind: 'window' | 'wall' | 'edit' | 'viewpoint' | 'panel' | 'furniture'
   /** Unused (0) for the viewpoint. */
   index: number
 }
@@ -64,6 +65,8 @@ export interface Draft {
   snap?: Snap
   /** Panel tool: where a click would put a panel. */
   panel?: Panel
+  /** Furniture tool: where a click would put the chosen piece. */
+  furniture?: Furniture
 }
 
 export interface Scene {
@@ -205,6 +208,8 @@ export function drawScene(svg: SVGSVGElement, s: Scene): void {
     }
   }
 
+  plan.furniture?.forEach((f, i) => drawFurniture(root, f, px, s.selection?.kind === 'furniture' && s.selection.index === i))
+  if (s.draft.furniture) drawFurniture(root, s.draft.furniture, px, false, 0.55)
   plan.panels.forEach((p, i) => drawPanel(root, p, px, s.selection?.kind === 'panel' && s.selection.index === i))
   if (s.draft.panel) drawPanel(root, s.draft.panel, px, false, 0.55)
   drawViewpoint(root, s, px)
@@ -270,6 +275,50 @@ function drawPanel(root: SVGElement, p: Panel, px: number, selected: boolean, op
   })
   if (selected) {
     const tip = panelTip(p)
+    svgEl(g, 'line', { x1: front.x, y1: front.z, x2: tip.x, y2: tip.z, stroke: C.accentStrong, 'stroke-width': 1.5 * px, 'stroke-dasharray': `${4 * px} ${3 * px}` })
+    svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
+  }
+}
+
+const FURNITURE_FILL = 'rgba(255, 253, 248, 0.78)'
+const FURNITURE_STROKE = '#8a7f6a'
+
+/** The piece's outlined footprint (a circle for a plant) with its name when it fits, a tick on the front and, selected, a rotate handle. */
+function drawFurniture(root: SVGElement, f: Furniture, px: number, selected: boolean, opacity = 1): void {
+  const spec = specOf(f.kind)
+  const g = svgEl(root, 'g', { 'data-role': 'furniture', opacity })
+  const name = t(spec.name)
+  svgEl(g, 'title', {}).textContent = name
+  const ring = furnitureFootprint(f)
+  const d = pathOf([ring])
+  const round = f.kind === 'plant'
+  const shape = (extra: Record<string, string | number>): void => {
+    if (round) svgEl(g, 'circle', { cx: f.x, cy: f.z, r: spec.w / 2, ...extra })
+    else svgEl(g, 'path', { d, 'stroke-linejoin': 'round', ...extra })
+  }
+  if (selected) shape({ fill: C.accent, stroke: C.accent, 'stroke-width': 10 * px, opacity: 0.85 })
+  shape({
+    fill: f.kind === 'rug' ? 'rgba(244, 234, 214, 0.6)' : FURNITURE_FILL, stroke: FURNITURE_STROKE, 'stroke-width': 1.5 * px,
+    ...(f.kind === 'rug' && { 'stroke-dasharray': `${5 * px} ${3 * px}` }),
+  })
+  // The front: a tick through the middle of the front edge, so a turned piece shows which way it faces.
+  const front = { x: (ring[2].x + ring[3].x) / 2, z: (ring[2].z + ring[3].z) / 2 }
+  const tip = furnitureTip(f)
+  const out = { x: tip.x - front.x, z: tip.z - front.z }
+  const len = Math.hypot(out.x, out.z) || 1
+  svgEl(g, 'line', {
+    x1: front.x - (out.x / len) * 4 * px, y1: front.z - (out.z / len) * 4 * px,
+    x2: front.x + (out.x / len) * 4 * px, y2: front.z + (out.z / len) * 4 * px,
+    stroke: FURNITURE_STROKE, 'stroke-width': 2.5 * px, 'stroke-linecap': 'round',
+  })
+  if (Math.max(spec.w, spec.d) / px >= name.length * 6.2) {
+    const label = svgEl(g, 'text', {
+      x: f.x, y: f.z, 'font-size': 10 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      fill: C.muted, stroke: C.surface, 'stroke-width': 2.5 * px, 'paint-order': 'stroke',
+    })
+    label.textContent = name
+  }
+  if (selected) {
     svgEl(g, 'line', { x1: front.x, y1: front.z, x2: tip.x, y2: tip.z, stroke: C.accentStrong, 'stroke-width': 1.5 * px, 'stroke-dasharray': `${4 * px} ${3 * px}` })
     svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
   }

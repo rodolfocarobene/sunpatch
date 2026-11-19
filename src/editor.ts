@@ -26,9 +26,13 @@ import { fmt1Fixed, t, type Key } from './i18n'
 import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
-import { isWalkable, yawOf } from './walk-geom'
+import { insideOutline, isWalkable, yawOf } from './walk-geom'
 import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
+import {
+  FINE_STEP, FURNITURE, ROTATE_STEP, furnitureTip, hitsFurniture, isFurnitureKind, newFurniture, rotationToward, snapMetres, specOf,
+} from './furniture'
+import type { Furniture, FurnitureKind } from './furniture'
 import { effectiveViewpoint, drawScene, metres2, viewTip, windowSegment } from './editor-draw'
 import type { Draft, Selection, View } from './editor-draw'
 
@@ -60,8 +64,9 @@ const HELP: Record<Tool, Key> = {
   window: 'editor.helpWindow',
   fix: 'editor.helpFix',
   panel: 'editor.helpPanel',
+  furniture: 'editor.helpFurniture',
 }
-const HELP_TOUCH: Partial<Record<Tool, Key>> = { wall: 'editor.helpWallTouch', fix: 'editor.helpFixTouch', panel: 'editor.helpPanelTouch' }
+const HELP_TOUCH: Partial<Record<Tool, Key>> = { wall: 'editor.helpWallTouch', fix: 'editor.helpFixTouch', panel: 'editor.helpPanelTouch', furniture: 'editor.helpFurnitureTouch' }
 /** The help line of a tool; a touch screen has no Shift or right-click, so those tools get their own wording. */
 const helpKey = (tool: Tool): Key => (touchOnly() && HELP_TOUCH[tool]) || HELP[tool]
 // One short line under the tools for the tools without options, so that row is never an empty gap.
@@ -78,6 +83,7 @@ const TOOL_NAME: Record<Tool, Key> = {
   window: 'editor.toolWindow',
   fix: 'editor.toolFix',
   panel: 'editor.toolPanel',
+  furniture: 'editor.toolFurniture',
 }
 const VIEWPOINT_CLEARANCE = 0.25
 
@@ -129,6 +135,8 @@ type Drag =
   | { kind: 'viewpoint'; mode: 'move' | 'rotate'; dx: number; dz: number; before: Plan }
   | { kind: 'panel'; index: number; dx: number; dz: number; free: boolean; before: Plan }
   | { kind: 'panelRotate'; index: number; before: Plan }
+  | { kind: 'furniture'; index: number; dx: number; dz: number; before: Plan }
+  | { kind: 'furnitureRotate'; index: number; before: Plan }
   | { kind: 'editVertex'; index: number; vertex: number; before: Plan }
 
 function field(label: string, input: HTMLElement): HTMLLabelElement {
@@ -216,6 +224,7 @@ export function createPlanEditor(
   let hoverId: string | undefined
   let pressed: { id: string; x: number; y: number } | undefined
   let newKind: BuildingEdit['kind'] = 'add'
+  let furnitureKind: FurnitureKind = 'sofa'
 
   // --- toolbar: Tools, Floor, File ---
   function cluster(name: string, ...children: HTMLElement[]): HTMLElement {
@@ -240,7 +249,7 @@ export function createPlanEditor(
   const toolButtons = new Map<Tool, HTMLButtonElement>()
   const toolRow = document.createElement('div')
   toolRow.className = 'editor-row'
-  for (const name of ['select', 'outline', 'wall', 'window', 'fix', 'panel'] as const) {
+  for (const name of ['select', 'outline', 'wall', 'window', 'fix', 'panel', 'furniture'] as const) {
     const label = t(TOOL_NAME[name])
     const b = button(label, t('editor.toolTitle', { name: label, key: TOOL_KEYS[name] }), () => setTool(name))
     if (name === 'fix') {
@@ -276,7 +285,20 @@ export function createPlanEditor(
     for (const [k, b] of kindButtons) b.setAttribute('aria-pressed', String(k === newKind))
   }
   updateKindRow()
-  optionsRow.append(kindGroup, optionNote)
+  // Furniture tool: the kind a click places.
+  const furnitureSelect = document.createElement('select')
+  furnitureSelect.setAttribute('aria-label', t('editor.kind'))
+  for (const spec of FURNITURE) furnitureSelect.append(new Option(t(spec.name), spec.kind))
+  furnitureSelect.value = furnitureKind
+  furnitureSelect.addEventListener('change', () => {
+    if (isFurnitureKind(furnitureSelect.value)) furnitureKind = furnitureSelect.value
+    furnitureSelect.blur() // so the tool shortcuts work again
+  })
+  const furnitureGroup = document.createElement('div')
+  furnitureGroup.className = 'editor-row'
+  furnitureGroup.hidden = true
+  furnitureGroup.append(furnitureSelect)
+  optionsRow.append(kindGroup, furnitureGroup, optionNote)
   const editRow = document.createElement('div')
   editRow.className = 'editor-row'
   editRow.append(
@@ -348,6 +370,7 @@ export function createPlanEditor(
     const hint = TOOL_HINT[tool]
     optionNote.textContent = tool === 'outline' ? (lost ? t('editor.replacesOutlineLost', { lost }) : t('editor.replacesOutline')) : (hint ? t(hint) : '')
     kindGroup.hidden = tool !== 'fix'
+    furnitureGroup.hidden = tool !== 'furniture'
     // Rebuilt only when it changes, so a focused field keeps its focus while the drawing redraws.
     const key = `${plan.floor} ${plan.floorHeight} ${levels} ${b.height} ${b.minHeight}`
     if (key === floorKey) return
@@ -394,6 +417,8 @@ export function createPlanEditor(
       props.replaceChildren(...editProps(p, sel.index))
     } else if (sel.kind === 'panel') {
       props.replaceChildren(...panelProps(p, sel.index))
+    } else if (sel.kind === 'furniture') {
+      props.replaceChildren(...furnitureProps(p, sel.index))
     } else if (sel.kind === 'window') {
       const w = p.windows[sel.index]
       const ring = ringOf(p, w.ring)
@@ -478,8 +503,8 @@ export function createPlanEditor(
     render()
   }
 
-  function selectionList(p: Plan, kind: 'window' | 'wall' | 'edit' | 'panel'): unknown[] {
-    return kind === 'window' ? p.windows : kind === 'wall' ? p.walls : kind === 'panel' ? p.panels : (p.edits ??= [])
+  function selectionList(p: Plan, kind: 'window' | 'wall' | 'edit' | 'panel' | 'furniture'): unknown[] {
+    return kind === 'window' ? p.windows : kind === 'wall' ? p.walls : kind === 'panel' ? p.panels : kind === 'furniture' ? (p.furniture ??= []) : (p.edits ??= [])
   }
 
   function resetViewpoint(): void {
@@ -837,6 +862,78 @@ export function createPlanEditor(
     ]
   }
 
+  // --- furniture ---
+  /** The topmost piece under `p`. A rug lies under everything: the Furniture tool only counts it once it is selected, so a piece can be placed on it. */
+  function hitFurniture(p: Point): number {
+    const list = plan?.furniture ?? []
+    for (let i = list.length - 1; i >= 0; i--) {
+      const mine = selection?.kind === 'furniture' && selection.index === i
+      if (list[i].kind === 'rug' && tool === 'furniture' && !mine) continue
+      if (hitsFurniture(list[i], p, tol(HIT_PX))) return i
+    }
+    return -1
+  }
+
+  /** A press on a piece or on the rotate handle of the selected one: selects it and starts the drag. False when it hit neither. */
+  function furnitureDown(p: Point): boolean {
+    if (!plan) return false
+    const near = (q: Point, px: number): boolean => Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(tol(px), 0.2)
+    if (selection?.kind === 'furniture') {
+      const f = plan.furniture?.[selection.index]
+      if (f && near(furnitureTip(f), 9)) {
+        drag = { kind: 'furnitureRotate', index: selection.index, before: clone(plan) }
+        return true
+      }
+    }
+    const i = hitFurniture(p)
+    if (i < 0) return false
+    const f = plan.furniture![i]
+    selection = { kind: 'furniture', index: i }
+    drag = { kind: 'furniture', index: i, dx: f.x - p.x, dz: f.z - p.z, before: clone(plan) }
+    render()
+    return true
+  }
+
+  function furnitureClick(e: PointerEvent): void {
+    if (!plan) return
+    const p = eventPoint(e)
+    if (furnitureDown(p)) return
+    const piece = newFurniture(furnitureKind, { x: snapMetres(p.x), z: snapMetres(p.z) })
+    const next = clone(plan)
+    ;(next.furniture ??= []).push(piece)
+    selection = { kind: 'furniture', index: next.furniture.length - 1 }
+    draft = { outline: [] }
+    commit(next)
+    setMessage(t('editor.furnPlaced', { name: t(specOf(piece.kind).name) }))
+  }
+
+  function furnitureProps(p: Plan, index: number): HTMLElement[] {
+    const f = p.furniture![index]
+    const spec = specOf(f.kind)
+    const patch = (change: Partial<Furniture>): void => {
+      const next = clone(p)
+      Object.assign(next.furniture![index], change)
+      commit(next)
+      updateProps(true)
+    }
+    const kind = document.createElement('select')
+    for (const s of FURNITURE) kind.append(new Option(t(s.name), s.kind))
+    kind.value = f.kind
+    kind.addEventListener('change', () => {
+      if (isFurnitureKind(kind.value)) patch({ kind: kind.value })
+    })
+    const size = document.createElement('output')
+    size.textContent = `${fmt1Fixed(spec.w)} x ${fmt1Fixed(spec.d)} m`
+    const out: HTMLElement[] = [
+      Object.assign(document.createElement('h4'), { textContent: t('editor.furnTitle') }),
+      field(t('editor.kind'), kind),
+      field(t('editor.furnTurn'), numberInput(f.rot, ROTATE_STEP, 0, (v) => patch({ rot: Math.round(v) % 360 }), 360)),
+      field(t('editor.furnSize'), size),
+    ]
+    if (!insideOutline(p, f)) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnOutside') }))
+    return out
+  }
+
   function finishOutline(): void {
     if (!plan) return
     const pts = draft.outline
@@ -947,6 +1044,7 @@ export function createPlanEditor(
       drag = { kind: 'panel', index: pi, dx: q.x - p.x, dz: q.z - p.z, free: e.shiftKey, before: clone(plan) }
       return render()
     }
+    if (furnitureDown(p)) return
     if (selection?.kind === 'edit') {
       const vertex = plan.edits![selection.index].outline.findIndex((q) => near(q, HIT_PX))
       if (vertex >= 0) {
@@ -1028,6 +1126,15 @@ export function createPlanEditor(
         const az = azimuthOf(p.x - q.x, p.z - q.z)
         q.azimuth = (e.shiftKey ? Math.round(az / 15) * 15 : Math.round(az)) % 360
       }
+    } else if (drag.kind === 'furniture') {
+      const f = plan.furniture![drag.index]
+      const p = eventPoint(e)
+      f.x = snapMetres(p.x + drag.dx)
+      f.z = snapMetres(p.z + drag.dz)
+    } else if (drag.kind === 'furnitureRotate') {
+      const f = plan.furniture![drag.index]
+      const p = eventPoint(e)
+      if (Math.hypot(p.x - f.x, p.z - f.z) > 0.05) f.rot = rotationToward(f, p, e.shiftKey ? FINE_STEP : ROTATE_STEP)
     } else if (drag.kind === 'editVertex') {
       plan.edits![drag.index].outline[drag.vertex] = snapForFix(eventPoint(e), drag.index).point
     } else {
@@ -1052,6 +1159,7 @@ export function createPlanEditor(
     else if (tool === 'wall') wallClick(e)
     else if (tool === 'fix') fixClick(e)
     else if (tool === 'panel') panelClick(e)
+    else if (tool === 'furniture') furnitureClick(e)
     else windowClick(e)
   })
 
@@ -1068,6 +1176,9 @@ export function createPlanEditor(
       draft.snap = snap
     } else if (tool === 'panel' && building) {
       draft.panel = panelAt(eventPoint(e), e.shiftKey)
+    } else if (tool === 'furniture') {
+      const at = eventPoint(e)
+      draft.furniture = newFurniture(furnitureKind, { x: snapMetres(at.x), z: snapMetres(at.z) })
     } else if (tool === 'wall') {
       const snap = wallPoint(e, draft.wallStart)
       draft.cursor = snap.point
@@ -1081,8 +1192,8 @@ export function createPlanEditor(
     render()
   })
   svg.addEventListener('pointerleave', () => {
-    if (draft.panel) {
-      draft.panel = undefined
+    if (draft.panel || draft.furniture) {
+      draft.panel = draft.furniture = undefined
       render()
     }
     if (hoverId === undefined) return
