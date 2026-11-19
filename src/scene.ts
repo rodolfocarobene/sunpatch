@@ -183,6 +183,8 @@ export interface SunScene {
   /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
   setWalkHandlers(handlers: WalkHandlers & { change(walking: boolean): void }): void
   resize(): void
+  /** Lofi mode: draws the 3D view at about half resolution (never below 0.5); off restores the pixel ratio it started with. */
+  setLofiPixelRatio(on: boolean): void
   /** Called with the id of the building polygon under a shift-click (not a drag) in the 3D view. */
   onPartClick(handler: (polygonId: string) => void): void
   /** Shows or hides the stripes on buildings whose height is a guess (on by default); the shapes and shadows are unchanged. */
@@ -329,6 +331,7 @@ function createSunDisc(): Sprite {
 export function createScene(container: HTMLElement): SunScene {
   const renderer = new WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio)
+  const basePixelRatio = renderer.getPixelRatio()
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFShadowMap
   renderer.toneMapping = ACESFilmicToneMapping
@@ -1416,6 +1419,11 @@ export function createScene(container: HTMLElement): SunScene {
   window.addEventListener('resize', resize)
   resize()
 
+  // resize() keeps the ratio set here, since setSize reads it back from the renderer.
+  function setLofiPixelRatio(on: boolean) {
+    renderer.setPixelRatio(on ? Math.max(0.5, basePixelRatio * 0.55) : basePixelRatio)
+  }
+
   // Pass 2 of the two-light render: everything outside the apartment is drawn without colour or
   // depth (it only has to stay in the narrow shadow map) over the first pass's picture.
   function renderApartmentPass() {
@@ -1604,6 +1612,7 @@ export function createScene(container: HTMLElement): SunScene {
       walkHandlers = handlers
     },
     resize,
+    setLofiPixelRatio,
     setActive(active) {
       if (!active) stopWalk()
       renderer.setAnimationLoop(active ? render : null)
