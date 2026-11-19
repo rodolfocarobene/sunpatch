@@ -1,5 +1,6 @@
 import { BoxGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial, type BufferGeometry } from 'three'
 import type { Furniture, FurnitureKind } from './furniture'
+import { plantById, type PlantKind } from './plants'
 
 // Muted, warm colours that sit with the scene palette (scene.ts): oak and walnut, linen, sage, clay.
 const OAK = 0xb98f63
@@ -15,6 +16,11 @@ const LEAF = 0x6f8f5a
 const LEAF_LIGHT = 0x88a56c
 const POT = 0xb8704f
 const SOIL = 0x4a3a2c
+const LEAF_DEEP = 0x3f6b45
+const LEAF_DARK = 0x56804f
+const FRUIT = 0xc9573f
+// Warm blooms of a flowering pot: one per plant, picked by its id.
+const BLOOMS = [0xd6553f, 0xe8913a, 0xe8c547, 0xd9708c]
 const BOOKS = [0xb5513f, 0x4f6d7a, 0xd2a64a, 0x6a7f55, 0x8a5a7a]
 
 const materials = new Map<number, MeshStandardMaterial>()
@@ -123,14 +129,63 @@ const RECIPES: Record<FurnitureKind, () => Part[]> = {
   ],
 }
 
-const templates = new Map<FurnitureKind, Group>()
+/** A pot whose foliage hints at the plant's kind: a low bush (herb, vegetable), green with blooms (flower), a small tree (fruit), big dark leaves (houseplant). */
+const POTTED: Record<PlantKind, (bloom: number) => Part[]> = {
+  herb: () => [
+    cyl(0, 0, 0, 0.26, 0.22, 0.26, POT),
+    cyl(0, 0.22, 0, 0.22, 0.02, 0.22, SOIL),
+    blob(0, 0.24, 0, 0.34, 0.2, 0.34, LEAF),
+    blob(0.07, 0.3, 0.05, 0.24, 0.18, 0.24, LEAF_LIGHT),
+    blob(-0.08, 0.3, -0.04, 0.2, 0.16, 0.2, LEAF_LIGHT),
+  ],
+  vegetable: () => [
+    cyl(0, 0, 0, 0.3, 0.25, 0.3, POT),
+    cyl(0, 0.25, 0, 0.26, 0.02, 0.26, SOIL),
+    blob(0, 0.27, 0, 0.4, 0.26, 0.4, LEAF),
+    blob(0.1, 0.4, 0.06, 0.28, 0.2, 0.28, LEAF_LIGHT),
+    blob(-0.1, 0.38, -0.06, 0.24, 0.2, 0.24, LEAF),
+  ],
+  flower: (bloom) => [
+    cyl(0, 0, 0, 0.28, 0.24, 0.28, POT),
+    cyl(0, 0.24, 0, 0.24, 0.02, 0.24, SOIL),
+    blob(0, 0.26, 0, 0.36, 0.24, 0.36, LEAF),
+    ...[[0, 0.45, 0.02], [0.1, 0.4, -0.08], [-0.1, 0.42, 0.08], [0.12, 0.38, 0.1], [-0.08, 0.38, -0.1]].map(([x, y, z]) => blob(x, y, z, 0.1, 0.1, 0.1, BLOOMS[bloom])),
+  ],
+  fruit: () => [
+    cyl(0, 0, 0, 0.4, 0.32, 0.4, POT),
+    cyl(0, 0.32, 0, 0.36, 0.02, 0.36, SOIL),
+    cyl(0, 0.34, 0, 0.06, 0.42, 0.06, WALNUT),
+    blob(0, 0.66, 0, 0.5, 0.46, 0.5, LEAF),
+    blob(0.1, 0.9, 0.05, 0.3, 0.24, 0.3, LEAF_LIGHT),
+    ...[[0.2, 0.7, 0.1], [-0.18, 0.78, -0.08], [0.02, 0.62, -0.2]].map(([x, y, z]) => blob(x, y, z, 0.08, 0.08, 0.08, FRUIT)),
+  ],
+  houseplant: () => [
+    cyl(0, 0, 0, 0.34, 0.3, 0.34, POT),
+    cyl(0, 0.3, 0, 0.3, 0.02, 0.3, SOIL),
+    cyl(0, 0.32, 0, 0.05, 0.4, 0.05, WALNUT),
+    blob(0, 0.45, 0, 0.5, 0.34, 0.5, LEAF_DEEP),
+    blob(0.06, 0.66, 0.04, 0.42, 0.34, 0.42, LEAF_DARK),
+    blob(-0.06, 0.86, -0.03, 0.3, 0.28, 0.3, LEAF_DEEP),
+  ],
+}
 
-/** One template per kind: a group of boxes and cylinders sharing the unit geometries and the colour materials. */
-function template(kind: FurnitureKind): Group {
-  let g = templates.get(kind)
+const templates = new Map<string, Group>()
+
+/** The parts of a piece: a pot with foliage for a known species, else the kind's own recipe. */
+function partsOf(f: Furniture): { key: string; parts: Part[] } {
+  const plant = f.plant ? plantById(f.plant) : undefined
+  if (f.kind !== 'plant' || !plant) return { key: f.kind, parts: RECIPES[f.kind]() }
+  const bloom = [...plant.id].reduce((n, c) => n + c.charCodeAt(0), 0) % BLOOMS.length
+  return { key: `pot-${plant.kind}-${plant.kind === 'flower' ? bloom : 0}`, parts: POTTED[plant.kind](bloom) }
+}
+
+/** One template per kind (and per look of a potted plant): a group of boxes and cylinders sharing the unit geometries and the colour materials. */
+function template(f: Furniture): Group {
+  const { key, parts } = partsOf(f)
+  let g = templates.get(key)
   if (g) return g
   g = new Group()
-  for (const part of RECIPES[kind]()) {
+  for (const part of parts) {
     const mesh = new Mesh(part.geometry, material(part.color))
     // `at[1]` is the bottom of the part, the unit shapes are centred.
     mesh.scale.set(...part.size)
@@ -139,18 +194,18 @@ function template(kind: FurnitureKind): Group {
     mesh.receiveShadow = true
     g.add(mesh)
   }
-  templates.set(kind, g)
+  templates.set(key, g)
   return g
 }
 
 /**
- * A piece standing on a floor at height `floorY`: a clone of the kind's template (geometry and materials are shared, so
+ * A piece standing on a floor at height `floorY` (its own `y` when it is not on the apartment floor): a clone of the kind's template (geometry and materials are shared, so
  * placing a hundred chairs costs a hundred small groups). Plan rotation is clockwise on screen, three.js turns the
  * other way around y.
  */
 export function furnitureMesh(f: Furniture, floorY: number): Group {
-  const g = template(f.kind).clone()
-  g.position.set(f.x, floorY, f.z)
+  const g = template(f).clone()
+  g.position.set(f.x, f.y ?? floorY, f.z)
   g.rotation.y = (-f.rot * Math.PI) / 180
   g.userData.furnitureKind = f.kind
   return g

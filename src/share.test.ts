@@ -92,6 +92,20 @@ describe('share links with furniture', () => {
     expect('furniture' in none.share.plan).toBe(false)
   })
 
+  it('round-trips pots with their plant and height, and stays small', async () => {
+    const pots = [
+      { kind: 'plant' as const, x: 3.05, z: 0.4, rot: 0, plant: 'basil' },
+      { kind: 'plant' as const, x: -12.5, z: 8.25, rot: 0, plant: 'tomato', y: 14.4 },
+    ]
+    const out = await decodeShare(await encodeShare({ ...share, plan: { ...plan, furniture: pots } }))
+    if (!('share' in out)) throw new Error(out.error)
+    expect(out.share.plan.furniture).toEqual(pots)
+    const without = (await encodeShare(share)).length
+    const withPots = (await encodeShare({ ...share, plan: { ...plan, furniture: pots } })).length
+    console.log(`Milan example share hash length: ${without} without furniture, ${withPots} with 2 pots`)
+    expect(withPots - without).toBeLessThan(60)
+  })
+
   it('adds only a little to the link', async () => {
     const without = (await encodeShare(share)).length
     const withFive = (await encodeShare({ ...share, plan: { ...plan, furniture: five } })).length

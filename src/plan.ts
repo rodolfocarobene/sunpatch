@@ -33,7 +33,7 @@ export interface Plan {
   heights?: HeightOverrides
   /** Solar panels, anywhere around the building (inside or outside the outline); [] for none. */
   panels: Panel[]
-  /** Furniture on the apartment's floor, for looks only: it never enters a computed number. Absent for none (and in older plans). */
+  /** Furniture on the apartment's floor, for looks: it enters a computed number only when the user counts it (see `occluderRoots`). Absent for none (and in older plans). */
   furniture?: Furniture[]
 }
 

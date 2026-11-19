@@ -222,7 +222,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #suitPopover .suitPlace:hover { background: #e89a14; border-color: var(--accent-strong); }
 #suitPopover .suitPlace:active { background: #d98d0c; }
 /* Building heights: the guessed-height legend, the Edit height line, the right-click box and the hover note. */
-#aptShow, #guessedBox, #hoodBox, #heightsBox { display: flex; flex-direction: column; gap: 4px; }
+#aptShow, #guessedBox, #furnitureBox, #hoodBox, #heightsBox { display: flex; flex-direction: column; gap: 4px; }
 #panel label.hoodRow { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); }
 #hood { flex: 0 1 auto; min-width: 0; font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 4px 6px; }
 #hoodLine:empty { display: none; }
@@ -383,6 +383,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .plantCard a { color: var(--link); }
 .plantHere { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 8px; background: var(--bg-band); border-radius: var(--radius-control); }
 .plantHere .plantReason { flex-basis: 100%; color: var(--muted); font-size: var(--text-xs); text-wrap: pretty; }
+.plantPot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.plantCard .potBtn { font: inherit; padding: 4px 10px; cursor: pointer; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); }
+.plantCard .potBtn:hover:not(:disabled) { background: var(--bg-band); border-color: var(--accent-strong); }
+.plantCard .potBtn:disabled { color: var(--disabled); cursor: default; }
 .plantFacts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
 .plantFacts dt { color: var(--muted); }
 .plantFacts dd { margin: 0; text-wrap: pretty; }

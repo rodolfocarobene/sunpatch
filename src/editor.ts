@@ -30,7 +30,7 @@ import { insideOutline, isWalkable, yawOf } from './walk-geom'
 import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
 import {
-  FINE_STEP, FURNITURE, ROTATE_STEP, furnitureTip, hitsFurniture, isFurnitureKind, newFurniture, rotationToward, snapMetres, specOf,
+  FINE_STEP, FURNITURE, ROTATE_STEP, furnitureName, furnitureTip, hitsFurniture, isFurnitureKind, newFurniture, rotationToward, snapMetres, specOf,
 } from './furniture'
 import type { Furniture, FurnitureKind } from './furniture'
 import { effectiveViewpoint, drawScene, metres2, viewTip, windowSegment } from './editor-draw'
@@ -920,7 +920,8 @@ export function createPlanEditor(
     for (const s of FURNITURE) kind.append(new Option(t(s.name), s.kind))
     kind.value = f.kind
     kind.addEventListener('change', () => {
-      if (isFurnitureKind(kind.value)) patch({ kind: kind.value })
+      // Another kind is no longer a pot of that plant, and stands on the apartment floor.
+      if (isFurnitureKind(kind.value)) patch({ kind: kind.value, plant: undefined, y: undefined })
     })
     const size = document.createElement('output')
     size.textContent = `${fmt1Fixed(spec.w)} x ${fmt1Fixed(spec.d)} m`
@@ -930,7 +931,9 @@ export function createPlanEditor(
       field(t('editor.furnTurn'), numberInput(f.rot, ROTATE_STEP, 0, (v) => patch({ rot: Math.round(v) % 360 }), 360)),
       field(t('editor.furnSize'), size),
     ]
-    if (!insideOutline(p, f)) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnOutside') }))
+    if (f.plant) out.splice(2, 0, field(t('editor.furnPlantOf'), Object.assign(document.createElement('output'), { textContent: furnitureName(f) })))
+    if (f.y !== undefined) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnPotElsewhere', { y: fmt1Fixed(f.y) }) }))
+    else if (!insideOutline(p, f)) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnOutside') }))
     return out
   }
 

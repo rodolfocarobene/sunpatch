@@ -11,6 +11,12 @@ export function occluderRoots(groups: { world: Object3D; trees: Object3D; furnit
 }
 
 /**
+ * What every cache of a computed number keys the scene by: the scene's own version, with the "count furniture" switch
+ * folded in, so flipping it can never be answered from a result traced with the other setting.
+ */
+export const sceneKey = (version: number, countFurniture: boolean): number => version * 2 + (countFurniture ? 1 : 0)
+
+/**
  * Triangles (nine numbers each, scene coordinates) of everything under `roots` that casts a shadow and is visible:
  * the same set the shadow maps draw. Glass panes never set castShadow, so they let the sun through. Instanced
  * meshes (trees) are expanded, one copy per instance.
