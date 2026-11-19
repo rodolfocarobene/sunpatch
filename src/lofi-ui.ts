@@ -21,6 +21,15 @@ export function parseVolume(raw: string | null): number {
   return v >= 0 && v <= 1 ? v : DEFAULT_VOLUME
 }
 
+const listeners = new Set<(on: boolean) => void>()
+const isOn = () => document.documentElement.dataset.lofi === 'on'
+
+/** Calls `handler` now and whenever the mode turns on or off (for what CSS alone can't switch, like the 3D canvas resolution). */
+export function onLofiChange(handler: (on: boolean) => void): void {
+  listeners.add(handler)
+  handler(isOn())
+}
+
 function store(key: string, value: string): void {
   try {
     localStorage.setItem(key, value)
@@ -59,7 +68,10 @@ export function createLofi(): { toggle: HTMLButtonElement; bar: HTMLElement } {
   const tuneEl = bar.querySelector<HTMLElement>('#lofiTune')!
 
   const showPlay = () => {
-    playBtn.textContent = player.isPlaying() ? t('lofi.pause') : t('lofi.play')
+    // The note and the aria-label tell this button from the time bar's sun-animation Play.
+    const playing = player.isPlaying()
+    playBtn.textContent = `♪ ${playing ? t('lofi.pause') : t('lofi.play')}`
+    playBtn.setAttribute('aria-label', playing ? t('lofi.pauseAria') : t('lofi.playAria'))
   }
   const apply = () => {
     if (on) document.documentElement.dataset.lofi = 'on'
@@ -67,6 +79,7 @@ export function createLofi(): { toggle: HTMLButtonElement; bar: HTMLElement } {
     toggle.setAttribute('aria-pressed', String(on))
     bar.hidden = !on
     showPlay()
+    for (const handler of listeners) handler(on)
   }
 
   player.onTune((info) => { tuneEl.textContent = tuneLine(info) })
