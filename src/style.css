@@ -761,3 +761,78 @@ input::placeholder { color: var(--muted); opacity: 1; }
 /* Full column width, borders included, whatever the browser does with a button in a flex column. */
 #shareBox { min-width: 0; }
 #shareBtn { box-sizing: border-box; width: 100%; max-width: 100%; }
+
+/* Lofi mode (html[data-lofi='on'], set by lofi-ui.ts): an old-paper, analog look. Everything is CSS over the finished pictures, so the
+   sun maths, the render passes and every number stay as they are, and with the mode off nothing here applies. Contrast on the paper
+   surface (#f6ebcf), checked by hand: ink 12.4:1, muted 7.3:1 (5.7:1 on the #e2cfa0 band), accent-strong 6.1:1, link 7.5:1, ink on
+   the terracotta accent 5.0:1, box edges 3.7:1, danger 7.4:1, warn 6.6:1, ink on Good 8.1:1 and on OK 6.2:1. */
+html[data-lofi='on'] {
+  --bg: #ecdcb5;
+  --bg-band: #e2cfa0;
+  --surface: #f6ebcf;
+  --text: #33261a;
+  --muted: #5e4730;
+  --line: #8c7450;
+  --accent: #c9795a;
+  --accent-hover: #d98a6a;
+  --accent-strong: #8f3f22;
+  --on-accent: #2b1d12;
+  --link: #7a3519;
+  --disabled: #6f5d41;
+  --danger-bg: #f3d9c8;
+  --danger: #7e1f14;
+  --warn-bg: #f1dfb0;
+  --warn: #6b4208;
+  --rate-good: #f0b82e;
+  --rate-good-edge: #8a5a00;
+  --rate-ok: #bda57a;
+  --rate-ok-edge: #6b5430;
+  --shadow: 3px 3px 0 rgba(51, 38, 26, 0.38);
+  --radius-box: 3px;
+  --radius-control: 2px;
+  --font-head: 'Courier Prime', 'Courier New', ui-monospace, monospace;
+  --paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .4 0 0 0 0 .28 0 0 0 0 .15 0 0 0 .2 -.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .13 0 0 0 0 .07 0 0 0 1.2 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+/* Paper texture on the boxes (the plant card keeps its scroll shadows and gets the texture as one more layer). */
+html[data-lofi='on'] :is(#panel, #timeBar, #statusChip, #keepChip, #sharedChip, #mapStatus, #spotPopover, #suitPopover, #heightPopover, #hoverTip, #results,
+  .editor-box, .editor-status span, .maplibregl-popup-content, #heightRuler .hrLabel) { background-image: var(--paper); }
+html[data-lofi='on'] .plantCard {
+  background:
+    linear-gradient(var(--surface) 30%, transparent) center top / 100% 28px local no-repeat,
+    linear-gradient(transparent, var(--surface) 70%) center bottom / 100% 28px local no-repeat,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.22), transparent) center top / 100% 10px scroll no-repeat,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.22), transparent) center bottom / 100% 10px scroll no-repeat,
+    var(--paper), var(--surface);
+}
+/* Typewriter face for headings and labels only, body text keeps the normal font. */
+html[data-lofi='on'] :is(#panel h2, #panel .groupHead, #guide summary, .yearBox > summary, .editor-cluster h3, .editor-box h4, .plantCard h4, .plantCard h5, .panelCard h4,
+  #sunMapLegend .legendHead, #suitLegend .legendHead, #daylightLegend .legendHead) { font-family: var(--font-head); letter-spacing: -0.01em; }
+html[data-lofi='on'] #panel button.primary:hover:not(:disabled), html[data-lofi='on'] .maplibregl-popup-content button:hover,
+html[data-lofi='on'] #suitPopover .suitPlace:hover, html[data-lofi='on'] #heightPopover button.primary:hover { background: var(--accent-hover); }
+html[data-lofi='on'] #panel button.primary:active:not(:disabled), html[data-lofi='on'] .maplibregl-popup-content button:active,
+html[data-lofi='on'] #suitPopover .suitPlace:active { background: var(--accent); }
+/* The colour grade on the finished 3D and map pictures: warm, a little faded, with the contrast kept up so sun patches stay clear of shade.
+   The 3D canvas is also drawn at about half resolution (scene.ts, setLofiPixelRatio) and scaled up without smoothing. */
+html[data-lofi='on'] #app > canvas, html[data-lofi='on'] #mapCanvas canvas { filter: sepia(0.22) saturate(0.92) contrast(1.08) brightness(1.02); }
+html[data-lofi='on'] #app > canvas { image-rendering: pixelated; }
+/* A soft vignette under the chrome, and film grain over everything (a pointer-events: none overlay that jitters in steps, still when
+   motion is reduced). The grain peaks at about 6% ink, which keeps muted text over 4.5:1. */
+html[data-lofi='on'] body::before, html[data-lofi='on'] body::after { content: ''; position: fixed; pointer-events: none; }
+html[data-lofi='on'] body::before { inset: 0; z-index: 4; background: radial-gradient(ellipse at center, transparent 58%, rgba(60, 35, 15, 0.3) 100%); }
+html[data-lofi='on'] body::after {
+  inset: -40px; z-index: 50; opacity: 0.07; background-image: var(--grain); background-size: 140px 140px;
+  animation: lofiGrain 0.9s steps(1) infinite;
+}
+@keyframes lofiGrain {
+  0% { transform: translate(0, 0); opacity: 0.07; }
+  25% { transform: translate(-24px, 16px); opacity: 0.055; }
+  50% { transform: translate(18px, -26px); opacity: 0.08; }
+  75% { transform: translate(-12px, -20px); opacity: 0.06; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-lofi='on'] body::after { animation: none; }
+}
+@media (max-width: 700px) {
+  html[data-lofi='on'] #panel { border-radius: 4px 4px 0 0; box-shadow: 0 -3px 0 rgba(51, 38, 26, 0.38); }
+}
