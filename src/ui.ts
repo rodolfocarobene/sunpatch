@@ -1,5 +1,6 @@
 import SunCalc from 'suncalc'
 import { createLangSwitch } from './lang-switch'
+import { createLofi } from './lofi-ui'
 import { fmt1Fixed, fmtNumber, fmtTime, t, upFirst, type Key } from './i18n'
 import { touchOnly } from './touch'
 import type { Building } from './osm'
@@ -271,7 +272,11 @@ export function createUI(
         <p id="gardenRoofHint" class="cardNote small" hidden>${t('shell.gardenRoofHint')}</p>
       </div>
     </section>`
-  panel.querySelector('#panelTop')!.append(createLangSwitch())
+  const lofi = createLofi()
+  const tools = Object.assign(document.createElement('span'), { className: 'panelTools' })
+  tools.append(lofi.toggle, createLangSwitch())
+  panel.querySelector('#panelTop')!.append(tools)
+  panel.querySelector('#panelTop')!.after(lofi.bar)
   document.body.appendChild(panel)
   // One docked bar for date and time, shared by the 3D view and walk mode (the walk key hints stack above it).
   const dock = document.createElement('div')
