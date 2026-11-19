@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadSavedPlan, savePlan } from './editor'
 import { validatePlan } from './editor-geom'
 import {
-  FURNITURE, checkFurniture, furnitureFootprint, furnitureTip, hitsFurniture, newFurniture, packFurniture, rotationToward, snapMetres, specOf, unpackFurniture,
+  FURNITURE, checkFurniture, furnitureFootprint, furnitureName, furnitureTip, hasPot, hitsFurniture, potAt, newFurniture, packFurniture, rotationToward, snapMetres, specOf, unpackFurniture,
   type Furniture,
 } from './furniture'
 import { useLang } from './i18n'
@@ -140,5 +140,49 @@ describe('packed form (share links)', () => {
     expect(packFurniture([pieces[0]])).toEqual([['bd', 50, 61, 18]])
     expect(unpackFurniture([['zz', 1, 2, 3], ['sf', 'a', 2, 3], 'x', ['sf', 20, 40, 0]])).toEqual([{ kind: 'sofa', x: 1, z: 2, rot: 0 }])
     expect(unpackFurniture('nope')).toEqual([])
+  })
+
+  it('adds a pot'+"'"+'s plant id, and its height in decimetres only when it is off the apartment floor', () => {
+    const floor: Furniture = { kind: 'plant', x: 1, z: 2, rot: 0, plant: 'basil' }
+    const roof: Furniture = { kind: 'plant', x: 1.5, z: -2, rot: 0, plant: 'tomato', y: 12.3 }
+    expect(packFurniture([floor, roof])).toEqual([['pl', 20, 40, 0, 'basil'], ['pl', 30, -40, 0, 'tomato', 123]])
+    expect(unpackFurniture(packFurniture([floor, roof, pieces[1]]))).toEqual([floor, roof, pieces[1]])
+    // an old link (four numbers) still opens, bad extras are ignored
+    expect(unpackFurniture([['pl', 20, 40, 0]])).toEqual([{ kind: 'plant', x: 1, z: 2, rot: 0 }])
+    expect(unpackFurniture([['pl', 20, 40, 0, 'Not An Id!', 'x']])).toEqual([{ kind: 'plant', x: 1, z: 2, rot: 0 }])
+    expect(unpackFurniture([['pl', 20, 40, 0, '', 5]])).toEqual([{ kind: 'plant', x: 1, z: 2, rot: 0, y: 0.5 }])
+  })
+})
+
+describe('pots', () => {
+  it('put a plant at a picked spot: snapped, with a height only off the apartment floor', () => {
+    expect(potAt('basil', { x: 1.234, y: 3.02, z: -2.46 }, true)).toEqual({ kind: 'plant', x: 1.25, z: -2.45, rot: 0, plant: 'basil' })
+    expect(potAt('basil', { x: 1, y: 12.34, z: 2 }, false)).toEqual({ kind: 'plant', x: 1, z: 2, rot: 0, plant: 'basil', y: 12.3 })
+  })
+
+  it('are not stacked: the same plant at the same spot is already there', () => {
+    const pot = potAt('basil', { x: 1, y: 0, z: 2 }, false)
+    expect(hasPot(undefined, pot)).toBe(false)
+    expect(hasPot([pot], potAt('basil', { x: 1.02, y: 0.04, z: 2 }, false))).toBe(true)
+    expect(hasPot([pot], potAt('mint', { x: 1, y: 0, z: 2 }, false))).toBe(false)
+    expect(hasPot([pot], potAt('basil', { x: 1.5, y: 0, z: 2 }, false))).toBe(false)
+    expect(hasPot([pot], potAt('basil', { x: 1, y: 3, z: 2 }, false))).toBe(false)
+  })
+
+  it('keep the plant and height through validation, and take the plant'+"'"+'s name in the current language', () => {
+    const pot: Furniture = { kind: 'plant', x: 1, z: 2, rot: 0, plant: 'tomato', y: 6.5 }
+    expect(checkFurniture(JSON.parse(JSON.stringify([pot])))).toEqual({ furniture: [pot] })
+    expect(checkFurniture([{ ...pot, plant: 7, y: 'high' }])).toEqual({ furniture: [{ kind: 'plant', x: 1, z: 2, rot: 0 }] })
+    expect(furnitureName(pot)).toBe('tomato')
+    useLang('it')
+    expect(furnitureName(pot)).toBe('pomodoro')
+    expect(furnitureName({ ...pot, plant: 'no-such-plant' })).toBe(italian['editor.furnPlant'])
+  })
+
+  it('keep their height when the plan is rebased (only x and z move)', () => {
+    const pot: Furniture = { kind: 'plant', x: 1, z: 2, rot: 0, plant: 'tomato', y: 6.5 }
+    const moved = rebasePlan({ ...plan, furniture: [pot] }, { lat: 45.0004, lon: 9.0005 })
+    expect(moved.furniture![0]).toMatchObject({ plant: 'tomato', y: 6.5 })
+    expect(moved.furniture![0].x).not.toBe(1)
   })
 })

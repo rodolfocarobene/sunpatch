@@ -1,5 +1,6 @@
 import type { Point } from './osm'
-import type { Key } from './i18n'
+import { t, type Key } from './i18n'
+import { plantById, plantName } from './plants'
 
 /**
  * Furniture is decoration: it stands on the apartment floor in 3D and in the walk, but enters a computed number only when the
@@ -15,6 +16,10 @@ export interface Furniture {
   z: number
   /** Degrees clockwise in the plan, 0..360. */
   rot: number
+  /** A potted plant of this species (a `plants.ts` id): the piece is a `plant` and is drawn and named after it. */
+  plant?: string
+  /** Height of the floor it stands on, scene metres. Only for what is not on the apartment floor (ground, roof, terrace): absent means that floor. */
+  y?: number
 }
 
 export interface FurnitureSpec {
@@ -95,7 +100,24 @@ export function hitsFurniture(f: Furniture, at: Point, tol: number): boolean {
   return Math.abs(dx * c + dz * s) <= w / 2 + tol && Math.abs(-dx * s + dz * c) <= d / 2 + tol
 }
 
+/** What the plan editor calls a piece: the species of a potted plant, else its kind. */
+export function furnitureName(f: Furniture): string {
+  const plant = f.plant ? plantById(f.plant) : undefined
+  return plant ? plantName(plant) : t(specOf(f.kind).name)
+}
+
+/** A pot of `plant` at a picked spot: snapped to 5 cm, with its height (to 10 cm, what a share link keeps) only when the spot is not on the apartment floor. */
+export const potAt = (plant: string, at: Point & { y: number }, indoor: boolean): Furniture => ({
+  kind: 'plant', x: snapMetres(at.x), z: snapMetres(at.z), rot: 0, plant, ...(!indoor && { y: Math.round(at.y * 10) / 10 }),
+})
+
+/** True when `list` already has a pot of `plant` where `pot` would stand. */
+export const hasPot = (list: readonly Furniture[] | undefined, pot: Furniture): boolean =>
+  !!list?.some((f) => f.plant === pot.plant && Math.hypot(f.x - pot.x, f.z - pot.z) < 0.06 && Math.abs((f.y ?? 0) - (pot.y ?? 0)) < 0.06)
+
 export const newFurniture = (kind: FurnitureKind, at: Point): Furniture => ({ kind, x: at.x, z: at.z, rot: 0 })
+
+const isPlantId = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9_-]{1,40}$/.test(v)
 
 /** Checks the furniture of a parsed plan: `bad` when it is not a list of well-formed pieces. Pieces of an unknown kind are dropped. */
 export function checkFurniture(raw: unknown): { furniture: Furniture[] } | { bad: true } {
@@ -103,7 +125,9 @@ export function checkFurniture(raw: unknown): { furniture: Furniture[] } | { bad
   const furniture: Furniture[] = []
   for (const f of raw as Partial<Furniture>[]) {
     if (!f || typeof f !== 'object' || ![f.x, f.z, f.rot].every((n) => typeof n === 'number' && Number.isFinite(n))) return { bad: true }
-    if (isFurnitureKind(f.kind)) furniture.push({ kind: f.kind, x: f.x!, z: f.z!, rot: f.rot! })
+    if (!isFurnitureKind(f.kind)) continue
+    const y = typeof f.y === 'number' && Number.isFinite(f.y) ? f.y : undefined
+    furniture.push({ kind: f.kind, x: f.x!, z: f.z!, rot: f.rot!, ...(isPlantId(f.plant) && { plant: f.plant }), ...(y !== undefined && { y }) })
   }
   return { furniture }
 }
@@ -112,9 +136,17 @@ export function checkFurniture(raw: unknown): { furniture: Furniture[] } | { bad
 const POS_UNIT = 0.05
 const ROT_UNIT = 5
 
-/** `[code, x, z, rot]` per piece, in 5 cm and 5 degree units: the compact form in a share link. */
+/**
+ * `[code, x, z, rot]` per piece, in 5 cm and 5 degree units: the compact form in a share link. A potted plant adds its
+ * plant id, and a piece off the apartment floor its height in decimetres (after an empty id when there is no plant).
+ */
 export function packFurniture(list: readonly Furniture[]): (string | number)[][] {
-  return list.map((f) => [specOf(f.kind).code, Math.round(f.x / POS_UNIT), Math.round(f.z / POS_UNIT), Math.round(f.rot / ROT_UNIT) % (360 / ROT_UNIT)])
+  return list.map((f) => {
+    const e: (string | number)[] = [specOf(f.kind).code, Math.round(f.x / POS_UNIT), Math.round(f.z / POS_UNIT), Math.round(f.rot / ROT_UNIT) % (360 / ROT_UNIT)]
+    if (f.plant || f.y !== undefined) e.push(f.plant ?? '')
+    if (f.y !== undefined) e.push(Math.round(f.y * 10))
+    return e
+  })
 }
 
 /** The pieces of a packed list; entries that are not understood (a newer kind, bad numbers) are skipped. */
@@ -123,10 +155,13 @@ export function unpackFurniture(raw: unknown): Furniture[] {
   const out: Furniture[] = []
   for (const e of raw) {
     if (!Array.isArray(e)) continue
-    const [code, x, z, rot] = e as unknown[]
+    const [code, x, z, rot, plant, dm] = e as unknown[]
     const spec = typeof code === 'string' ? BY_CODE.get(code) : undefined
     if (!spec || ![x, z, rot].every((n) => typeof n === 'number' && Number.isFinite(n))) continue
-    out.push({ kind: spec.kind, x: Math.round((x as number) * POS_UNIT * 100) / 100, z: Math.round((z as number) * POS_UNIT * 100) / 100, rot: ((rot as number) * ROT_UNIT + 360) % 360 })
+    out.push({
+      kind: spec.kind, x: Math.round((x as number) * POS_UNIT * 100) / 100, z: Math.round((z as number) * POS_UNIT * 100) / 100, rot: ((rot as number) * ROT_UNIT + 360) % 360,
+      ...(isPlantId(plant) && { plant }), ...(typeof dm === 'number' && Number.isFinite(dm) && { y: dm / 10 }),
+    })
   }
   return out
 }
