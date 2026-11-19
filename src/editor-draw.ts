@@ -6,7 +6,7 @@ import type { Snap } from './editor-geom'
 import { startPosition, windowYaw } from './walk-geom'
 import { fmt1Fixed, fmtNumber, t } from './i18n'
 import { panelFootprint, panelTip, facing, footprintDepth } from './panel'
-import { furnitureFootprint, furnitureTip, specOf, type Furniture } from './furniture'
+import { furnitureFootprint, furnitureName, furnitureTip, specOf, type Furniture } from './furniture'
 
 export interface View {
   /** Scene point shown at the centre of the SVG. */
@@ -287,7 +287,7 @@ const FURNITURE_STROKE = '#8a7f6a'
 function drawFurniture(root: SVGElement, f: Furniture, px: number, selected: boolean, opacity = 1): void {
   const spec = specOf(f.kind)
   const g = svgEl(root, 'g', { 'data-role': 'furniture', opacity })
-  const name = t(spec.name)
+  const name = furnitureName(f)
   svgEl(g, 'title', {}).textContent = name
   const ring = furnitureFootprint(f)
   const d = pathOf([ring])
@@ -311,9 +311,10 @@ function drawFurniture(root: SVGElement, f: Furniture, px: number, selected: boo
     x2: front.x + (out.x / len) * 4 * px, y2: front.z + (out.z / len) * 4 * px,
     stroke: FURNITURE_STROKE, 'stroke-width': 2.5 * px, 'stroke-linecap': 'round',
   })
-  if (Math.max(spec.w, spec.d) / px >= name.length * 6.2) {
+  // A pot is too small for its plant's name: that sits just below it.
+  if (f.plant || Math.max(spec.w, spec.d) / px >= name.length * 6.2) {
     const label = svgEl(g, 'text', {
-      x: f.x, y: f.z, 'font-size': 10 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      x: f.x, y: f.plant ? f.z + spec.d / 2 + 9 * px : f.z, 'font-size': 10 * px, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
       fill: C.muted, stroke: C.surface, 'stroke-width': 2.5 * px, 'paint-order': 'stroke',
     })
     label.textContent = name

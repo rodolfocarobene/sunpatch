@@ -53,6 +53,48 @@ describe('furnitureMesh', () => {
   })
 })
 
+describe('potted plants', () => {
+  const pot = (plant: string, y?: number): Furniture => ({ kind: 'plant', x: 0, z: 0, rot: 0, plant, ...(y !== undefined && { y }) })
+  const size = (f: Furniture, floorY = 0) => {
+    const piece = furnitureMesh(f, floorY)
+    piece.updateMatrixWorld(true)
+    const box = new Box3().setFromObject(piece)
+    return { width: Math.max(box.max.x - box.min.x, box.max.z - box.min.z), height: box.max.y - box.min.y, bottom: box.min.y, count: piece.children.length }
+  }
+
+  it('are 0.3 to 0.5 m wide and 0.3 to 1.2 m tall, whatever the kind', () => {
+    for (const id of ['basil', 'tomato', 'nasturtium', 'lemon', 'pothos']) {
+      const { width, height } = size(pot(id))
+      expect(width).toBeGreaterThanOrEqual(0.3)
+      expect(width).toBeLessThanOrEqual(0.5 + 1e-6)
+      expect(height).toBeGreaterThanOrEqual(0.3)
+      expect(height).toBeLessThanOrEqual(1.2)
+    }
+  })
+
+  it('take their shape from the plant kind: bushes low, trees and houseplants taller, flowers with blooms', () => {
+    const [herb, vegetable, flower, fruit, house] = ['basil', 'tomato', 'nasturtium', 'lemon', 'pothos'].map((id) => size(pot(id)))
+    expect(herb.height).toBeLessThan(0.5)
+    expect(vegetable.height).toBeLessThan(0.6)
+    expect(fruit.height).toBeGreaterThan(0.9)
+    expect(house.height).toBeGreaterThan(1)
+    expect(flower.count).toBeGreaterThan(herb.count)
+  })
+
+  it('stand on the floor, or on their own height when they are off it', () => {
+    expect(size(pot('basil'), 7).bottom).toBeCloseTo(7, 5)
+    expect(size(pot('basil', 14.4), 7).bottom).toBeCloseTo(14.4, 5)
+  })
+
+  it('share meshes by kind, and fall back to the floor plant for a plant that is not known', () => {
+    const a = furnitureMesh(pot('basil'), 0)
+    const b = furnitureMesh(pot('parsley'), 0)
+    expect((a.children[0] as Mesh).geometry).toBe((b.children[0] as Mesh).geometry)
+    expect(size(pot('no-such-plant')).height).toBeCloseTo(size(at('plant')).height, 5)
+    expect(furnitureMesh(pot('basil'), 0).userData.furnitureKind).toBe('plant')
+  })
+})
+
 describe('furniture and the computed numbers', () => {
   const casting = (w: number): Mesh => {
     const m = new Mesh(new BoxGeometry(w, 1, 1), new MeshBasicMaterial())
