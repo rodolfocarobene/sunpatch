@@ -41,6 +41,8 @@ export interface PlantCardInput {
   plant: Plant
   /** The plant at the picked spot, when one is picked and rated. */
   here?: PlantRow
+  /** Offer a pot of this plant at the picked spot; `placed` when one already stands there. Left out when there is no spot or no plan to put it in. */
+  pot?: { placed: boolean }
 }
 
 export interface PlantCard {
@@ -74,7 +76,7 @@ export function creditLine(credit: Credit): HTMLElement {
   return p
 }
 
-export function createPlantCard(options: { onClose: () => void }): PlantCard {
+export function createPlantCard(options: { onClose: () => void; onPot: () => void }): PlantCard {
   const root = el('aside', 'plantCard')
   root.hidden = true
   root.setAttribute('role', 'region')
@@ -125,6 +127,14 @@ export function createPlantCard(options: { onClose: () => void }): PlantCard {
       const v = el('div', 'plantHere')
       v.append(el('strong', '', t('plant.here')), ' ', el('span', `rate ${here.rating}`, here.label), el('p', 'plantReason', here.reason))
       parts.push(v)
+    }
+    if (input.pot) {
+      const pot = el('div', 'plantPot')
+      const b = Object.assign(el('button', 'potBtn', t(input.pot.placed ? 'plant.potPlaced' : 'plant.putPot')), { type: 'button', disabled: input.pot.placed })
+      b.addEventListener('click', options.onPot)
+      pot.append(b)
+      if (input.pot.placed) pot.append(Object.assign(el('p', 'plantQuiet', t('plant.potNote')), { role: 'status' }))
+      parts.push(pot)
     }
     parts.push(wikiBlock(plant, info))
     const dl = el('dl', 'plantFacts')

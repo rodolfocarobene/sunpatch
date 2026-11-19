@@ -57,6 +57,7 @@ import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCo
 import { createFindPanel } from './garden-find-panel'
 import type { DeadEnd } from './garden-text'
 import { scoreSpots, type PlantResult } from './garden'
+import { hasPot, potAt } from './furniture'
 import { plantById, plantName, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
 import { bestOfKind, getKindFilter } from './garden-kind'
@@ -204,7 +205,7 @@ let plantCardId: string | undefined
 /** The card follows the spot's top-ranked plant until the user picks one. */
 let plantCardAuto = false
 let spotRanked: PlantResult[] | null = null
-const plantCard = createPlantCard({ onClose: () => closePlantCard() })
+const plantCard = createPlantCard({ onClose: () => closePlantCard(), onPot: putPotHere })
 const narrow = window.matchMedia('(max-width: 700px)')
 const placePlantCard = () => (narrow.matches ? ui.gardenSlot.prepend(plantCard.el) : document.body.appendChild(plantCard.el))
 placePlantCard()
@@ -212,7 +213,24 @@ narrow.addEventListener('change', placePlantCard)
 function renderPlantCard() {
   const plant = plantCardId ? plantById(plantCardId) : undefined
   const result = plant && gardenSpot ? spotRanked?.find((r) => r.plant.id === plant.id) : undefined
-  plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined } : null)
+  const pot = plant && gardenSpot && plan ? { placed: hasPot(plan.furniture, potAt(plant.id, gardenSpot, gardenSpot.kind === 'indoor')) } : undefined
+  plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined, pot } : null)
+}
+
+/** "Put a pot here": a pot of the card's plant at the picked spot, as furniture (so it is saved, shared and drawn in Plan). */
+function putPotHere() {
+  const plant = plantCardId ? plantById(plantCardId) : undefined
+  if (!plant || !gardenSpot || !plan) return
+  const pot = potAt(plant.id, gardenSpot, gardenSpot.kind === 'indoor')
+  if (hasPot(plan.furniture, pot)) return
+  const apply = (next: Plan) => {
+    keepingSpot(() => setPlan(next, true))
+    if (!ephemeral()) savePlan(next) // the built-in example is never saved: the pot lives until the page is reloaded
+    renderPlantCard()
+  }
+  apply({ ...plan, furniture: [...(plan.furniture ?? []), pot] })
+  // Undo takes this pot away again, whatever else was edited since.
+  chip.done(t('plant.potChip'), { label: t('shell.undo'), run: () => plan && apply({ ...plan, furniture: (plan.furniture ?? []).filter((f) => !hasPot([f], pot)) }) })
 }
 function closePlantCard() {
   plantCardId = undefined
