@@ -57,7 +57,7 @@ import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
-import { collectOccluders, occluderRoots } from './sunmap-trace'
+import { collectOccluders, occluderRoots, sceneKey } from './sunmap-trace'
 import { furnitureMesh } from './furniture-mesh'
 import { heatTexels, type Grid } from './sunmap'
 import { along, facing } from './panel'
@@ -208,6 +208,8 @@ export interface SunScene {
   setActive(active: boolean): void
   /** Changes whenever anything that can shade the apartment is rebuilt (buildings, plan, edits) or replaced (trees). */
   sceneVersion(): number
+  /** Brings the furniture into every computed number (off by default); with furniture in the plan this refreshes them. */
+  setCountFurniture(on: boolean): void
   /** Triangles (nine numbers each) of everything that casts a shadow, for the sun map's rays. */
   occluders(): Float32Array
   /** Called after the scene content changed; the sun map is stale then. */
@@ -376,7 +378,7 @@ export function createScene(container: HTMLElement): SunScene {
   let treeGroup = new Group()
   scene.add(treeGroup)
   // Furniture is decoration: it is lit and shadowed like the apartment but sits outside `world`, so the sun map and every
-  // other computed number leave it out (see occluderRoots). Its meshes share geometry and materials, so it is only cleared.
+  // other computed number leave it out unless the user counts it (see occluderRoots). Its meshes share geometry and materials, so it is only cleared.
   const furnitureGroup = new Group()
   scene.add(furnitureGroup)
 
@@ -484,6 +486,7 @@ export function createScene(container: HTMLElement): SunScene {
   let selectedIds = new Set<string>()
   // Sun map: the overlay painted on the floor, the marker of the clicked point, and the version the job caches by.
   let version = 0
+  let countFurniture = false
   let sceneChange: (() => void) | undefined
   let sunMapOn = false
   let sunMapData: SunMapPaint | null = null
@@ -1540,8 +1543,13 @@ export function createScene(container: HTMLElement): SunScene {
     rulerAnchor,
     rulerContext,
     previewHeight,
-    sceneVersion: () => version,
-    occluders: () => collectOccluders(occluderRoots({ world, trees: treeGroup, furniture: furnitureGroup })),
+    sceneVersion: () => sceneKey(version, countFurniture),
+    occluders: () => collectOccluders(occluderRoots({ world, trees: treeGroup, furniture: furnitureGroup }, countFurniture)),
+    setCountFurniture(on) {
+      if (on === countFurniture) return
+      countFurniture = on
+      if (furnitureGroup.children.length) sceneChange?.() // no furniture: no number changes
+    },
     onSceneChange(handler) {
       sceneChange = handler
     },

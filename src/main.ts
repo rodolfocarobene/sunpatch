@@ -220,6 +220,20 @@ function closePlantCard() {
   renderPlantCard()
 }
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
+/** A scene change that leaves the picked spot where it is (furniture counted or not, a pot placed): the spot is traced again in the new scene. */
+let keepSpot = false
+function keepingSpot(change: () => void) {
+  keepSpot = true
+  try {
+    change()
+  } finally {
+    keepSpot = false
+  }
+  if (!gardenSpot) return
+  const { x, y, z } = gardenSpot
+  sunScene.setGardenMark({ x, y, z })
+  requestGarden()
+}
 let gardenTrace: GardenCardInput['trace'] = { status: 'idle' }
 let gardenMonth: number | null = null
 let gardenHint: string | undefined
@@ -948,7 +962,7 @@ ui.onSunMap((on) => {
   }
 })
 sunScene.onSceneChange(() => {
-  if (gardenSpot) clearGardenSpot() // the spot belongs to the scene it was picked in
+  if (gardenSpot && !keepSpot) clearGardenSpot() // the spot belongs to the scene it was picked in
   if (findPlant) {
     // The plant map belongs to the scene too: trace the area again (the job's cache answers when only the view changed).
     findResult = undefined
@@ -1099,6 +1113,7 @@ ui.onEditHeight((at) => {
   openHeight(mine?.members ? [...mine.members].sort((a, b) => b.height - a.height)[0] : mine, at)
 })
 ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
+ui.onCountFurniture((on) => keepingSpot(() => sunScene.setCountFurniture(on)))
 sunScene.onBuildingClick((id, at) => {
   // In Garden a click is a spot, not a wish to change building; in Panels with the suitability map a stray click must not drop the pick.
   const action = buildingClickAction(view, suitOn)
@@ -1655,6 +1670,7 @@ function setPlan(next: Plan | undefined, keepView = false) {
   plan = next
   sunScene.setPlan(next ?? null, { keepView })
   ui.setPlanActive(next !== undefined)
+  ui.setHasFurniture(!!next?.furniture?.length)
   ui.setNextStep(nextStep(next, site?.selected))
 }
 

@@ -22,6 +22,7 @@ const SWITCH_HINT_KEY = 'sunpatch.switchHint'
 const DETAILS_KEY = 'sunpatch.details'
 const TIPS_KEY = 'sunpatch.tips'
 const NEIGHBORHOOD_KEY = 'sunpatch.neighborhood'
+const COUNT_FURNITURE_KEY = 'sunpatch.countFurniture'
 const CLOSE_ICON =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
 
@@ -84,6 +85,10 @@ export interface UI {
   onCutaway(listener: (hidden: boolean) => void): void
   /** The "Mark guessed heights" switch (on by default): hear about it now and on every change. */
   onMarkGuessed(listener: (on: boolean) => void): void
+  /** The "Count furniture in the numbers" switch (off by default, kept in localStorage): hear about it now and on every change. */
+  onCountFurniture(listener: (on: boolean) => void): void
+  /** Shows the switch only while the plan has furniture. */
+  setHasFurniture(has: boolean): void
   /** The neighbourhood size (kept in localStorage): hear about it now and on every change. */
   onNeighborhood(listener: (size: NeighborhoodId) => void): void
   /** The line under the size menu ("214 buildings within 350 m"); null clears it. */
@@ -225,6 +230,10 @@ export function createUI(
           <label class="row" title="${t('shell.guessedTitle')}"><input id="guessed" type="checkbox" checked> ${t('shell.guessed')}</label>
           <p id="guessedLegend" class="legendNote"><i class="hatchKey" aria-hidden="true"></i>${t('shell.guessedLegend')}</p>
         </div>
+        <div id="furnitureBox" hidden>
+          <label class="row" title="${t('shell.countFurnitureTitle')}"><input id="countFurniture" type="checkbox"> ${t('shell.countFurniture')}</label>
+          <p class="legendNote">${t('shell.countFurnitureNote')}</p>
+        </div>
         <div id="hoodBox">
           <label class="hoodRow" title="${t('shell.hoodTitle')}">${t('shell.hood')}
             <select id="hood">${NEIGHBORHOODS.map((n) => `<option value="${n.id}">${t(n.label)} (${n.radiusM} m)</option>`).join('')}</select></label>
@@ -358,6 +367,17 @@ export function createUI(
   guessed.addEventListener('change', () => {
     $('guessedLegend').hidden = !guessed.checked
     guessedListener?.(guessed.checked)
+  })
+  const countFurniture = $<HTMLInputElement>('countFurniture')
+  let countFurnitureListener: ((on: boolean) => void) | undefined
+  try {
+    countFurniture.checked = localStorage.getItem(COUNT_FURNITURE_KEY) === 'on'
+  } catch { /* storage blocked: off */ }
+  countFurniture.addEventListener('change', () => {
+    try {
+      localStorage.setItem(COUNT_FURNITURE_KEY, countFurniture.checked ? 'on' : 'off')
+    } catch { /* not remembered */ }
+    countFurnitureListener?.(countFurniture.checked)
   })
   const cutaway = $<HTMLInputElement>('cutaway')
   let cutawayListener: ((hidden: boolean) => void) | undefined
@@ -766,6 +786,13 @@ export function createUI(
     onMarkGuessed(fn) {
       guessedListener = fn
       fn(guessed.checked)
+    },
+    onCountFurniture(fn) {
+      countFurnitureListener = fn
+      fn(countFurniture.checked)
+    },
+    setHasFurniture(has) {
+      $('furnitureBox').hidden = !has
     },
     onNeighborhood(fn) {
       hoodListener = fn

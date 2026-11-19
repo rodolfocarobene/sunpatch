@@ -2,8 +2,8 @@ import type { Point } from './osm'
 import type { Key } from './i18n'
 
 /**
- * Furniture is decoration: it stands on the apartment floor in 3D and in the walk, but never enters a computed number
- * (see `occluderRoots` in sunmap-trace.ts). A piece is `x`/`z` (the centre of its footprint, plan metres) and `rot`
+ * Furniture is decoration: it stands on the apartment floor in 3D and in the walk, but enters a computed number only when the
+ * user counts it (see `occluderRoots` in sunmap-trace.ts). A piece is `x`/`z` (the centre of its footprint, plan metres) and `rot`
  * (degrees, turned like the plan on screen: positive is clockwise). Its front looks toward +z (south) at rot 0.
  */
 export type FurnitureKind =

@@ -2,7 +2,7 @@ import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3 } from 'thre
 import { describe, expect, it } from 'vitest'
 import { FURNITURE, furnitureFootprint, type Furniture } from './furniture'
 import { furnitureMesh } from './furniture-mesh'
-import { collectOccluders, occluderRoots } from './sunmap-trace'
+import { collectOccluders, occluderRoots, sceneKey } from './sunmap-trace'
 
 const at = (kind: Furniture['kind'], rot = 0): Furniture => ({ kind, x: 0, z: 0, rot })
 
@@ -81,5 +81,14 @@ describe('furniture and the computed numbers', () => {
   it('has one flag to bring it in', () => {
     expect(occluderRoots(groups, true)).toEqual([world, trees, furniture])
     expect(triangles(occluderRoots(groups, true) as Group[])).toBeGreaterThan(24)
+  })
+
+  it('keys the scene differently with the switch on, whatever the version', () => {
+    for (const version of [0, 1, 7, 8]) {
+      expect(sceneKey(version, true)).not.toBe(sceneKey(version, false))
+      expect(sceneKey(version + 1, false)).not.toBe(sceneKey(version, true))
+      expect(sceneKey(version + 1, true)).not.toBe(sceneKey(version, false))
+    }
+    expect(sceneKey(3, true)).toBe(sceneKey(3, true))
   })
 })
