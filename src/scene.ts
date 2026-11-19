@@ -57,7 +57,8 @@ import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
-import { collectOccluders } from './sunmap-trace'
+import { collectOccluders, occluderRoots } from './sunmap-trace'
+import { furnitureMesh } from './furniture-mesh'
 import { heatTexels, type Grid } from './sunmap'
 import { along, facing } from './panel'
 import type { SurfaceSample } from './suitability'
@@ -374,6 +375,10 @@ export function createScene(container: HTMLElement): SunScene {
   // Trees live outside `world`: they depend on the OSM answer, not on the plan, and populate() must not drop them.
   let treeGroup = new Group()
   scene.add(treeGroup)
+  // Furniture is decoration: it is lit and shadowed like the apartment but sits outside `world`, so the sun map and every
+  // other computed number leave it out (see occluderRoots). Its meshes share geometry and materials, so it is only cleared.
+  const furnitureGroup = new Group()
+  scene.add(furnitureGroup)
 
   const hemi = new HemisphereLight(0xe6edf5, 0x9a9879, 0.35)
   const ambient = new AmbientLight(0xfff3e0, 0.12)
@@ -934,6 +939,7 @@ export function createScene(container: HTMLElement): SunScene {
     clearHover()
     removeSunMap()
     clearWorld()
+    furnitureGroup.clear()
     suitMesh = suitMark = undefined // cleared with the world; the data is painted again below
     gardenMapMeshes = [] // cleared with the world; the page asks for the plant map again after a scene change
     version++
@@ -970,6 +976,12 @@ export function createScene(container: HTMLElement): SunScene {
     if (plan) {
       addApartment(selected, plan)
       for (const o of panelMeshes(plan.panels)) world.add(o)
+      for (const f of plan.furniture ?? []) {
+        const piece = furnitureMesh(f, floorBase(selected, plan))
+        // Apartment meshes: the second render pass repaints them under the narrow sun light, like the walls.
+        piece.traverse((o) => o instanceof Mesh && apartmentMeshes.add(o))
+        furnitureGroup.add(piece)
+      }
       const { c, radius } = apartmentBounds(selected, plan)
       const mid = floorBase(selected, plan) + plan.floorHeight / 2
       aptLight.target.position.set(c.x, mid, c.z)
@@ -1529,7 +1541,7 @@ export function createScene(container: HTMLElement): SunScene {
     rulerContext,
     previewHeight,
     sceneVersion: () => version,
-    occluders: () => collectOccluders([world, treeGroup]),
+    occluders: () => collectOccluders(occluderRoots({ world, trees: treeGroup, furniture: furnitureGroup })),
     onSceneChange(handler) {
       sceneChange = handler
     },
