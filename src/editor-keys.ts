@@ -1,11 +1,11 @@
 import { t } from './i18n'
 
-export type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix' | 'panel'
+export type Tool = 'select' | 'outline' | 'wall' | 'window' | 'fix' | 'panel' | 'furniture'
 
 export type Shortcut = { tool: Tool } | { action: 'fit' }
 
 /** Single-letter shortcuts, shown on the buttons. Space, Esc, Del and Ctrl+Z are handled elsewhere. */
-export const TOOL_KEYS: Record<Tool, string> = { select: 'V', outline: 'O', wall: 'W', window: 'N', fix: 'B', panel: 'P' }
+export const TOOL_KEYS: Record<Tool, string> = { select: 'V', outline: 'O', wall: 'W', window: 'N', fix: 'B', panel: 'P', furniture: 'M' }
 export const FIT_KEY = 'F'
 
 /** The shortcut for a key press, or undefined for other keys and for keys held with Ctrl, Meta or Alt. */
