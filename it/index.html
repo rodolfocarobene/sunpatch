@@ -32,17 +32,45 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Sunpatch",
-        "url": "https://rodolfocarobene.github.io/sunpatch/it/",
-        "description": "Scopri quando entra il sole in casa tua e quante ore di sole prende ogni stanza, con le ombre degli edifici vicini. Qualsiasi indirizzo, gratis, nel browser.",
-        "inLanguage": "it",
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "Any (web browser)",
-        "isAccessibleForFree": true,
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
-        "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
-        "author": { "@type": "Person", "name": "Rodolfo Carobene" }
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "Sunpatch",
+            "alternateName": "Sunpatch sun simulator",
+            "url": "https://rodolfocarobene.github.io/sunpatch/it/",
+            "inLanguage": "it"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "Sunpatch",
+            "url": "https://rodolfocarobene.github.io/sunpatch/it/",
+            "description": "Scopri quando entra il sole in casa tua e quante ore di sole prende ogni stanza, con le ombre degli edifici vicini. Qualsiasi indirizzo, gratis, nel browser.",
+            "inLanguage": "it",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Any (web browser)",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            },
+            "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
+            "author": {
+              "@type": "Person",
+              "name": "Rodolfo Carobene"
+            },
+            "screenshot": "https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png",
+            "featureList": [
+              "Macchie di sole attraverso ogni finestra, per qualsiasi data e ora",
+              "Ore di sole diretto per ogni punto del pavimento",
+              "Ombre degli edifici vicini e degli alberi, da OpenStreetMap",
+              "Spaccato 3D e visita in prima persona dentro l'appartamento",
+              "Stima dell'energia di pannelli solari su balconi e tetti",
+              "Valutazione delle piante da giardino in base al sole",
+              "Nessun account, funziona nel browser"
+            ]
+          }
+        ]
       }
     </script>
     <link rel="stylesheet" href="/src/landing.css" />

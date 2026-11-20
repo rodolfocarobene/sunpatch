@@ -33,17 +33,45 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Sunpatch",
-        "url": "https://rodolfocarobene.github.io/sunpatch/",
-        "description": "See when the sun enters your home and how many hours of sun each room gets, with shadows from neighbouring buildings. Any address, free, in your browser.",
-        "inLanguage": "en",
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "Any (web browser)",
-        "isAccessibleForFree": true,
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
-        "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
-        "author": { "@type": "Person", "name": "Rodolfo Carobene" }
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "Sunpatch",
+            "alternateName": "Sunpatch sun simulator",
+            "url": "https://rodolfocarobene.github.io/sunpatch/",
+            "inLanguage": "en"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "Sunpatch",
+            "url": "https://rodolfocarobene.github.io/sunpatch/",
+            "description": "See when the sun enters your home and how many hours of sun each room gets, with shadows from neighbouring buildings. Any address, free, in your browser.",
+            "inLanguage": "en",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Any (web browser)",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            },
+            "license": "https://github.com/rodolfocarobene/sunpatch/blob/main/LICENSE",
+            "author": {
+              "@type": "Person",
+              "name": "Rodolfo Carobene"
+            },
+            "screenshot": "https://rodolfocarobene.github.io/sunpatch/media/screenshot-cutaway.png",
+            "featureList": [
+              "Sun patches through each window, for any date and time",
+              "Hours of direct sun per spot of the floor",
+              "Shadows from neighbouring buildings and trees, from OpenStreetMap",
+              "3D cutaway and first-person walk inside the apartment",
+              "Solar panel energy estimates for balconies and roofs",
+              "Garden plant ratings by sun",
+              "No account, runs in the browser"
+            ]
+          }
+        ]
       }
     </script>
     <link rel="stylesheet" href="/src/landing.css" />
