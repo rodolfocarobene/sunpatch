@@ -150,3 +150,21 @@ footer p { margin-bottom: 8px; }
 
 .faq h3 { font-size: 1.05rem; margin-bottom: 6px; }
 .faq p { color: var(--muted); margin: 0; }
+
+/* Guide pages (guide/ and it/guide/): a narrow reading column. */
+.guide { max-width: 42rem; margin: 0 auto; padding: 32px var(--gutter) 64px; }
+.guide h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); margin-bottom: 0.6rem; }
+.guide h2 { font-size: clamp(1.3rem, 3vw, 1.6rem); margin: 2.2rem 0 0.8rem; }
+.guide .byline { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.8rem; }
+.guide .lead-left { font-size: 1.1rem; color: var(--muted); margin-bottom: 1.8rem; }
+.guide ul { padding-left: 1.2em; margin: 0 0 1rem; }
+.guide li { margin-bottom: 0.5rem; }
+.guide .actions { justify-content: flex-start; margin: 1.4rem 0; }
+.guide .callout { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin: 1.6rem 0; }
+.guide .callout p { margin: 0; color: var(--muted); font-size: 0.97rem; }
+.guide .related { border-top: 1px solid var(--line); margin-top: 2.4rem; padding-top: 1.2rem; }
+.guide .related h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
+.guide .guide-list { list-style: none; padding: 0; display: grid; gap: 16px; }
+.guide .guide-list li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 0; }
+.guide .guide-list h2 { font-size: 1.15rem; margin: 0 0 6px; }
+.guide .guide-list p { margin: 0; color: var(--muted); }
