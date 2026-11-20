@@ -2,18 +2,66 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://rodolfocarobene.github.io/sunpatch/</loc>
-    <lastmod>2026-11-19</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
     <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
   </url>
   <url>
     <loc>https://rodolfocarobene.github.io/sunpatch/it/</loc>
-    <lastmod>2026-11-19</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/" />
     <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/" />
   </url>
   <url>
     <loc>https://rodolfocarobene.github.io/sunpatch/app/</loc>
-    <lastmod>2026-11-19</lastmod>
+    <lastmod>2026-11-20</lastmod>
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/guide/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/it/guide/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/guide/winter-sun-hours-apartment/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/winter-sun-hours-apartment/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/ore-di-sole-appartamento-inverno/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/it/guide/ore-di-sole-appartamento-inverno/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/winter-sun-hours-apartment/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/ore-di-sole-appartamento-inverno/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/guide/south-east-west-north-facing-flat/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/south-east-west-north-facing-flat/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/esposizione-sud-est-ovest-nord/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/it/guide/esposizione-sud-est-ovest-nord/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/south-east-west-north-facing-flat/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/esposizione-sud-est-ovest-nord/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/guide/will-neighbouring-building-block-my-sun/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/will-neighbouring-building-block-my-sun/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/palazzo-di-fronte-toglie-il-sole/" />
+  </url>
+  <url>
+    <loc>https://rodolfocarobene.github.io/sunpatch/it/guide/palazzo-di-fronte-toglie-il-sole/</loc>
+    <lastmod>2026-11-20</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://rodolfocarobene.github.io/sunpatch/guide/will-neighbouring-building-block-my-sun/" />
+    <xhtml:link rel="alternate" hreflang="it" href="https://rodolfocarobene.github.io/sunpatch/it/guide/palazzo-di-fronte-toglie-il-sole/" />
   </url>
 </urlset>
