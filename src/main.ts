@@ -1197,6 +1197,8 @@ sunScene.onSceneMenu((hit, at) => {
         return { label: t('menu.height'), run: () => openHeight(site?.buildings.find((b) => b.id === hit.building), at) }
     }
   }
+  // A facade offers nothing but the height: its box opens straight away, as a right-click on a building always did.
+  if (groups.length === 1 && groups[0].length === 1 && groups[0][0] === 'height') return entry('height').run?.()
   sceneMenu.open(groups.map((g) => g.map(entry)), at)
 })
 /** "Sun here" and "Indirect light here": the 3D view's probe at a floor point, with the layer it needs. */
