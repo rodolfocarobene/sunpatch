@@ -1,6 +1,6 @@
 import { BoxGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial, type BufferGeometry } from 'three'
 import type { Furniture, FurnitureKind } from './furniture'
-import { plantById, type PlantKind } from './plants'
+import { plantById, type Plant, type PlantForm } from './plants'
 
 // Muted, warm colours that sit with the scene palette (scene.ts): oak and walnut, linen, sage, clay.
 const OAK = 0xb98f63
@@ -19,6 +19,9 @@ const SOIL = 0x4a3a2c
 const LEAF_DEEP = 0x3f6b45
 const LEAF_DARK = 0x56804f
 const FRUIT = 0xc9573f
+const SUCCULENT = 0x7f9f8a
+const SUCCULENT_LIGHT = 0x9fbaa2
+const SWORD = 0x6b8a4e
 // Warm blooms of a flowering pot: one per plant, picked by its id.
 const BLOOMS = [0xd6553f, 0xe8913a, 0xe8c547, 0xd9708c]
 const BOOKS = [0xb5513f, 0x4f6d7a, 0xd2a64a, 0x6a7f55, 0x8a5a7a]
@@ -129,54 +132,147 @@ const RECIPES: Record<FurnitureKind, () => Part[]> = {
   ],
 }
 
-/** A pot whose foliage hints at the plant's kind: a low bush (herb, vegetable), green with blooms (flower), a small tree (fruit), big dark leaves (houseplant). */
-const POTTED: Record<PlantKind, (bloom: number) => Part[]> = {
-  herb: () => [
-    cyl(0, 0, 0, 0.26, 0.22, 0.26, POT),
-    cyl(0, 0.22, 0, 0.22, 0.02, 0.22, SOIL),
-    blob(0, 0.24, 0, 0.34, 0.2, 0.34, LEAF),
-    blob(0.07, 0.3, 0.05, 0.24, 0.18, 0.24, LEAF_LIGHT),
-    blob(-0.08, 0.3, -0.04, 0.2, 0.16, 0.2, LEAF_LIGHT),
+/** Small round dots (fruit or blooms) of `size` at `at`, or none when the plant has no colour to show. */
+const dots = (at: number[][], size: number, color?: number): Part[] =>
+  color === undefined ? [] : at.map(([x, y, z]) => blob(x, y, z, size, size, size, color))
+
+/** A ring of `n` leaves of size w x h x w at radius `r`, bottoms at `y`, alternating two greens. */
+const ring = (n: number, r: number, y: number, w: number, h: number, colors: [number, number]): Part[] =>
+  Array.from({ length: n }, (_, i) => blob(r * Math.cos((2 * Math.PI * i) / n), y, r * Math.sin((2 * Math.PI * i) / n), w, h, w, colors[i % 2]))
+
+/** A terracotta pot of diameter `w` and height `h` with its soil. */
+const terracotta = (w: number, h: number): Part[] => [cyl(0, 0, 0, w, h, w, POT), cyl(0, h, 0, w - 0.04, 0.02, w - 0.04, SOIL)]
+/** A square planter of side `w` and height `h` with its soil. */
+const planter = (w: number, h: number, color: number): Part[] => [box(0, 0, 0, w, h, w, color), box(0, h, 0, w - 0.04, 0.02, w - 0.04, SOIL)]
+
+/**
+ * A pot shaped after the plant's growth form (plants.ts), each within the 0.4 m plant footprint (foliage up to 0.5 m) and
+ * 1.2 m: a tall pot for a tree, a low bowl for a succulent, a square planter for sword leaves and leafy crops, terracotta
+ * otherwise. `accent` colours the fruit or the blooms, when the plant has them.
+ */
+const POTTED: Record<PlantForm, (accent?: number) => Part[]> = {
+  tree: (accent) => [
+    ...terracotta(0.36, 0.4),
+    cyl(0, 0.42, 0, 0.05, 0.4, 0.05, WALNUT),
+    blob(0, 0.68, 0, 0.5, 0.38, 0.5, LEAF),
+    blob(0.06, 0.9, 0.03, 0.32, 0.26, 0.32, LEAF_LIGHT),
+    ...dots([[0.2, 0.8, 0.1], [-0.18, 0.86, -0.08], [0.04, 0.74, -0.21], [-0.1, 0.78, 0.19]], 0.07, accent),
   ],
-  vegetable: () => [
-    cyl(0, 0, 0, 0.3, 0.25, 0.3, POT),
-    cyl(0, 0.25, 0, 0.26, 0.02, 0.26, SOIL),
-    blob(0, 0.27, 0, 0.4, 0.26, 0.4, LEAF),
-    blob(0.1, 0.4, 0.06, 0.28, 0.2, 0.28, LEAF_LIGHT),
-    blob(-0.1, 0.38, -0.06, 0.24, 0.2, 0.24, LEAF),
+  shrub: (accent) => [
+    ...terracotta(0.3, 0.24),
+    blob(0, 0.24, 0, 0.44, 0.3, 0.44, LEAF),
+    blob(0.08, 0.36, 0.06, 0.26, 0.22, 0.26, LEAF_LIGHT),
+    blob(-0.08, 0.38, -0.05, 0.24, 0.22, 0.24, LEAF),
+    blob(0, 0.46, -0.02, 0.2, 0.18, 0.2, LEAF_LIGHT),
+    ...dots([[0.16, 0.42, 0.06], [-0.12, 0.46, 0.1], [0.04, 0.5, -0.14], [-0.14, 0.38, -0.1], [0.08, 0.56, 0.04]], 0.07, accent),
   ],
-  flower: (bloom) => [
-    cyl(0, 0, 0, 0.28, 0.24, 0.28, POT),
-    cyl(0, 0.24, 0, 0.24, 0.02, 0.24, SOIL),
-    blob(0, 0.26, 0, 0.36, 0.24, 0.36, LEAF),
-    ...[[0, 0.45, 0.02], [0.1, 0.4, -0.08], [-0.1, 0.42, 0.08], [0.12, 0.38, 0.1], [-0.08, 0.38, -0.1]].map(([x, y, z]) => blob(x, y, z, 0.1, 0.1, 0.1, BLOOMS[bloom])),
+  // Broad leaves held flat on stalks of three heights.
+  upright: () => [
+    ...terracotta(0.32, 0.3),
+    cyl(0.04, 0.3, -0.05, 0.03, 0.7, 0.03, LEAF_DEEP),
+    cyl(0.03, 0.3, 0.02, 0.03, 0.56, 0.03, LEAF_DEEP),
+    cyl(-0.05, 0.3, -0.03, 0.03, 0.42, 0.03, LEAF_DEEP),
+    blob(0.03, 0.96, -0.12, 0.18, 0.06, 0.24, LEAF_DARK),
+    blob(0.12, 0.82, 0.04, 0.26, 0.06, 0.18, LEAF_DARK),
+    blob(-0.13, 0.68, -0.04, 0.24, 0.06, 0.18, LEAF_DEEP),
+    blob(-0.04, 0.56, 0.12, 0.2, 0.06, 0.22, LEAF_DARK),
+    blob(0.1, 0.48, -0.1, 0.2, 0.05, 0.18, LEAF_DEEP),
   ],
-  fruit: () => [
-    cyl(0, 0, 0, 0.4, 0.32, 0.4, POT),
-    cyl(0, 0.32, 0, 0.36, 0.02, 0.36, SOIL),
-    cyl(0, 0.34, 0, 0.06, 0.42, 0.06, WALNUT),
-    blob(0, 0.66, 0, 0.5, 0.46, 0.5, LEAF),
-    blob(0.1, 0.9, 0.05, 0.3, 0.24, 0.3, LEAF_LIGHT),
-    ...[[0.2, 0.7, 0.1], [-0.18, 0.78, -0.08], [0.02, 0.62, -0.2]].map(([x, y, z]) => blob(x, y, z, 0.08, 0.08, 0.08, FRUIT)),
+  // A low mound with strands hanging over the rim.
+  trailing: (accent) => [
+    ...terracotta(0.3, 0.28),
+    blob(0, 0.26, 0, 0.36, 0.18, 0.36, LEAF),
+    blob(0.17, 0.04, 0, 0.08, 0.3, 0.1, LEAF_LIGHT),
+    blob(-0.17, 0.08, 0, 0.08, 0.26, 0.1, LEAF_LIGHT),
+    blob(0, 0.06, 0.17, 0.1, 0.28, 0.08, LEAF_LIGHT),
+    blob(0, 0.12, -0.17, 0.1, 0.22, 0.08, LEAF_LIGHT),
+    blob(0.12, 0.12, 0.12, 0.08, 0.22, 0.08, LEAF),
+    ...dots([[0.17, 0.06, 0.04], [-0.04, 0.1, 0.18], [0.08, 0.36, -0.08], [-0.1, 0.34, 0.06]], 0.07, accent),
   ],
-  houseplant: () => [
-    cyl(0, 0, 0, 0.34, 0.3, 0.34, POT),
-    cyl(0, 0.3, 0, 0.3, 0.02, 0.3, SOIL),
-    cyl(0, 0.32, 0, 0.05, 0.4, 0.05, WALNUT),
-    blob(0, 0.45, 0, 0.5, 0.34, 0.5, LEAF_DEEP),
-    blob(0.06, 0.66, 0.04, 0.42, 0.34, 0.42, LEAF_DARK),
-    blob(-0.06, 0.86, -0.03, 0.3, 0.28, 0.3, LEAF_DEEP),
+  succulent: () => [
+    cyl(0, 0, 0, 0.36, 0.12, 0.36, STONE),
+    cyl(0, 0.12, 0, 0.32, 0.01, 0.32, SOIL),
+    ...ring(6, 0.1, 0.12, 0.11, 0.08, [SUCCULENT, SUCCULENT_LIGHT]),
+    blob(0, 0.12, 0, 0.12, 0.18, 0.12, SUCCULENT_LIGHT),
   ],
+  // Stiff upright blades, half of them turned a quarter.
+  sword: () => [
+    ...planter(0.3, 0.32, SLATE),
+    ...[[0, 0, 0.74], [0.06, 0.05, 0.6], [-0.07, 0.03, 0.66], [0.04, -0.07, 0.52], [-0.05, -0.05, 0.7], [0.08, -0.01, 0.46]].map(([x, z, h], i) =>
+      i % 2 ? box(x, 0.33, z, 0.025, h, 0.06, LEAF_DEEP) : box(x, 0.33, z, 0.06, h, 0.025, SWORD)),
+  ],
+  // A crown with fronds reaching out and down.
+  fern: () => [
+    ...terracotta(0.3, 0.28),
+    blob(0, 0.28, 0, 0.22, 0.3, 0.22, LEAF),
+    blob(0.13, 0.36, 0, 0.22, 0.08, 0.1, LEAF_LIGHT),
+    blob(-0.13, 0.38, 0, 0.22, 0.08, 0.1, LEAF_LIGHT),
+    blob(0, 0.4, 0.13, 0.1, 0.08, 0.22, LEAF_LIGHT),
+    blob(0, 0.34, -0.13, 0.1, 0.08, 0.22, LEAF_LIGHT),
+    blob(0.09, 0.48, 0.09, 0.14, 0.08, 0.14, LEAF),
+    blob(-0.09, 0.46, -0.09, 0.14, 0.08, 0.14, LEAF),
+    blob(0.21, 0.24, 0, 0.08, 0.14, 0.08, LEAF_LIGHT),
+    blob(-0.21, 0.26, 0, 0.08, 0.14, 0.08, LEAF_LIGHT),
+  ],
+  grass: () => [
+    ...terracotta(0.3, 0.22),
+    ...[[0, 0, 0.42], [0.06, 0.02, 0.34], [-0.05, 0.04, 0.38], [0.02, -0.06, 0.3], [-0.04, -0.05, 0.36], [0.07, -0.04, 0.26], [-0.08, 0, 0.28], [0.03, 0.07, 0.32], [-0.02, 0.08, 0.25]].map(([x, z, h], i) =>
+      cyl(x, 0.22, z, 0.025, h, 0.025, i % 2 ? LEAF : LEAF_LIGHT)),
+  ],
+  // Leaves up a cane.
+  climber: (accent) => [
+    ...terracotta(0.3, 0.26),
+    cyl(0, 0.26, 0, 0.025, 0.86, 0.025, OAK),
+    blob(0.06, 0.3, 0.04, 0.26, 0.22, 0.26, LEAF),
+    blob(-0.06, 0.48, -0.03, 0.24, 0.2, 0.24, LEAF_LIGHT),
+    blob(0.05, 0.66, 0.02, 0.22, 0.2, 0.22, LEAF),
+    blob(-0.04, 0.84, 0, 0.18, 0.18, 0.18, LEAF_LIGHT),
+    ...dots([[0.13, 0.4, 0.08], [-0.13, 0.58, -0.02], [0.11, 0.76, -0.06], [-0.02, 0.66, 0.13], [0.06, 0.45, -0.13]], 0.07, accent),
+  ],
+  // A low rosette of leaves, as a lettuce or a chard in a trough.
+  leafy: () => [
+    ...planter(0.38, 0.18, STONE),
+    ...ring(6, 0.11, 0.19, 0.16, 0.1, [LEAF, LEAF_LIGHT]),
+    blob(0, 0.19, 0, 0.18, 0.2, 0.18, LEAF_LIGHT),
+  ],
+  mound: (accent) => [
+    ...terracotta(0.28, 0.24),
+    blob(0, 0.24, 0, 0.4, 0.24, 0.4, LEAF),
+    blob(0, 0.32, 0, 0.28, 0.2, 0.28, LEAF_LIGHT),
+    ...dots([[0, 0.48, 0.02], [0.12, 0.42, -0.08], [-0.12, 0.42, 0.08], [0.14, 0.36, 0.1], [-0.1, 0.38, -0.12], [0.04, 0.4, 0.15], [-0.15, 0.34, -0.02]], 0.09, accent),
+  ],
+  // Low leaves, then a flower on each stem.
+  bulb: (accent) => [
+    ...terracotta(0.3, 0.22),
+    blob(0, 0.22, 0, 0.24, 0.12, 0.24, LEAF),
+    ...[[0, 0, 0.42], [0.06, 0.04, 0.34], [-0.06, 0.03, 0.38], [0.03, -0.06, 0.3], [-0.04, -0.05, 0.36]].flatMap(([x, z, h]) => [
+      cyl(x, 0.22, z, 0.02, h, 0.02, LEAF_LIGHT),
+      ...dots([[x, 0.2 + h, z]], 0.09, accent),
+    ]),
+  ],
+}
+
+/**
+ * The look of a pot of `plant`: its form, the colour of its fruit or blooms (flowers and flowering forms get one of the
+ * blooms, picked by id; fruit, and the fruiting vegetables on a bush, a cane or a trailing stem, the fruit colour), and the
+ * template key the two make.
+ */
+export function potLook(plant: Plant): { form: PlantForm; accent?: number; key: string } {
+  const bloom = [...plant.id].reduce((n, c) => n + c.charCodeAt(0), 0) % BLOOMS.length
+  const flowering = plant.kind === 'flower' || plant.form === 'mound' || plant.form === 'bulb'
+  const fruiting = plant.kind === 'fruit' || (plant.kind === 'vegetable' && ['shrub', 'climber', 'trailing'].includes(plant.form))
+  const accent = flowering ? BLOOMS[bloom] : fruiting ? FRUIT : undefined
+  return { form: plant.form, accent, key: `pot-${plant.form}-${accent?.toString(16) ?? 'leaf'}` }
 }
 
 const templates = new Map<string, Group>()
 
-/** The parts of a piece: a pot with foliage for a known species, else the kind's own recipe. */
+/** The parts of a piece: a pot shaped after a known species' growth form, else the kind's own recipe. */
 function partsOf(f: Furniture): { key: string; parts: Part[] } {
   const plant = f.plant ? plantById(f.plant) : undefined
   if (f.kind !== 'plant' || !plant) return { key: f.kind, parts: RECIPES[f.kind]() }
-  const bloom = [...plant.id].reduce((n, c) => n + c.charCodeAt(0), 0) % BLOOMS.length
-  return { key: `pot-${plant.kind}-${plant.kind === 'flower' ? bloom : 0}`, parts: POTTED[plant.kind](bloom) }
+  const { form, accent, key } = potLook(plant)
+  return { key, parts: POTTED[form](accent) }
 }
 
 /** One template per kind (and per look of a potted plant): a group of boxes and cylinders sharing the unit geometries and the colour materials. */

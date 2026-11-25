@@ -1,7 +1,8 @@
 import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { FURNITURE, furnitureFootprint, type Furniture } from './furniture'
-import { furnitureMesh } from './furniture-mesh'
+import { furnitureMesh, potLook } from './furniture-mesh'
+import { PLANTS, plantById } from './plants'
 import { collectOccluders, occluderRoots, sceneKey } from './sunmap-trace'
 
 const at = (kind: Furniture['kind'], rot = 0): Furniture => ({ kind, x: 0, z: 0, rot })
@@ -62,23 +63,43 @@ describe('potted plants', () => {
     return { width: Math.max(box.max.x - box.min.x, box.max.z - box.min.z), height: box.max.y - box.min.y, bottom: box.min.y, count: piece.children.length }
   }
 
-  it('are 0.3 to 0.5 m wide and 0.3 to 1.2 m tall, whatever the kind', () => {
-    for (const id of ['basil', 'tomato', 'nasturtium', 'lemon', 'pothos']) {
+  it('are 0.3 to 0.5 m wide and 0.25 to 1.2 m tall, whatever the plant', () => {
+    for (const { id } of PLANTS) {
       const { width, height } = size(pot(id))
-      expect(width).toBeGreaterThanOrEqual(0.3)
-      expect(width).toBeLessThanOrEqual(0.5 + 1e-6)
-      expect(height).toBeGreaterThanOrEqual(0.3)
-      expect(height).toBeLessThanOrEqual(1.2)
+      expect(width, id).toBeGreaterThanOrEqual(0.3)
+      expect(width, id).toBeLessThanOrEqual(0.5 + 1e-6)
+      expect(height, id).toBeGreaterThanOrEqual(0.25)
+      expect(height, id).toBeLessThanOrEqual(1.2)
     }
   })
 
-  it('take their shape from the plant kind: bushes low, trees and houseplants taller, flowers with blooms', () => {
-    const [herb, vegetable, flower, fruit, house] = ['basil', 'tomato', 'nasturtium', 'lemon', 'pothos'].map((id) => size(pot(id)))
-    expect(herb.height).toBeLessThan(0.5)
-    expect(vegetable.height).toBeLessThan(0.6)
-    expect(fruit.height).toBeGreaterThan(0.9)
-    expect(house.height).toBeGreaterThan(1)
-    expect(flower.count).toBeGreaterThan(herb.count)
+  it('take their shape from the growth form: trees, climbers and big leaves tall, succulents and leafy crops low', () => {
+    const height = (id: string) => size(pot(id)).height
+    for (const id of ['lemon', 'tomato', 'monstera', 'snake-plant']) expect(height(id), id).toBeGreaterThan(0.9)
+    for (const id of ['echeveria', 'aloe', 'lettuce', 'pothos']) expect(height(id), id).toBeLessThan(0.5)
+    expect(height('basil')).toBeLessThan(0.7)
+    // forms differ by their parts, not just their size
+    const counts = new Set(['lemon', 'basil', 'monstera', 'pothos', 'echeveria', 'snake-plant', 'fern', 'chives', 'tomato', 'lettuce'].map((id) => size(pot(id)).count))
+    expect(counts.size).toBeGreaterThan(5)
+  })
+
+  it('show fruit or blooms where the plant has them, and key the shared template by form and that colour', () => {
+    const look = (id: string) => potLook(plantById(id)!)
+    expect(look('lemon').accent).toBe(look('tomato').accent)
+    expect(look('lemon').accent).toBeDefined()
+    expect(look('basil').accent).toBeUndefined()
+    expect(look('monstera').accent).toBeUndefined()
+    expect(look('tulip').accent).toBeDefined()
+    expect(look('african-violet').accent).toBeDefined()
+    expect(look('basil').key).toBe('pot-shrub-leaf')
+    expect(look('basil').key).toBe(look('rosemary').key)
+    expect(look('olive').key).toBe(look('fig').key)
+    expect(look('pepper').key).toBe(look('blueberry').key)
+    expect(look('pepper').key).not.toBe(look('basil').key)
+    // a modest number of templates for the whole catalogue
+    const keys = new Set(PLANTS.map((p) => potLook(p).key))
+    expect(keys.size).toBeLessThan(40)
+    for (const p of PLANTS) expect(potLook(p).key.startsWith(`pot-${p.form}-`), p.id).toBe(true)
   })
 
   it('stand on the floor, or on their own height when they are off it', () => {
@@ -86,9 +107,9 @@ describe('potted plants', () => {
     expect(size(pot('basil', 14.4), 7).bottom).toBeCloseTo(14.4, 5)
   })
 
-  it('share meshes by kind, and fall back to the floor plant for a plant that is not known', () => {
+  it('share meshes by form, and fall back to the floor plant for a plant that is not known', () => {
     const a = furnitureMesh(pot('basil'), 0)
-    const b = furnitureMesh(pot('parsley'), 0)
+    const b = furnitureMesh(pot('rosemary'), 0)
     expect((a.children[0] as Mesh).geometry).toBe((b.children[0] as Mesh).geometry)
     expect(size(pot('no-such-plant')).height).toBeCloseTo(size(at('plant')).height, 5)
     expect(furnitureMesh(pot('basil'), 0).userData.furnitureKind).toBe('plant')
