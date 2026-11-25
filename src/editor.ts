@@ -887,7 +887,7 @@ export function createPlanEditor(
     const near = (q: Point, px: number): boolean => Math.hypot(q.x - p.x, q.z - p.z) <= Math.max(tol(px), 0.2)
     if (selection?.kind === 'furniture') {
       const f = plan.furniture?.[selection.index]
-      if (f && near(furnitureTip(f), 9)) {
+      if (f && !specOf(f.kind).mounted && near(furnitureTip(f), 9)) {
         drag = { kind: 'furnitureRotate', index: selection.index, before: clone(plan) }
         return true
       }
@@ -936,7 +936,8 @@ export function createPlanEditor(
     const out: HTMLElement[] = [
       Object.assign(document.createElement('h4'), { textContent: t('editor.furnTitle') }),
       field(t('editor.kind'), kind),
-      field(t('editor.furnTurn'), numberInput(f.rot, ROTATE_STEP, 0, (v) => patch({ rot: Math.round(v) % 360 }), 360)),
+      // What hangs faces out of its window or wall: turning it would turn it into the wall.
+      ...(spec.mounted ? [] : [field(t('editor.furnTurn'), numberInput(f.rot, ROTATE_STEP, 0, (v) => patch({ rot: Math.round(v) % 360 }), 360))]),
       field(t('editor.furnSize'), size),
     ]
     if (f.plant) out.splice(2, 0, field(t('editor.furnPlantOf'), Object.assign(document.createElement('output'), { textContent: furnitureName(f) })))
@@ -1174,7 +1175,7 @@ export function createPlanEditor(
     const groups: MenuEntry[][] = []
     if (i >= 0) {
       groups.push([
-        { label: t('menu.rotate'), run: edit((next) => void (next.furniture![i].rot = (next.furniture![i].rot + 90) % 360), { kind: 'furniture', index: i }) },
+        ...(specOf(plan.furniture![i].kind).mounted ? [] : [{ label: t('menu.rotate'), run: edit((next) => void (next.furniture![i].rot = (next.furniture![i].rot + 90) % 360), { kind: 'furniture', index: i }) }]),
         { label: t('menu.remove'), run: edit((next) => void next.furniture!.splice(i, 1), null) },
       ])
     }

@@ -319,7 +319,7 @@ function drawFurniture(root: SVGElement, f: Furniture, px: number, selected: boo
     })
     label.textContent = name
   }
-  if (selected) {
+  if (selected && !spec.mounted) {
     svgEl(g, 'line', { x1: front.x, y1: front.z, x2: tip.x, y2: tip.z, stroke: C.accentStrong, 'stroke-width': 1.5 * px, 'stroke-dasharray': `${4 * px} ${3 * px}` })
     svgEl(g, 'circle', { cx: tip.x, cy: tip.z, r: 5 * px, fill: C.surface, stroke: C.accentStrong, 'stroke-width': 2 * px })
   }

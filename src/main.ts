@@ -1171,7 +1171,7 @@ sunScene.onSceneMenu((hit, at) => {
   const base = plan && site ? floorBase(site.selected, plan) : 0
   // A window seen from outside, a window box or a wall planter: "Plants for this spot" traces the point in front of it.
   const hung = piece && specOf(piece.kind).mounted ? piece : plan && hit.window?.outside ? windowBoxAt(plan, base, hit.window.index, '') : undefined
-  const target = { floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece, front: !!hung, window: !!hit.window, wall: !!hit.wall }
+  const target = { floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece, mounted: !!piece && !!specOf(piece.kind).mounted, front: !!hung, window: !!hit.window, wall: !!hit.wall }
   const groups = sceneMenuItems(target, { hasPlan: !!plan, walking })
   const entry = (item: SceneMenuItem): MenuEntry => {
     switch (item) {

@@ -14,6 +14,8 @@ export interface SceneMenuTarget {
   building?: boolean
   /** A piece of furniture or a pot. */
   furniture?: boolean
+  /** The piece hangs on a window or a wall (a window box, a wall planter): turning it would turn it into the wall. */
+  mounted?: boolean
   /** The point in front of a window seen from outside, or of a window box or a wall planter: the Garden traces it, though no pot stands there. */
   front?: boolean
   /** A window of the apartment, from outside or inside: a window box can hang under it. */
@@ -31,7 +33,7 @@ export interface SceneMenuTarget {
 export function sceneMenuItems(target: SceneMenuTarget, state: { hasPlan: boolean; walking: boolean }): SceneMenuItem[][] {
   const floor = !!target.floor && state.hasPlan
   const groups: SceneMenuItem[][] = [
-    target.furniture && state.hasPlan ? ['rotate', 'remove'] : [],
+    target.furniture && state.hasPlan ? (target.mounted ? ['remove'] : ['rotate', 'remove']) : [],
     floor ? ['sun', 'daylight'] : [],
     [
       ...(target.spot || target.front ? (['plants'] as const) : []),
