@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Point } from './osm'
 import type { Plan, Window } from './plan'
-import { mountSpot, outerSillAt, wallFaceAt, wallPotAt, windowBoxAt, windowOnRay, windowOpening } from './wall-mount'
+import { dropOrphanWallPots, followWindows, mountSpot, outerSillAt, wallFaceAt, wallPotAt, windowBoxAt, windowOnRay, windowOpening } from './wall-mount'
 
 const rect = (x0: number, z0: number, x1: number, z1: number): Point[] => [
   { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
@@ -100,5 +100,43 @@ describe('outerSillAt', () => {
     expect(outerSillAt(plan(), BASE, { x: 5, y: 3.9, z: 0.25 })).toBeUndefined()
     expect(outerSillAt(plan(), BASE, { x: 5, y: 4.5, z: 0.1 })).toBeUndefined()
     expect(outerSillAt(plan(), BASE, { x: 6, y: 3.9, z: 0.1 })).toBeUndefined()
+  })
+})
+
+describe('followWindows and dropOrphanWallPots', () => {
+  const twoWindows = () => plan(rect(0, 0, 10, 6), [win({ t: 0.3 }), win({ t: 0.7 })])
+  const withBoxes = (p: Plan): Plan => ({ ...p, furniture: [windowBoxAt(p, BASE, 0, 'basil')!, windowBoxAt(p, BASE, 1, 'geranium')!, { kind: 'sofa', x: 2, z: 3, rot: 0 }] })
+
+  it('moves a window box with its moved window and keeps the rest', () => {
+    const before = withBoxes(twoWindows())
+    const after: Plan = { ...before, windows: [win({ t: 0.2, sill: 1.1 }), win({ t: 0.7 })] }
+    const list = followWindows(before, after, BASE, (i) => i)!
+    expect(list[0]).toEqual(windowBoxAt(after, BASE, 0, 'basil'))
+    expect(list[0].x).toBeCloseTo(2)
+    expect(list.slice(1)).toEqual(before.furniture!.slice(1))
+  })
+
+  it('drops the box of a deleted window and follows the others to their new index', () => {
+    const before = withBoxes(twoWindows())
+    const after: Plan = { ...before, windows: [win({ t: 0.7 })] }
+    const list = followWindows(before, after, BASE, (i) => (i === 0 ? undefined : i - 1))!
+    expect(list.map((f) => f.plant ?? f.kind)).toEqual(['geranium', 'sofa'])
+    expect(list[0]).toEqual(windowBoxAt(after, BASE, 0, 'geranium'))
+  })
+
+  it('leaves a box that was moved off its window', () => {
+    const before = withBoxes(twoWindows())
+    before.furniture![0] = { ...before.furniture![0], x: before.furniture![0].x + 0.5 }
+    const after: Plan = { ...before, windows: [win({ t: 0.7 })] }
+    expect(followWindows(before, after, BASE, (i) => (i === 0 ? undefined : i - 1))![0]).toBe(before.furniture![0])
+  })
+
+  it('drops a wall planter with its wall, and keeps one on the facade', () => {
+    const p = plan()
+    const onWall = wallPotAt(wallFaceAt(p, { x: 4.05, z: 2 }, { x: 5, z: 2 }, 0.05)!, BASE, 3, 'pothos')
+    const onFacade = wallPotAt(wallFaceAt(p, { x: 6, z: 0.3 }, { x: 6, z: 1 }, 0.05)!, BASE, 3, 'fern')
+    const before: Plan = { ...p, furniture: [onWall, onFacade] }
+    expect(dropOrphanWallPots(before, before)).toEqual([onWall, onFacade])
+    expect(dropOrphanWallPots(before, { ...before, walls: [] })).toEqual([onFacade])
   })
 })

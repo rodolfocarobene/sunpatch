@@ -26,7 +26,7 @@ import { fmt1Fixed, t, upFirst, type Key } from './i18n'
 import type { ContextMenu, MenuEntry } from './context-menu'
 import { plantById, plantName } from './plants'
 import { MENU_FURNITURE, MENU_PLANTS, MOUNT_PLANTS } from './scene-menu'
-import { wallFaceAt, wallPotAt, windowBoxAt } from './wall-mount'
+import { dropOrphanWallPots, followWindows, wallFaceAt, wallPotAt, windowBoxAt } from './wall-mount'
 import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
@@ -435,7 +435,7 @@ export function createPlanEditor(
       const edit = (patch: Partial<typeof w>): void => {
         const next = clone(p)
         Object.assign(next.windows[sel.index], patch)
-        commit(next)
+        commit(withHungPieces(next, p))
         updateProps(true)
       }
       props.replaceChildren(
@@ -484,6 +484,19 @@ export function createPlanEditor(
     plan = normalizeWindows(next)
     persist()
     render()
+  }
+
+  /**
+   * `next`, a window or wall edit of `before`, with each window box moved with its window (window `i` of `before` is
+   * window `windowAfter(i)` of `next`, none when deleted) and the wall planters of a deleted wall gone: see wall-mount.ts.
+   */
+  function withHungPieces(next: Plan, before: Plan, windowAfter = (i: number): number | undefined => i): Plan {
+    if (!next.furniture) return next
+    const base = building ? floorBase(building, before) : 0
+    normalizeWindows(next)
+    next.furniture = dropOrphanWallPots(before, next)
+    next.furniture = followWindows(before, next, base, windowAfter)
+    return next
   }
 
   function persist(): void {
@@ -554,9 +567,13 @@ export function createPlanEditor(
     if (!plan || !selection) return
     if (selection.kind === 'viewpoint') return resetViewpoint()
     const next = clone(plan)
-    selectionList(next, selection.kind).splice(selection.index, 1)
+    const gone = selection.index
+    selectionList(next, selection.kind).splice(gone, 1)
+    const hung = selection.kind === 'window' ? withHungPieces(next, plan, (i) => (i === gone ? undefined : i > gone ? i - 1 : i))
+      : selection.kind === 'wall' ? withHungPieces(next, plan)
+      : next
     selection = null
-    commit(next)
+    commit(hung)
   }
 
   function exportJson(): void {
@@ -1266,7 +1283,7 @@ export function createPlanEditor(
     if (d.kind === 'pan') return render()
     if (plan && JSON.stringify(plan) !== JSON.stringify(d.before)) {
       const current = plan
-      commit(current, d.before)
+      commit(d.kind === 'window' ? withHungPieces(current, d.before) : current, d.before)
     }
   }
   svg.addEventListener('pointerup', (e) => {
