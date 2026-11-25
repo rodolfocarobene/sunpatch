@@ -22,7 +22,10 @@ import {
 } from './editor-geom'
 import type { Segment, Snap } from './editor-geom'
 import { isClick } from './click'
-import { fmt1Fixed, t, type Key } from './i18n'
+import { fmt1Fixed, t, upFirst, type Key } from './i18n'
+import type { ContextMenu, MenuEntry } from './context-menu'
+import { plantById, plantName } from './plants'
+import { MENU_FURNITURE, MENU_PLANTS } from './scene-menu'
 import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
@@ -178,6 +181,7 @@ export function createPlanEditor(
     onSwitch,
     panelSummary,
     onPanelSelect,
+    contextMenu,
   }: {
     autosave?: () => boolean
     onSwitch?: (buildingId: string, at: Point) => void
@@ -185,6 +189,8 @@ export function createPlanEditor(
     panelSummary?: HTMLElement
     /** Called with the selected panel's id when the selection shows in the properties box, null when it does not. */
     onPanelSelect?: (id: string | null) => void
+    /** The menu a right-click opens (shared with the 3D scene): add a piece or a pot at the point, turn or remove the piece there. */
+    contextMenu?: ContextMenu
   } = {},
 ): PlanEditor {
   const root = document.createElement('div')
@@ -1147,6 +1153,38 @@ export function createPlanEditor(
   }
 
   // --- events ---
+  // A right-click inside the apartment adds a piece or a pot there; on a piece it also turns or removes it. All are undoable.
+  svg.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    if (!contextMenu || !plan || drag) return
+    const p = eventPoint(e)
+    const i = hitFurniture(p)
+    const edit = (change: (next: Plan) => void, select: Selection | null) => () => {
+      const next = clone(plan!)
+      change(next)
+      selection = select
+      commit(next)
+    }
+    const place = (piece: Furniture) => () => {
+      edit((next) => (next.furniture ??= []).push(piece), { kind: 'furniture', index: plan!.furniture?.length ?? 0 })()
+      setMessage(t('editor.furnPlaced', { name: upFirst(furnitureName(piece)) }))
+    }
+    const groups: MenuEntry[][] = []
+    if (i >= 0) {
+      groups.push([
+        { label: t('menu.rotate'), run: edit((next) => void (next.furniture![i].rot = (next.furniture![i].rot + 90) % 360), { kind: 'furniture', index: i }) },
+        { label: t('menu.remove'), run: edit((next) => void next.furniture!.splice(i, 1), null) },
+      ])
+    }
+    if (insideOutline(plan, p)) {
+      const at = { x: snapMetres(p.x), z: snapMetres(p.z) }
+      groups.push([
+        { label: t('menu.addPlant'), items: MENU_PLANTS.indoor.map((id) => ({ label: upFirst(plantName(plantById(id)!)), run: place({ ...newFurniture('plant', at), plant: id }) })) },
+        { label: t('menu.addFurniture'), items: MENU_FURNITURE.map((kind) => ({ label: t(specOf(kind).name), run: place(newFurniture(kind, at)) })) },
+      ])
+    }
+    contextMenu.open(groups, { x: e.clientX, y: e.clientY })
+  })
   svg.addEventListener('pointerdown', (e) => {
     if (!plan) return
     if (e.button === 1 || (e.button === 0 && spaceDown)) {
