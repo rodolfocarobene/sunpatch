@@ -77,6 +77,7 @@ import { glassTriangles } from './dayfactor-trace'
 import { createDaylightJob, type DaylightResult } from './dayfactor-job'
 import { bandWord } from './ui'
 import { touchOnly } from './touch'
+import { cameraAfterWalk, cameraForKey, pickCamera, shownCamera, type CameraMode } from './camera-mode'
 import { saveSession, takeSession } from './session'
 import { decodeShare, encodeShare, shareUrl } from './share'
 import { createSharedChip } from './shared-chip'
@@ -89,7 +90,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
 onLofiChange((on) => sunScene.setLofiPixelRatio(on))
 const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
-const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk() })
+const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk(), hold: (move, on) => sunScene.holdWalk(move, on) })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
@@ -1006,6 +1007,7 @@ sunScene.onSceneChange(() => {
   }
 })
 sunScene.onFloorClick((at) => {
+  if (walking && view !== '3d') return // in Panels and Garden a click while walking picks for that view
   if (!at) return closeProbe()
   probePoint = at
   sunScene.setProbe(at)
@@ -1021,6 +1023,9 @@ sunScene.onFloorClick((at) => {
   else if (outcome === 'close') closeProbe()
 })
 let walking = false
+/** The camera of the scene views (Top, Outside, Inside), kept across tabs for the session. */
+let camera: CameraMode = 'outside'
+const inScene = (v: View): boolean => v === '3d' || v === 'panels' || v === 'garden' // one scene and one camera for all three
 /** Esc: a first press closes an open popover, and while walking the next one leaves walk mode. */
 function escape() {
   const action = escapeAction({ walking, popoverOpen: popover.open })
@@ -1046,6 +1051,8 @@ if (import.meta.env.DEV) {
 sunScene.setWalkHandlers({
   change(isWalking) {
     walking = isWalking
+    camera = cameraAfterWalk(camera, isWalking, inScene(view))
+    ui.setCamera(shownCamera(view, camera))
     if (isWalking) heightRuler.hide()
     if (isWalking) ui.setSuitability(false) // the map belongs to the outside view
     hud.show(isWalking)
@@ -1257,9 +1264,37 @@ async function openExample(over?: Plan, shared?: { date: string; minutes: number
 }
 
 function walkInside() {
-  setView('3d')
-  sunScene.startWalk()
+  chooseCamera('inside')
 }
+
+/** Puts the scene camera in the chosen mode; `asked` is the user's own pick (Inside then gets the whole floor when there is no plan). */
+function applyCamera(asked = false) {
+  if (camera === 'inside' && !plan && asked) ensurePlan(true)
+  if (camera === 'inside' && !walking && !sunScene.startWalk()) camera = 'outside'
+  if (camera !== 'inside') {
+    sunScene.stopWalk()
+    sunScene.setTopView(camera === 'top', frameTargetFor(view))
+  }
+  ui.setCamera(shownCamera(view, camera))
+}
+
+function chooseCamera(mode: CameraMode) {
+  const next = pickCamera(view, mode)
+  camera = next.mode
+  if (next.view !== view) setView(next.view, true)
+  else if (inScene(view)) applyCamera(true)
+  else ui.setCamera(shownCamera(view, camera))
+}
+ui.onCamera(chooseCamera)
+// 1, 2 and 3 pick Top, Outside and Inside wherever the switcher shows (not while typing).
+window.addEventListener('keydown', (e) => {
+  const target = e.target as HTMLElement | null
+  if (view === 'map' || target?.closest('input, textarea, select, [contenteditable="true"]')) return
+  const mode = cameraForKey(e)
+  if (!mode) return
+  e.preventDefault()
+  chooseCamera(mode)
+})
 
 /** The Panels and Garden views need a plan (panels to hold, a floor to stand on): the whole floor, as when the editor opens first. */
 function ensurePlan(keepView = false): boolean {
@@ -1271,17 +1306,12 @@ function ensurePlan(keepView = false): boolean {
 /** What each scene view frames: the apartment (3D), the whole building (Panels), the apartment and the ground round it (Garden). */
 const frameTargetFor = (v: View): FrameTarget => (v === 'panels' ? 'building' : v === 'garden' ? 'garden' : 'apartment')
 
-function setView(next: View) {
+/** `askedCamera`: the switcher sent the user here, so its camera is the user's own pick (see applyCamera). */
+function setView(next: View, askedCamera = false) {
   const from = view
   if (next === 'plan' && !openEditor()) return
   if (next === 'panels' && !ensurePlan()) return
   if (next === 'garden' && !ensurePlan(true)) return // the camera stays where it is
-  // Walking belongs to the 3D view: Panels and Garden pick and place from outside, so leaving the 3D tab ends the walk
-  // (the camera goes back to the orbit view, then is framed for the tab).
-  if (walking && next !== '3d') {
-    sunScene.stopWalk()
-    if (next === 'garden' || next === 'panels') chip.done(t('shell.leftWalk', { tab: t(next === 'garden' ? 'shell.tabGarden' : 'shell.tabPanels') }))
-  }
   if (view === 'garden' && next !== 'garden') {
     clearGardenSpot()
     clearFind()
@@ -1290,7 +1320,7 @@ function setView(next: View) {
   heightPopover.hide()
   hoverTip.hide()
   heightRuler.hide()
-  const scene3d = next === '3d' || next === 'panels' || next === 'garden' // one scene and one camera for all three
+  const scene3d = inScene(next)
   sunScene.setGardenPicking(next === 'garden')
   sunScene.setWalkOnDoubleClick(next === '3d')
   app.hidden = !scene3d
@@ -1301,6 +1331,9 @@ function setView(next: View) {
   // Opening a scene view shows its answer, unless the user has orbited since the camera was framed: the apartment
   // in 3D and Garden, the whole building in Panels (its map covers the facades and the roof).
   if (scene3d && from !== next) sunScene.frameOnEntry(frameTargetFor(next))
+  // The camera picked on the switcher holds in every scene view: a walk goes on from 3D into Garden, Top stays Top.
+  if (scene3d) applyCamera(askedCamera)
+  else ui.setCamera(shownCamera(next, camera))
   // The map belongs to the Panels view: it goes off when leaving and comes back (recomputed if the scene changed) on return.
   if (next !== 'panels') {
     suitLeaving = true

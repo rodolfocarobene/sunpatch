@@ -272,9 +272,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #building strong { overflow-wrap: anywhere; }
 #building .buildLine { color: var(--muted); font-variant-numeric: tabular-nums; }
 #panel:not([data-view='map']) #building .mapOnly { display: none; }
-/* Walking, the panel keeps the tabs and the two floor switches with the sun map legend, nothing else. */
-#panel.walking > :not(#views, #panelTop, #lofiBar, section[data-views~='3d']) { display: none; }
-#panel.walking section[data-views~='3d'] > :not(#aptTools) { display: none; }
+/* Walking in 3D, the panel keeps the tabs, the camera switch and the two floor switches with the sun map legend, nothing else.
+   Panels and Garden keep their whole panel: the walk picks for them. */
+#panel.walking[data-view='3d'] > :not(#views, #camera, #panelTop, #lofiBar, section[data-views~='3d']) { display: none; }
+#panel.walking[data-view='3d'] section[data-views~='3d'] > :not(#aptTools) { display: none; }
 #panel.walking #walk, #panel.walking .legendMore { display: none; }
 #panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
 #panel.walking .walkKey { display: inline-block; }
@@ -295,6 +296,13 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #views button.active, #panel #views button.active:hover {
   background: var(--text); border-color: var(--text); color: var(--surface); box-shadow: inset 0 -3px 0 var(--accent);
 }
+/* The camera switch under the tabs: Top, Outside, Inside, one pressed. Outlined, so it does not read as a second row of tabs. */
+#camera { display: flex; flex: none; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
+#panel #camera button { flex: 1; padding: 4px 6px; font-size: var(--text-sm); font-weight: 600; color: var(--muted); background: var(--surface); border: 0; border-radius: 0; }
+#panel #camera button + button { border-left: 1px solid var(--line); }
+#panel #camera button:focus-visible { outline-offset: -3px; }
+#panel #camera button:hover:not(:disabled) { background: var(--bg-band); border-color: var(--line); color: var(--text); }
+#panel #camera button[aria-pressed='true'], #panel #camera button[aria-pressed='true']:hover { background: var(--text); color: var(--surface); }
 
 #search { display: flex; flex-wrap: wrap; gap: 6px; }
 #search input { flex: 1; min-width: 0; }
@@ -438,6 +446,22 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #walkHud .walkExit { padding: 1px 8px; }
 #walkHud .walkExit kbd { margin: 0 0 0 4px; }
 #walkHud :focus-visible { outline-color: var(--accent); }
+/* Walk arrows for touch screens (a phone has no WASD): at the right edge, clear of the compass, the sun bar and the sheet.
+   Hidden with a mouse. The key hints go too, the exit button stays. */
+#walkPad { display: none; }
+@media (pointer: coarse) and (not (any-pointer: fine)) {
+  #walkHud .walkHelp > span { display: none; }
+  #walkPad:not([hidden]) {
+    position: fixed; right: 12px; top: 30%; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+}
+#walkPad button {
+  display: grid; place-items: center; width: 52px; height: 52px; padding: 0; cursor: pointer; -webkit-touch-callout: none;
+  color: var(--surface); background: var(--text); border: 0; border-radius: var(--radius-box); box-shadow: var(--shadow); opacity: 0.88;
+}
+#walkPad button:active { background: var(--accent-strong); opacity: 1; }
+#walkPad svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* The map's "Use this building" popup, in the same box as the rest of the chrome. */
 .maplibregl-popup-content {
   padding: var(--box-pad); font: inherit; font-size: var(--text-sm); color: var(--text);
@@ -711,9 +735,10 @@ input::placeholder { color: var(--muted); opacity: 1; }
   #sheetGrip[aria-expanded='true'] .gripLabel::after { transform: translateY(-3px) rotate(225deg); }
   #sheetGrip .gripBar { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
   #panel #sheetGrip:hover .gripBar { background: var(--accent-strong); }
-  #panel #views { order: -1; flex: none; }
+  #panel #views, #panel #camera { order: -1; flex: none; }
   #panel #views button { min-height: 40px; }
-  #panel[data-sheet='closed'] > :not(#sheetGrip, #views, section), #panel[data-sheet='closed'] > section > :not(#sunHeadline, #cardSlot, #gardenSlot),
+  #panel #camera button { min-height: 36px; }
+  #panel[data-sheet='closed'] > :not(#sheetGrip, #views, #camera, section), #panel[data-sheet='closed'] > section > :not(#sunHeadline, #cardSlot, #gardenSlot),
   #panel[data-sheet='closed'] > section:not(:has(> :is(#sunHeadline, #cardSlot, #gardenSlot):not([hidden]):not(:empty))) { display: none; }
   #panel input[type='checkbox'] { width: 20px; height: 20px; }
   #panel label.row { min-height: 32px; }
@@ -752,7 +777,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: var(--sheet-h, 0px); }
 }
 @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
-  #panel[data-sheet] > :not(#sheetGrip, #views) { animation: sheetIn 160ms ease-out; }
+  #panel[data-sheet] > :not(#sheetGrip, #views, #camera) { animation: sheetIn 160ms ease-out; }
   @keyframes sheetIn { from { opacity: 0; } }
 }
 /* A phone has no keyboard for WASD: the Walk button is for devices with a mouse or trackpad. */

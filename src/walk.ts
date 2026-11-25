@@ -2,7 +2,7 @@ import type { PerspectiveCamera } from 'three'
 import type { Point } from './osm'
 import type { Plan } from './plan'
 import type { SunDirection } from './sun'
-import { bandMarker, headingDeg, movePosition, relativeBearing } from './walk-geom'
+import { bandMarker, headingDeg, movePosition, relativeBearing, resolvePosition } from './walk-geom'
 import { t, type Key } from './i18n'
 
 export const EYE_HEIGHT = 1.6
@@ -31,6 +31,10 @@ export interface WalkControls {
   /** Stands at `at` (scene x, z) on a floor whose surface is at height `floorY`, looking along `yaw`. */
   start(plan: Plan, floorY: number, at: Point, yaw: number): void
   stop(): void
+  /** Stands at `at` (scene x, z), pushed clear of the walls, keeping the look direction: the double-click on the floor. */
+  goTo(at: Point): void
+  /** Holds or releases a step as if its key were held: the on-screen arrows of a touch screen. */
+  hold(move: 'forward' | 'back', on: boolean): void
   /** Applies held keys for `dt` seconds. */
   update(dt: number): void
 }
@@ -47,7 +51,9 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
   let pos: Point = { x: 0, z: 0 }
   let yaw = 0
   let pitch = 0
-  let dragging = false
+  // The pointer that looks around and where it was: one finger or the mouse, tracked by position because a touch has no movementX.
+  let dragId: number | undefined
+  let dragAt = { x: 0, y: 0 }
   let shiftHeld = false
   const held = new Set<string>()
 
@@ -85,19 +91,23 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) return
-    dragging = true
+    if (e.button !== 0 || dragId !== undefined) return
+    dragId = e.pointerId
+    dragAt = { x: e.clientX, y: e.clientY }
     dom.setPointerCapture?.(e.pointerId)
     // Leaves a focused panel input so the keys reach the walk controls.
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }
   function onPointerMove(e: PointerEvent) {
-    if (!dragging) return
-    yaw -= e.movementX * LOOK_SENSITIVITY
-    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - e.movementY * LOOK_SENSITIVITY))
+    if (e.pointerId !== dragId) return
+    yaw -= (e.clientX - dragAt.x) * LOOK_SENSITIVITY
+    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - (e.clientY - dragAt.y) * LOOK_SENSITIVITY))
+    dragAt = { x: e.clientX, y: e.clientY }
     place()
   }
-  const onPointerUp = () => { dragging = false }
+  const onPointerUp = (e: PointerEvent) => {
+    if (e.pointerId === dragId) dragId = undefined
+  }
 
   return {
     get active() {
@@ -125,7 +135,7 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
     },
     stop() {
       active = false
-      dragging = false
+      dragId = undefined
       held.clear()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
@@ -134,6 +144,14 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
       dom.removeEventListener('pointermove', onPointerMove)
       dom.removeEventListener('pointerup', onPointerUp)
       dom.removeEventListener('pointercancel', onPointerUp)
+    },
+    goTo(at) {
+      if (active) pos = resolvePosition(plan, at) ?? pos
+    },
+    hold(move, on) {
+      if (!active) return
+      if (on) held.add(move)
+      else held.delete(move)
     },
     update(dt) {
       if (!active) return
@@ -163,6 +181,8 @@ export interface WalkHud {
 
 export interface WalkHudHandlers {
   exit(): void
+  /** The on-screen arrows (touch screens only, style.css): a step held while the finger is down. */
+  hold(move: 'forward' | 'back', on: boolean): void
 }
 
 const BAND_WIDTH = 320
@@ -174,6 +194,8 @@ const SUN_ICON =
   '<svg class="sunMark" viewBox="-10 -10 20 20" width="20" height="20" aria-hidden="true"><circle r="4.5"/>' +
   [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-6.5" y2="-9" transform="rotate(${a})"/>`).join('') +
   '</svg>'
+const PAD_ARROW = (up: boolean) =>
+  `<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path d="${up ? 'M3 10.5 8 5l5 5.5' : 'M3 5.5 8 11l5-5.5'}"/></svg>`
 const CHEVRON = (side: 'left' | 'right') =>
   `<svg class="edgeArrow" data-side="${side}" viewBox="0 0 8 12" width="8" height="12" aria-hidden="true"><path d="${side === 'left' ? 'M6.5 1 1.5 6l5 5' : 'M1.5 1l5 5-5 5'}"/></svg>`
 
@@ -217,6 +239,25 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
     </div>
     <div class="compassCaption"></div>`
   container.appendChild(compass)
+  // A touch screen has no keys to walk with: two arrows, held to step forward or back (dragging looks around).
+  const pad = document.createElement('div')
+  pad.id = 'walkPad'
+  pad.hidden = true
+  pad.setAttribute('role', 'group')
+  pad.setAttribute('aria-label', t('walk.pad'))
+  pad.innerHTML = `
+    <button type="button" data-move="forward" aria-label="${t('walk.forward')}">${PAD_ARROW(true)}</button>
+    <button type="button" data-move="back" aria-label="${t('walk.back')}">${PAD_ARROW(false)}</button>`
+  for (const button of pad.querySelectorAll<HTMLButtonElement>('button')) {
+    const move = button.dataset.move as 'forward' | 'back'
+    button.addEventListener('pointerdown', (e) => {
+      button.setPointerCapture?.(e.pointerId)
+      handlers.hold(move, true)
+    })
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) button.addEventListener(type, () => handlers.hold(move, false))
+    button.addEventListener('contextmenu', (e) => e.preventDefault()) // a long press is a step, not a menu
+  }
+  container.appendChild(pad)
   const compassStrip = compass.querySelector<HTMLElement>('.compassStrip')!
   const sunMark = compass.querySelector<SVGElement>('.sunMark')!
   const caption = compass.querySelector('.compassCaption')!
@@ -248,6 +289,7 @@ export function createWalkHud(container: HTMLElement, dock: HTMLElement, handler
     show(on) {
       hud.hidden = !on
       compass.hidden = !on
+      pad.hidden = !on
       if (on) drawn = ''
     },
     setSun(sun) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitDistance, freeAspect, gardenRadius, GARDEN_MARGIN, inFreeArea, metresPerPixel } from './frame'
+import { fitDistance, freeAspect, gardenRadius, GARDEN_MARGIN, inFreeArea, metresPerPixel, TOP_TILT, topFrame } from './frame'
 
 describe('fitDistance', () => {
   it('makes the circle cover the fill share of the smaller side', () => {
@@ -49,5 +49,25 @@ describe('inFreeArea', () => {
     expect(inFreeArea(200, 450, 1440, 900, 330)).toBe(false)
     expect(inFreeArea(800, 890, 1440, 900, 330)).toBe(false)
     expect(inFreeArea(-5, 450, 1440, 900, 330)).toBe(false)
+  })
+})
+
+describe('topFrame', () => {
+  it('stands straight above the centre, a hair to the south so north stays up', () => {
+    const { position, target } = topFrame({ x: 3, y: 10, z: -4 }, 8, 30, 1200, 800, 0)
+    expect(target).toEqual({ x: 3, y: 10, z: -4 })
+    expect(position.x).toBe(3)
+    expect(position.y - 10).toBeCloseTo(fitDistance(8, 30, 1.5), 9)
+    expect(position.z - target.z).toBeCloseTo((position.y - 10) * TOP_TILT, 9)
+    expect(position.z).toBeGreaterThan(target.z)
+  })
+
+  it('slides west by half the panel so the centre sits in the free area', () => {
+    const free = topFrame({ x: 0, y: 0, z: 0 }, 8, 30, 1440, 900, 0)
+    const panel = topFrame({ x: 0, y: 0, z: 0 }, 8, 30, 1440, 900, 340)
+    const dist = panel.position.y
+    expect(panel.target.x).toBeCloseTo(-170 * metresPerPixel(dist, 30, 900), 9)
+    expect(panel.position.x).toBe(panel.target.x)
+    expect(free.target.x).toBe(0)
   })
 })
