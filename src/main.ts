@@ -31,7 +31,7 @@ import { createHeightPopover, createHoverTip } from './height-popover'
 import { createHeightRuler, cycleOrder, hoverNoteKind, nextInCycle } from './height-ruler'
 import { hoverLines } from './building-line'
 import { onLofiChange } from './lofi-ui'
-import { createScene, type FrameTarget } from './scene'
+import { createScene, type FrameTarget, type SurfacePoint } from './scene'
 import { tileBuildings } from './tiles'
 import { parseGreen, scatterTrees, TREE_RADIUS_M } from './trees'
 import { dateValue, minutesOfDay } from './daylight'
@@ -75,6 +75,7 @@ import { facadeWalls } from './apartment'
 import { bandOf, daylightColor, summarize } from './dayfactor'
 import { glassTriangles } from './dayfactor-trace'
 import { createDaylightJob, type DaylightResult } from './dayfactor-job'
+import { createSurfaceJob } from './surface-job'
 import { bandWord } from './ui'
 import { touchOnly } from './touch'
 import { cameraAfterWalk, cameraForKey, pickCamera, shownCamera, type CameraMode } from './camera-mode'
@@ -98,6 +99,8 @@ const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk(), hold:
 const sunJob = createSunMapJob()
 const popover = createSunMapPopover(app, closeProbe)
 const daylightJob = createDaylightJob()
+// "Sun here" and "Indirect light here" on a wall, a sill or a reveal: that one point, in a worker of its own.
+const surfaceJob = createSurfaceJob()
 // "Through the year" under the headline: worked out (in a worker of its own) only while its disclosure is open.
 const yearJob = createYearJob()
 const yearCard = createYearCard(document.getElementById('yearSlot')!)
@@ -155,6 +158,8 @@ let tracedCell = CELL
 /** Where the user clicked, kept so the popover can be redone when the result changes. */
 let plan: Plan | undefined // declared early: the sun callback below can fire before the building is picked
 let probePoint: Point | undefined
+/** A wall, sill or reveal point asked about instead (`room` is the floor beside it), and which light: the floor layers stay as they are. */
+let surfaceProbe: { at: SurfacePoint; room: Point; daylight: boolean; shown?: 'working' | 'answer' } | undefined
 /** The date, strip and place the sun was last computed for; the sun map follows them. */
 let sunDay: { when: Date; strip: string; lat: number; lon: number } | undefined
 let sunKey = ''
@@ -897,6 +902,7 @@ sceneCanvas.addEventListener('click', (e) => {
 
 function closeProbe() {
   probePoint = undefined
+  dropSurfaceProbe()
   popover.hide()
   sunScene.setProbe(null)
 }
@@ -915,7 +921,7 @@ sunJob.onState((state) => {
     ui.setHeadline({ kind: 'working' })
     if (sunMapOn) {
       sunScene.setSunMap(null)
-      if (popover.open) closeProbe()
+      if (popover.open && !surfaceProbe) closeProbe()
       ui.setSunMapStatus({ kind: 'computing', progress: state.progress })
     }
   } else if (state.status === 'ready') {
@@ -952,12 +958,57 @@ function showDaylightProbe() {
   popover.showText(t('sun.dayHeadSpot', { df: fmt1Fixed(df) }), t('sun.daySpotDetail', { band: upFirst(bandWord(bandOf(df))) }), t('sun.dayAria'))
 }
 
+function dropSurfaceProbe() {
+  if (!surfaceProbe) return
+  surfaceProbe = undefined
+  surfaceJob.stop()
+}
+
+/** The asked wall point's light: its sun on the shown day, or its daylight estimate. */
+function requestSurface() {
+  if (!surfaceProbe || !site || !plan || !sunDay) return
+  const { selected } = site
+  const p = plan
+  const { at, room, daylight } = surfaceProbe
+  surfaceJob.request({
+    sceneVersion: sunScene.sceneVersion(),
+    plan: p,
+    floorY: floorBase(selected, p),
+    point: at,
+    normal: at.normal,
+    room,
+    ask: daylight ? { kind: 'daylight' } : { kind: 'sun', day: sunDay.when, lat: sunDay.lat, lon: sunDay.lon },
+    occluders: () => sunScene.occluders(),
+    glass: () => glassTriangles(facadeWalls(p, selected).glass),
+  })
+}
+
+surfaceJob.onState((state) => {
+  const probe = surfaceProbe
+  if (!probe || !sunDay || state.status === 'idle') return
+  const aria = t(probe.daylight ? 'sun.dayAria' : 'sun.spotAria')
+  if (state.status === 'running') {
+    if (probe.shown === 'working') return // progress: the box already says so
+    probe.shown = 'working'
+    popover.showText(t('sun.surfaceWorking'), t(probe.daylight ? 'sun.surfaceWorkingDay' : 'sun.surfaceWorkingSun'), aria)
+  } else if (state.status === 'error') {
+    probe.shown = 'answer'
+    popover.showText(t('sun.surfaceError'), state.message, aria)
+  } else {
+    probe.shown = 'answer'
+    const { answer } = state
+    if (answer.kind === 'sun') popover.show(answer.stats, sunDay.strip, minutesOfDay(sunDay.when))
+    else popover.showText(t('sun.dayHeadSpot', { df: fmt1Fixed(answer.df) }), t('sun.daySurfaceDetail', { band: upFirst(bandWord(bandOf(answer.df))) }), aria)
+  }
+  // The box waits, hidden, for the mark's place on screen: marking the point again reports it.
+  sunScene.setProbe(probe.at)
+})
 daylightJob.onState((state) => {
   if (!daylightOn) return
   if (state.status === 'running') {
     daylightResult = undefined
     sunScene.setSunMap(null)
-    if (popover.open) closeProbe()
+    if (popover.open && !surfaceProbe) closeProbe()
     ui.setDaylightStatus({ kind: 'computing', progress: state.progress })
   } else if (state.status === 'ready') {
     daylightResult = state.result
@@ -1037,6 +1088,7 @@ sunScene.onFloorClick((at) => {
 })
 /** Marks a floor point and answers it: with the daylight estimate when that layer is on, else with the sun map. */
 function probeAt(at: Point) {
+  dropSurfaceProbe()
   probePoint = at
   sunScene.setProbe(at)
   if (daylightOn) {
@@ -1113,6 +1165,7 @@ ui.onChange((when, sun, strip, place) => {
     sunKey = key
     scheduleSunMap()
     requestShade()
+    if (surfaceProbe && !surfaceProbe.daylight) requestSurface()
   }
 })
 // A language switch reloads the page: the building, tab and time come back from the session it saved (src/session.ts).
@@ -1191,9 +1244,9 @@ sunScene.onSceneMenu((hit, at) => {
       case 'remove':
         return { label: t('menu.remove'), run: () => editFurniture((list) => list.filter((f) => f !== piece), (list) => [...list, piece!], t('menu.removed', { name: upFirst(furnitureName(piece!)) })) }
       case 'sun':
-        return { label: t('menu.sun'), run: () => lightHere(floor!, false) }
+        return { label: t('menu.sun'), run: () => lightHere(floor!, false, hit.inner) }
       case 'daylight':
-        return { label: t('menu.daylight'), run: () => lightHere(floor!, true) }
+        return { label: t('menu.daylight'), run: () => lightHere(floor!, true, hit.inner) }
       case 'plants':
         return { label: t('menu.plants'), run: () => (hung ? mountHere(hung) : plantsHere(spot!)) }
       case 'addPlant': {
@@ -1234,8 +1287,17 @@ sunScene.onSceneMenu((hit, at) => {
   if (groups.length === 1 && groups[0].length === 1 && groups[0][0] === 'height') return entry('height').run?.()
   sceneMenu.open(groups.map((g) => g.map(entry)), at)
 })
-/** "Sun here" and "Indirect light here": the 3D view's probe at a floor point, with the layer it needs. */
-function lightHere(at: Point, daylight: boolean) {
+/**
+ * "Sun here" and "Indirect light here": the 3D view's probe at a floor point, with the layer it needs. On a wall, a sill
+ * or a reveal (`surface`) the point itself is answered where the user is: no other view, camera or floor layer.
+ */
+function lightHere(at: Point, daylight: boolean, surface?: SurfacePoint) {
+  if (surface) {
+    closeProbe()
+    surfaceProbe = { at: surface, room: at, daylight }
+    sunScene.setProbe(surface)
+    return requestSurface()
+  }
   if (view !== '3d') setView('3d')
   if (daylight !== daylightOn) ui.setDaylight(daylight)
   probeAt(at)
