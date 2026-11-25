@@ -107,11 +107,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panelTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 #panel #about { font-size: var(--text-sm); color: var(--muted); text-decoration: none; }
 #panel #about:hover { color: var(--accent-strong); text-decoration: underline; }
-#panel .panelTools { display: inline-flex; align-items: center; gap: 4px; }
-/* Lofi mode: a text toggle in the header and a slim player row under it. The look of the mode itself hangs on html[data-lofi='on']. */
-#panel .lofiToggle { min-height: 28px; padding: 4px 8px; background: transparent; border-color: transparent; color: var(--muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.03em; }
-#panel .lofiToggle[aria-pressed='true'] { color: var(--accent-strong); background: var(--bg-band); border-color: var(--line); }
-#panel .lofiToggle:hover:not(:disabled), #panel .lofiToggle:active:not(:disabled) { background: var(--bg-band); border-color: transparent; color: var(--accent-strong); }
+#panel .panelTools { display: inline-flex; align-items: center; gap: 10px; }
+/* Lofi mode: an outlined switch with a note in the header, set apart from the language switch, and a slim player row under it.
+   The look of the mode itself hangs on html[data-lofi='on']. */
+#panel .lofiToggle { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 10px; background: transparent; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+#panel .lofiToggle[aria-pressed='true'] { color: var(--accent-strong); background: var(--bg-band); border-color: var(--accent-strong); }
+#panel .lofiToggle:hover:not(:disabled), #panel .lofiToggle:active:not(:disabled) { background: var(--bg-band); color: var(--accent-strong); }
 #lofiBar { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; background: var(--bg-band); border: 1px solid var(--line); border-radius: var(--radius-control); }
 #lofiBar .lofiRow { display: flex; align-items: center; gap: 8px; }
 #panel #lofiBar button { flex: none; min-height: 28px; padding: 3px 10px; font-size: var(--text-xs); }
@@ -119,7 +120,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #panel #lofiBar .lofiNext { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; padding: 3px 8px; }
 #lofiBar input[type='range'] { flex: 1; min-width: 0; margin: 0; }
 #lofiBar .lofiTune { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
-#panel .langSwitch { display: inline-flex; align-items: center; gap: 1px; font-size: var(--text-xs); color: var(--disabled); }
+#panel .langSwitch { display: inline-flex; align-items: center; gap: 1px; padding-left: 6px; border-left: 1px solid var(--line); font-size: var(--text-xs); color: var(--disabled); }
 #panel .langSwitch button { min-width: 32px; min-height: 28px; padding: 4px 8px; background: transparent; border-color: transparent; color: var(--muted); font: inherit; font-weight: 600; letter-spacing: 0.03em; }
 #panel .langSwitch button[aria-pressed='true'] { color: var(--text); cursor: default; }
 #panel .langSwitch button:hover:not(:disabled), #panel .langSwitch button:active:not(:disabled) { background: transparent; border-color: transparent; color: var(--accent-strong); }
@@ -297,7 +298,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
    Panels and Garden keep their whole panel: the walk picks for them. */
 #panel.walking[data-view='3d'] > :not(#views, #camera, #panelTop, #lofiBar, section[data-views~='3d']) { display: none; }
 #panel.walking[data-view='3d'] section[data-views~='3d'] > :not(#aptTools) { display: none; }
-#panel.walking #walk, #panel.walking .legendMore { display: none; }
+#panel.walking .legendMore { display: none; }
 #panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
 #panel.walking .walkKey { display: inline-block; }
 #tips summary { cursor: pointer; color: var(--muted); }
@@ -800,10 +801,6 @@ input::placeholder { color: var(--muted); opacity: 1; }
 @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
   #panel[data-sheet] > :not(#sheetGrip, #views, #camera) { animation: sheetIn 160ms ease-out; }
   @keyframes sheetIn { from { opacity: 0; } }
-}
-/* A phone has no keyboard for WASD: the Walk button is for devices with a mouse or trackpad. */
-@media (pointer: coarse) and (not (any-pointer: fine)) {
-  #panel #walk { display: none; }
 }
 #suitPopover .spotMore { font-size: 12px; color: var(--muted); }
 #suitPopover .spotMore summary { cursor: pointer; }

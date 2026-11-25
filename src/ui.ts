@@ -159,7 +159,6 @@ export function createUI(
   onSun: (sun: SunDirection) => void,
   onView: (view: View) => void,
   onCutaway: (on: boolean) => void,
-  onWalk: () => void,
 ): UI {
   const now = new Date()
   const panel = document.createElement('div')
@@ -210,7 +209,6 @@ export function createUI(
       <div id="sunHeadline" hidden role="status"></div>
       <div id="yearSlot"></div>
       <div id="aptTools">
-        <button id="walk" class="primary" type="button" hidden title="${t('shell.walkTitle')}">${t('shell.walk')}</button>
         <div class="field">
           <h3 class="groupHead">${t('shell.show')}</h3>
           <div id="aptShow" hidden>
@@ -492,8 +490,6 @@ export function createUI(
     suit.checked = false
     applySuit()
   })
-  const walk = $<HTMLButtonElement>('walk')
-  walk.addEventListener('click', onWalk)
   const nextButton = $<HTMLButtonElement>('nextStep')
   nextButton.addEventListener('click', () => onView('plan'))
   $('emptyToPlan').addEventListener('click', () => onView('plan'))
@@ -745,8 +741,6 @@ export function createUI(
       $('planToThree').hidden = step !== 'see'
       nextButton.hidden = step === 'see'
       nextButton.textContent = step === 'outline' ? t('shell.nextOutline') : t('shell.nextWindows')
-      // Walking needs windows; before that the Next prompt leads, and double-clicking the floor still works.
-      walk.hidden = step !== 'see'
     },
     setExample(on) {
       exampleOn = on
@@ -915,7 +909,6 @@ export function createUI(
     gardenSection: $('gardenSection'),
     dock,
     setWalking(walking) {
-      walk.disabled = walking
       panel.classList.toggle('walking', walking)
     },
     setCamera(mode) {

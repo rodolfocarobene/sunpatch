@@ -975,8 +975,9 @@ export function createScene(container: HTMLElement): SunScene {
     gardenAt = null
   }
 
-  function populate() {
-    stopWalk()
+  /** Rebuilds the world; `keepWalk` goes on walking through it (an edit of the plan walked in), else the walk ends. */
+  function populate(keepWalk = false) {
+    if (!keepWalk) stopWalk()
     clearHover()
     removeSunMap()
     clearWorld()
@@ -1179,8 +1180,16 @@ export function createScene(container: HTMLElement): SunScene {
     const selected = selectedBuilding
     const accepted = next && selected && next.buildingId === selected.id ? next : null
     const first = accepted && !plan
+    // An edit of the plan being walked (furniture added from the menu, a pot placed) keeps the walker where they stand.
+    const keepWalk = walking && !!accepted && !!selected && accepted.floor === plan?.floor
     plan = accepted
-    populate()
+    populate(keepWalk)
+    if (keepWalk) {
+      walk.setPlan(accepted, floorBase(selected, accepted))
+      applyCutaway()
+      applyGlow()
+      applyOverlayOpacity()
+    }
     if (accepted && selected && first && !keepView) {
       cutaway = true
       applyCutaway()

@@ -39,7 +39,7 @@ describe('sceneMenuItems', () => {
   })
 
   it('traces the front of a window box or wall planter, but puts nothing there', () => {
-    expect(sceneMenuItems({ furniture: true, front: true }, out)).toEqual([['rotate', 'remove'], ['plants']])
+    expect(sceneMenuItems({ furniture: true, mounted: true, front: true }, out)).toEqual([['remove'], ['plants']])
   })
 
   it('is empty for the sky', () => {

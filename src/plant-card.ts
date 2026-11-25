@@ -42,8 +42,20 @@ export interface PlantCardInput {
   /** The plant at the picked spot, when one is picked and rated. */
   here?: PlantRow
   /** Offer a pot of this plant at the picked spot; `placed` when one already stands there. Left out when there is no spot or no plan to put it in. */
-  pot?: { placed: boolean }
+  pot?: { placed: boolean; kind?: PotKind }
 }
+
+/** What the pot button puts at the spot: a pot, or a window box or a wall planter when the spot is in front of a window or a wall. */
+export type PotKind = 'pot' | 'windowbox' | 'wallpot'
+
+const POT_LABEL: Record<PotKind, { put: Key; placed: Key }> = {
+  pot: { put: 'plant.putPot', placed: 'plant.potPlaced' },
+  windowbox: { put: 'plant.putWindowBox', placed: 'plant.windowBoxPlaced' },
+  wallpot: { put: 'plant.putWallPot', placed: 'plant.wallPotPlaced' },
+}
+
+/** The pot button's label key. */
+export const potButtonKey = (kind: PotKind = 'pot', placed: boolean): Key => POT_LABEL[kind][placed ? 'placed' : 'put']
 
 export interface PlantCard {
   el: HTMLElement
@@ -130,7 +142,7 @@ export function createPlantCard(options: { onClose: () => void; onPot: () => voi
     }
     if (input.pot) {
       const pot = el('div', 'plantPot')
-      const b = Object.assign(el('button', 'potBtn', t(input.pot.placed ? 'plant.potPlaced' : 'plant.putPot')), { type: 'button', disabled: input.pot.placed })
+      const b = Object.assign(el('button', 'potBtn', t(potButtonKey(input.pot.kind, input.pot.placed))), { type: 'button', disabled: input.pot.placed })
       b.addEventListener('click', options.onPot)
       pot.append(b)
       if (input.pot.placed) pot.append(Object.assign(el('p', 'plantQuiet', t('plant.potNote')), { role: 'status' }))

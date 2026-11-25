@@ -31,6 +31,8 @@ export interface WalkControls {
   /** Stands at `at` (scene x, z) on a floor whose surface is at height `floorY`, looking along `yaw`. */
   start(plan: Plan, floorY: number, at: Point, yaw: number): void
   stop(): void
+  /** Goes on walking in an edited plan (furniture placed, a window moved), where the walk is and looking the same way. */
+  setPlan(plan: Plan, floorY: number): void
   /** Stands at `at` (scene x, z), pushed clear of the walls, keeping the look direction: the double-click on the floor. */
   goTo(at: Point): void
   /** Holds or releases a step as if its key were held: the on-screen arrows of a touch screen. */
@@ -144,6 +146,12 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
       dom.removeEventListener('pointermove', onPointerMove)
       dom.removeEventListener('pointerup', onPointerUp)
       dom.removeEventListener('pointercancel', onPointerUp)
+    },
+    setPlan(p, y) {
+      if (!active) return
+      plan = p
+      floorY = y
+      place()
     },
     goTo(at) {
       if (active) pos = resolvePosition(plan, at) ?? pos

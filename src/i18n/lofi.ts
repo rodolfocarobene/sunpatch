@@ -3,7 +3,7 @@ import { defineStrings } from './define'
 /** Lofi mode: the toggle in the panel header and the mini-player. */
 export const lofi = defineStrings({
   en: {
-    'lofi.toggle': 'Lofi',
+    'lofi.toggle': 'Lofi mode',
     'lofi.toggleTitle': 'Lofi mode: generated music, made live in your browser',
     'lofi.player': 'Lofi player',
     'lofi.play': 'Play',
@@ -15,7 +15,7 @@ export const lofi = defineStrings({
     'lofi.tune': '{key} major · {bpm} bpm',
   },
   it: {
-    'lofi.toggle': 'Lofi',
+    'lofi.toggle': 'Modalità lofi',
     'lofi.toggleTitle': 'Modalità lofi: musica generata dal vivo nel browser',
     'lofi.player': 'Lettore lofi',
     'lofi.play': 'Riproduci',

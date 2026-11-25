@@ -92,7 +92,7 @@ const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
 onLofiChange((on) => sunScene.setLofiPixelRatio(on))
-const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
+const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on))
 const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk(), hold: (move, on) => sunScene.holdWalk(move, on) })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
@@ -218,7 +218,8 @@ narrow.addEventListener('change', placePlantCard)
 function renderPlantCard() {
   const plant = plantCardId ? plantById(plantCardId) : undefined
   const result = plant && gardenSpot ? spotRanked?.find((r) => r.plant.id === plant.id) : undefined
-  const pot = plant && gardenSpot && plan ? { placed: hasPot(plan.furniture, spotPot(plant.id, gardenSpot)) } : undefined
+  const piece = plant && gardenSpot && plan ? spotPot(plant.id, gardenSpot) : undefined
+  const pot = piece && plan ? { placed: hasPot(plan.furniture, piece), kind: piece.kind === 'windowbox' || piece.kind === 'wallpot' ? piece.kind : ('pot' as const) } : undefined
   plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined, pot } : null)
 }
 
@@ -1053,10 +1054,13 @@ let walking = false
 /** The camera of the scene views (Top, Outside, Inside), kept across tabs for the session. */
 let camera: CameraMode = 'outside'
 const inScene = (v: View): boolean => v === '3d' || v === 'panels' || v === 'garden' // one scene and one camera for all three
-/** Esc: a first press closes an open popover, and while walking the next one leaves walk mode. */
+/** Esc: a first press closes the Garden's plant card, then its spot card, then an open popover; while walking the next one leaves walk mode. */
 function escape() {
-  const action = escapeAction({ walking, popoverOpen: popover.open })
-  if (action === 'close-popover') closeProbe()
+  const action = escapeAction({ walking, popoverOpen: popover.open, cardOpen: view === 'garden' && (!!plantCardId || !!gardenSpot) })
+  if (action === 'close-card') {
+    if (plantCardId) closePlantCard()
+    else clearGardenSpot()
+  } else if (action === 'close-popover') closeProbe()
   else if (action === 'exit-walk') sunScene.stopWalk()
 }
 window.addEventListener('keydown', (e) => {
@@ -1081,7 +1085,12 @@ sunScene.setWalkHandlers({
     camera = cameraAfterWalk(camera, isWalking, inScene(view))
     ui.setCamera(shownCamera(view, camera))
     if (isWalking) heightRuler.hide()
-    if (isWalking) ui.setSuitability(false) // the map belongs to the outside view
+    // The map belongs to the outside view: off for the walk, back after it if the user had it on.
+    if (isWalking) {
+      suitLeaving = true
+      ui.setSuitability(false)
+      suitLeaving = false
+    } else if (view === 'panels' && suitWish) ui.setSuitability(true)
     hud.show(isWalking)
     ui.setWalking(isWalking)
     closeProbe() // a spot marked in one view is not where the camera is in the other
@@ -1170,7 +1179,7 @@ sunScene.onSceneMenu((hit, at) => {
   const base = plan && site ? floorBase(site.selected, plan) : 0
   // A window seen from outside, a window box or a wall planter: "Plants for this spot" traces the point in front of it.
   const hung = piece && specOf(piece.kind).mounted ? piece : plan && hit.window?.outside ? windowBoxAt(plan, base, hit.window.index, '') : undefined
-  const target = { floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece, front: !!hung, window: !!hit.window, wall: !!hit.wall }
+  const target = { floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece, mounted: !!piece && !!specOf(piece.kind).mounted, front: !!hung, window: !!hit.window, wall: !!hit.wall }
   const groups = sceneMenuItems(target, { hasPlan: !!plan, walking })
   const entry = (item: SceneMenuItem): MenuEntry => {
     switch (item) {
@@ -1396,10 +1405,6 @@ async function openExample(over?: Plan, shared?: { date: string; minutes: number
     ui.setWhen(restored.date, restored.minutes)
     setView(restored.view)
   }
-}
-
-function walkInside() {
-  chooseCamera('inside')
 }
 
 /** Puts the scene camera in the chosen mode; `asked` is the user's own pick (Inside then gets the whole floor when there is no plan). */

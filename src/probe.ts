@@ -1,5 +1,9 @@
-/** What the Esc key does: a first press closes an open popover, the next one leaves walk mode. */
-export function escapeAction(state: { walking: boolean; popoverOpen: boolean }): 'close-popover' | 'exit-walk' | 'none' {
+/**
+ * What the Esc key does: a first press closes an open card (the Garden's plant or spot card), then an open popover, and
+ * only then does a press leave walk mode.
+ */
+export function escapeAction(state: { walking: boolean; popoverOpen: boolean; cardOpen?: boolean }): 'close-card' | 'close-popover' | 'exit-walk' | 'none' {
+  if (state.cardOpen) return 'close-card'
   if (state.popoverOpen) return 'close-popover'
   return state.walking ? 'exit-walk' : 'none'
 }

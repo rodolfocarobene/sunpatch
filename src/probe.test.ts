@@ -18,6 +18,14 @@ describe('escapeAction', () => {
     state.popoverOpen = false
     expect(escapeAction(state)).toBe('exit-walk')
   })
+  it('closes an open card before a popover and before leaving walk mode', () => {
+    const state = { walking: true, popoverOpen: true, cardOpen: true }
+    expect(escapeAction(state)).toBe('close-card')
+    state.cardOpen = false
+    expect(escapeAction(state)).toBe('close-popover')
+    state.popoverOpen = false
+    expect(escapeAction(state)).toBe('exit-walk')
+  })
 })
 
 describe('probeOutcome', () => {

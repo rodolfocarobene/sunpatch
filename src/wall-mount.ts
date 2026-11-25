@@ -6,8 +6,9 @@ import { FACADE_THICKNESS, SLAB_THICKNESS, type Plan } from './plan'
 import { insideOutline, wallsOf } from './walk-geom'
 
 // Window boxes and wall planters: pots hung on the facade under a window, or on a wall inside. They are plain furniture
-// placed once (x, z, rot and an absolute height y worked out here), so they stay where they were put when the window or
-// the wall is later moved or deleted, and are removed like any other piece.
+// placed once (x, z, rot and an absolute height y worked out here) and removed like any other piece. The Plan editor
+// moves a window box with its window and drops it with it (`followWindows`), and drops a planter with its wall
+// (`dropOrphanWallPots`); other edits (the outline, a moved wall) leave them where they were put.
 
 /** The trough's height: its top sits `MOUNT_GAP` under the sill. */
 export const TROUGH_HEIGHT = 0.2
@@ -21,6 +22,9 @@ export const WALL_POT_HEIGHT = { initial: 1.5, min: 0.3, belowCeiling: 1 }
 const SPOT_OUT = 0.35
 
 const floorTenth = (v: number): number => Math.floor(v * 10 + 1e-6) / 10
+
+/** How far a hung piece may be from where its window or wall would put it and still count as hung there (a share link rounds to 5 cm). */
+const MOUNT_TOL = 0.1
 
 /** Window `index` as built (moved in from the corners like the opening): its centre on the facade's outer face, the unit normal out of the building, and the span along the wall. */
 export function windowOpening(plan: Plan, index: number): { centre: Point; out: Point; along: Point; width: number; sill: number; height: number } | undefined {
@@ -134,4 +138,32 @@ export function outerSillAt(plan: Plan, base: number, at: Vec3): number | undefi
     return inward >= -0.01 && inward <= FACADE_THICKNESS / 2 && Math.abs(dx * o.along.x + dz * o.along.z) <= o.width / 2
   })
   return i < 0 ? undefined : i
+}
+
+/**
+ * The furniture after a window edit, for a plan whose floor is at `base`: a window box hung under window `i` of `before`
+ * (where `windowBoxAt` put it, within MOUNT_TOL) hangs under window `windowAfter(i)` of `after` again, and goes when that
+ * is undefined (the window was deleted). Other pieces are kept as they are.
+ */
+export function followWindows(before: Plan, after: Plan, base: number, windowAfter: (index: number) => number | undefined): Furniture[] | undefined {
+  return after.furniture?.flatMap((f) => {
+    if (f.kind !== 'windowbox') return [f]
+    const near = (b: Furniture | undefined): boolean => !!b && Math.hypot(b.x - f.x, b.z - f.z) <= MOUNT_TOL && Math.abs((b.y ?? 0) - (f.y ?? 0)) <= MOUNT_TOL
+    const i = before.windows.findIndex((_, index) => near(windowBoxAt(before, base, index, '')))
+    if (i < 0) return [f]
+    const j = windowAfter(i)
+    if (j === undefined) return []
+    return [windowBoxAt(after, base, j, f.plant ?? '') ?? f]
+  })
+}
+
+/** The furniture after a wall edit: a wall planter whose wall face was in `before` but is gone from `after` goes with it. */
+export function dropOrphanWallPots(before: Plan, after: Plan): Furniture[] | undefined {
+  return after.furniture?.filter((f) => {
+    if (f.kind !== 'wallpot') return true
+    const r = (f.rot * Math.PI) / 180
+    const off = specOf(f.kind).d / 2 + MOUNT_GAP
+    const face = { x: f.x + Math.sin(r) * off, z: f.z - Math.cos(r) * off }
+    return !wallFaceAt(before, face, f, MOUNT_TOL) || !!wallFaceAt(after, face, f, MOUNT_TOL)
+  })
 }
