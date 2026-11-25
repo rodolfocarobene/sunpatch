@@ -1054,10 +1054,13 @@ let walking = false
 /** The camera of the scene views (Top, Outside, Inside), kept across tabs for the session. */
 let camera: CameraMode = 'outside'
 const inScene = (v: View): boolean => v === '3d' || v === 'panels' || v === 'garden' // one scene and one camera for all three
-/** Esc: a first press closes an open popover, and while walking the next one leaves walk mode. */
+/** Esc: a first press closes the Garden's plant card, then its spot card, then an open popover; while walking the next one leaves walk mode. */
 function escape() {
-  const action = escapeAction({ walking, popoverOpen: popover.open })
-  if (action === 'close-popover') closeProbe()
+  const action = escapeAction({ walking, popoverOpen: popover.open, cardOpen: view === 'garden' && (!!plantCardId || !!gardenSpot) })
+  if (action === 'close-card') {
+    if (plantCardId) closePlantCard()
+    else clearGardenSpot()
+  } else if (action === 'close-popover') closeProbe()
   else if (action === 'exit-walk') sunScene.stopWalk()
 }
 window.addEventListener('keydown', (e) => {
