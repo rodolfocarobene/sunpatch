@@ -1085,7 +1085,12 @@ sunScene.setWalkHandlers({
     camera = cameraAfterWalk(camera, isWalking, inScene(view))
     ui.setCamera(shownCamera(view, camera))
     if (isWalking) heightRuler.hide()
-    if (isWalking) ui.setSuitability(false) // the map belongs to the outside view
+    // The map belongs to the outside view: off for the walk, back after it if the user had it on.
+    if (isWalking) {
+      suitLeaving = true
+      ui.setSuitability(false)
+      suitLeaving = false
+    } else if (view === 'panels' && suitWish) ui.setSuitability(true)
     hud.show(isWalking)
     ui.setWalking(isWalking)
     closeProbe() // a spot marked in one view is not where the camera is in the other
