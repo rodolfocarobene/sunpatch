@@ -3,8 +3,9 @@ import type { Panel } from './plan'
 import { shadePanel, type PanelShade, type YearSlots } from './panel-shade'
 import { traceMonthly } from './garden-trace'
 import { traceDaylight } from './dayfactor-trace'
-import { IrcRun, PatchField, patchCellFor, type IrcCalibration, type IrcInput } from './irc-gather'
-import { buildBvh, litSlots, traceSun } from './sunmap-trace'
+import { gatherFirstBounce, IRC_GATHER_RAYS, IrcRun, ircValue, PatchField, patchCellFor, surfaceDirect, type IrcCalibration, type IrcInput } from './irc-gather'
+import { buildBvh, litSlots, traceSun, traceSurfaceSun } from './sunmap-trace'
+import { hemisphereDirs } from './dayfactor'
 import { IRRADIATION_STRIDE, traceSamples } from './suitability'
 
 export type WorkerIn =
@@ -16,6 +17,8 @@ export type WorkerIn =
   | { kind: 'suit'; id: number; key: number; inputs: Float32Array; slots: YearSlots; step: number }
   | { kind: 'garden'; id: number; key: number; points: Float32Array; slots: YearSlots; step: number; day?: { points: Float32Array; floorY: number; samples: number; irc?: IrcInput } }
   | { kind: 'year'; id: number; key: number; points: Float32Array; floorY: number; dirs: Float32Array; counts: number[] }
+  /** One point of a surface (x, y, z, then its unit normal): the day's sun for `dirs`, or the daylight estimate (`irc` reports one point, the floor beside it, for its room). */
+  | { kind: 'surface'; id: number; key: number; point: Float32Array; dirs?: Float32Array; daylight?: { samples: number; irc?: IrcInput } }
 
 export type WorkerOut =
   | { kind: 'progress'; id: number; done: number }
@@ -25,6 +28,7 @@ export type WorkerOut =
   | { kind: 'gardened'; id: number; minutes: Float32Array; ms: number; bvhMs: number; direct?: Float32Array; irc?: Float32Array; ircRooms?: IrcCalibration[] }
   | { kind: 'yeared'; id: number; lit: number[]; ms: number; bvhMs: number }
   | { kind: 'daylit'; id: number; direct: Float32Array; ms: number; bvhMs: number; irc?: Float32Array; ircRooms?: IrcCalibration[]; ircMs?: number; ircPatches?: number }
+  | { kind: 'surfaced'; id: number; lit?: Uint8Array; df?: number; ircRooms?: IrcCalibration[]; ms: number }
   | { kind: 'error'; id: number; message: string }
 
 // The BVH is built once per scene and kept for every date (sun map) or panel (shading analysis) asked afterwards.
@@ -58,6 +62,7 @@ let suitId = -1
 let gardenId = -1
 let yearId = -1
 let daylightId = -1
+let surfaceId = -1
 /** Points per turn of the daylight estimate. */
 const DAYLIGHT_CHUNK = 40
 /** The year chart asks every 3rd 5-minute slot and the ones between only where the answer changes. */
@@ -99,6 +104,10 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     }
     if (m.kind === 'year') {
       year(m)
+      return
+    }
+    if (m.kind === 'surface') {
+      surface(m)
       return
     }
     if (m.kind === 'shade') {
@@ -257,6 +266,49 @@ function daylight(m: Extract<WorkerIn, { kind: 'daylight' }>) {
         { kind: 'daylit', id: m.id, direct: out, ms: performance.now() - started, bvhMs, irc: ircOut, ircRooms: irc?.rooms, ircMs: irc ? performance.now() - ircStart : undefined, ircPatches: ircField?.field.size },
         [out.buffer, ...(ircOut ? [ircOut.buffer] : [])],
       )
+    }
+  }
+  turn()
+}
+
+/**
+ * One surface point: its sun on the day at once, or its daylight (SC + ERC, then the gathered IRC, whose room means may
+ * need the whole floor traced first, in turns reporting progress). A newer 'surface' request stops it.
+ */
+function surface(m: Extract<WorkerIn, { kind: 'surface' }>) {
+  surfaceId = m.id
+  const started = performance.now()
+  const [x, y, z, nx, ny, nz] = m.point
+  const normal = { x: nx, y: ny, z: nz }
+  if (m.dirs) {
+    const lit = traceSurfaceSun(bvh!, { x, y, z }, normal, m.dirs)
+    return reply({ kind: 'surfaced', id: m.id, lit, ms: performance.now() - started }, [lit.buffer])
+  }
+  const day = m.daylight!
+  if (!glassBvh || glassKey !== m.key) throw new Error('scene changed')
+  const direct = surfaceDirect(bvh!, glassBvh, x, y, z, normal, hemisphereDirs(day.samples))
+  if (!day.irc) return reply({ kind: 'surfaced', id: m.id, df: direct, ms: performance.now() - started })
+  const input = day.irc
+  const irc = newIrcRun(m.key, input)
+  const turn = () => {
+    if (surfaceId !== m.id) return
+    try {
+      if (!bvh || bvhKey !== m.key || !glassBvh || glassKey !== m.key) throw new Error('scene changed')
+      if (!irc.done) {
+        irc.step(IRC_CHUNK)
+        reply({ kind: 'progress', id: m.id, done: irc.progress })
+        setTimeout(turn, 0)
+        return
+      }
+      finishIrc(m.key, input, irc)
+      // The room is the floor point's beside the surface; the surface's own first bounce leaves about its normal.
+      const room = input.room?.[0] ?? -1
+      const rooms = irc.rooms
+      const e1 = gatherFirstBounce(bvh, glassBvh, ircField!.field, x, y, z, hemisphereDirs(IRC_GATHER_RAYS), 0, normal)
+      const reflected = room >= 0 && room < rooms.length ? ircValue(e1, rooms[room]) : 0
+      reply({ kind: 'surfaced', id: m.id, df: direct + reflected, ircRooms: rooms, ms: performance.now() - started })
+    } catch (err) {
+      reply({ kind: 'error', id: m.id, message: (err as Error).message })
     }
   }
   turn()

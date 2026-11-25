@@ -96,15 +96,12 @@ export const ircValue = (e1: number, c: IrcCalibration): number => c.scale * (e1
 export class PatchField {
   private readonly cache = new Map<string, number>()
   private readonly dirs: Float32Array
-  private readonly ray = new Ray()
-  private readonly n = new Vector3()
-  private readonly t = new Vector3()
-  private readonly b = new Vector3()
+  private readonly scratch = surfaceScratch()
   constructor(
     private readonly occluders: MeshBVH,
     private readonly glass: MeshBVH,
     readonly cell: number,
-    private readonly rays = IRC_PATCH_RAYS,
+    rays = IRC_PATCH_RAYS,
     private readonly glazing = GLAZING,
   ) {
     this.dirs = hemisphereDirs(rays)
@@ -150,30 +147,81 @@ export class PatchField {
     return value
   }
 
-  /** The patch's direct light: cosine rays about its normal; one through a pane first is sky (CIE-weighted) when nothing is beyond, an obstruction (ERC) when something is. */
+  /** The patch's direct light (see `surfaceDirect`). */
   private measure(x: number, y: number, z: number, normal: Vector3): number {
-    const { n, t, b, ray, dirs, rays } = this
-    n.copy(normal)
-    // Any unit vector not parallel to the normal gives the sideways axes.
-    t.set(Math.abs(n.y) < 0.9 ? 0 : 1, Math.abs(n.y) < 0.9 ? 1 : 0, 0).cross(n).normalize()
-    b.copy(n).cross(t)
-    ray.origin.set(x + n.x * LIFT, y + n.y * LIFT, z + n.z * LIFT)
-    let sky = 0
-    let obstructed = 0
-    for (let i = 0; i < rays; i++) {
-      const dx = dirs[i * 3]
-      const dy = dirs[i * 3 + 1]
-      const dz = dirs[i * 3 + 2]
-      ray.direction.set(t.x * dx + n.x * dy + b.x * dz, t.y * dx + n.y * dy + b.y * dz, t.z * dx + n.z * dy + b.z * dz)
-      const pane = this.glass.raycastFirst(ray, DoubleSide)
-      if (!pane) continue
-      const hit = this.occluders.raycastFirst(ray, DoubleSide)
-      if (!hit) {
-        if (ray.direction.y > 0) sky += cieWeight(ray.direction.y) // below the horizon is the ground: no sky, no ERC
-      } else if (hit.distance > pane.distance) obstructed++
-    }
-    return 100 * this.glazing * (sky / rays + (EXTERNAL_REFLECTANCE * obstructed) / rays)
+    return surfaceDirect(this.occluders, this.glass, x, y, z, normal, this.dirs, this.glazing, this.scratch)
   }
+}
+
+/** The sideways axes `t` and `b` of the frame about the unit normal `n`, so that a hemisphere direction's y goes along `n`. */
+export function tangentFrame(n: Vector3, t: Vector3, b: Vector3): void {
+  // Any unit vector not parallel to the normal gives the sideways axes.
+  t.set(Math.abs(n.y) < 0.9 ? 0 : 1, Math.abs(n.y) < 0.9 ? 1 : 0, 0).cross(n).normalize()
+  b.copy(n).cross(t)
+}
+
+/** Sets `out` to direction `i` of `dirs` (an upper hemisphere, y up) turned into the frame `t`, `n`, `b`. */
+export function orientDir(out: Vector3, dirs: ArrayLike<number>, i: number, n: Vector3, t: Vector3, b: Vector3): Vector3 {
+  const dx = dirs[i * 3]
+  const dy = dirs[i * 3 + 1]
+  const dz = dirs[i * 3 + 2]
+  return out.set(t.x * dx + n.x * dy + b.x * dz, t.y * dx + n.y * dy + b.y * dz, t.z * dx + n.z * dy + b.z * dz)
+}
+
+/** What a ray from a surface meets: the sky through glass, an obstruction beyond the glass, or nothing that lights it (the room first, or no glass). */
+export type Seen = 'sky' | 'obstruction' | null
+
+const surfaceScratch = () => ({ n: new Vector3(), t: new Vector3(), b: new Vector3(), d: new Vector3(), ray: new Ray() })
+
+/**
+ * The direct daylight on a surface facing unit `normal` (SC + ERC, % of the outdoor horizontal illuminance), from the
+ * cosine-distributed rays `dirs` turned about the normal: `see` tells what each ray meets. Sky counts with its CIE weight,
+ * which holds for any tilt (an unobstructed horizontal plane averages 1, a vertical one 0.396), and only above the
+ * horizon: below it is the ground, no sky and no ERC. An obstruction counts as ERC whatever its height.
+ */
+export function surfaceDaylight(normal: Vector3, dirs: Float32Array, see: (dir: Vector3) => Seen, glazing = GLAZING, frame = surfaceScratch()): number {
+  const rays = dirs.length / 3
+  const { t, b, d } = frame
+  tangentFrame(normal, t, b)
+  let sky = 0
+  let obstructed = 0
+  for (let i = 0; i < rays; i++) {
+    orientDir(d, dirs, i, normal, t, b)
+    const seen = see(d)
+    if (seen === 'sky') {
+      if (d.y > 0) sky += cieWeight(d.y)
+    } else if (seen === 'obstruction') obstructed++
+  }
+  return 100 * glazing * (sky / rays + (EXTERNAL_REFLECTANCE * obstructed) / rays)
+}
+
+/**
+ * The direct daylight (SC + ERC, %) at a surface point (x, y, z) facing unit `normal`: a wall patch for the IRC gather, or a
+ * wall, sill or reveal the user asks about. A ray from just off the surface that crosses a pane before anything else is
+ * sky when nothing is beyond the pane and an obstruction when something is; one that meets the room first adds nothing.
+ */
+export function surfaceDirect(
+  occluders: MeshBVH,
+  glass: MeshBVH,
+  x: number,
+  y: number,
+  z: number,
+  normal: { x: number; y: number; z: number },
+  dirs: Float32Array,
+  glazing = GLAZING,
+  scratch = surfaceScratch(),
+): number {
+  const { n, ray } = scratch
+  n.set(normal.x, normal.y, normal.z)
+  ray.origin.set(x + n.x * LIFT, y + n.y * LIFT, z + n.z * LIFT)
+  const see = (dir: Vector3): Seen => {
+    ray.direction.copy(dir)
+    const pane = glass.raycastFirst(ray, DoubleSide)
+    if (!pane) return null
+    const hit = occluders.raycastFirst(ray, DoubleSide)
+    return !hit ? 'sky' : hit.distance > pane.distance ? 'obstruction' : null
+  }
+  return surfaceDaylight(n, dirs, see, glazing, scratch)
 }
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
@@ -181,7 +229,8 @@ const GOLDEN = Math.PI * (3 - Math.sqrt(5))
 /**
  * The raw first bounce (%) at a point on the work plane: cosine rays go up, each takes the reflected light of the surface
  * it meets first (`rho * E_patch`); a ray that crosses a window pane before any surface leaves the room and adds nothing.
- * `index` numbers the point, only to turn its ray spiral so that points do not stripe.
+ * `index` numbers the point, only to turn its ray spiral so that points do not stripe. With `facing` (a unit normal) the
+ * point is on a surface facing that way (a wall, a sill): the rays leave from just off it, about its normal.
  */
 export function gatherFirstBounce(
   occluders: MeshBVH,
@@ -192,6 +241,7 @@ export function gatherFirstBounce(
   z: number,
   dirs: Float32Array,
   index: number,
+  facing?: { x: number; y: number; z: number },
 ): number {
   const samples = dirs.length / 3
   const turn = (index * GOLDEN) % (Math.PI * 2)
@@ -199,12 +249,16 @@ export function gatherFirstBounce(
   const s = Math.sin(turn)
   const ray = new Ray()
   const normal = new Vector3()
+  const frame = facing && { n: new Vector3(facing.x, facing.y, facing.z), t: new Vector3(), b: new Vector3() }
+  if (frame) tangentFrame(frame.n, frame.t, frame.b)
   ray.origin.set(x, y, z)
+  if (frame) ray.origin.addScaledVector(frame.n, LIFT)
   let sum = 0
   for (let i = 0; i < samples; i++) {
     const dx = dirs[i * 3]
     const dz = dirs[i * 3 + 2]
-    ray.direction.set(dx * c - dz * s, dirs[i * 3 + 1], dx * s + dz * c)
+    if (frame) orientDir(ray.direction, dirs, i, frame.n, frame.t, frame.b)
+    else ray.direction.set(dx * c - dz * s, dirs[i * 3 + 1], dx * s + dz * c)
     const hit = occluders.raycastFirst(ray, DoubleSide)
     if (!hit || !hit.face) continue
     const pane = glass.raycastFirst(ray, DoubleSide, 0, hit.distance)
