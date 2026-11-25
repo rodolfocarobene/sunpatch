@@ -261,6 +261,27 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #heightPopover .hpReset { align-self: flex-start; margin-top: 4px; }
 #heightPopover .hpError { color: var(--danger); min-height: 0; }
 #heightPopover .hpError:empty { display: none; }
+/* The scene's context menu (right-click, or a long press on a touch screen): one column of items; a sub-list replaces it in place. */
+.ctxMenu {
+  position: fixed; z-index: 13; min-width: 200px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; padding: 4px; font-size: var(--text-sm); line-height: 1.3;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: var(--shadow);
+}
+.ctxMenu [role='menuitem'] {
+  display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; font: inherit; text-align: left; cursor: pointer;
+  color: var(--text); background: transparent; border: 0; border-radius: var(--radius-control);
+}
+.ctxMenu [role='menuitem']:focus { outline: none; background: var(--bg-band); }
+.ctxMenu [role='menuitem']:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
+.ctxMenu .ctxSub::after { content: '\25B8'; margin-left: auto; padding-left: 12px; color: var(--muted); }
+.ctxMenu .ctxBack { color: var(--muted); }
+.ctxMenu .ctxBack::before { content: '\2039'; font-size: 16px; line-height: 1; }
+.ctxMenu .ctxSep { height: 1px; margin: 4px 6px; background: var(--line); }
+#app > canvas { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+@media (max-width: 700px) {
+  .ctxMenu { min-width: 220px; }
+  .ctxMenu [role='menuitem'] { min-height: 40px; }
+}
 #hoverTip {
   position: fixed; z-index: 11; max-width: 280px; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; pointer-events: none;
   font-size: var(--text-xs); line-height: 1.4; color: var(--text); font-variant-numeric: tabular-nums;
@@ -824,7 +845,7 @@ html[data-lofi='on'] {
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .13 0 0 0 0 .07 0 0 0 1.2 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 /* Paper texture on the boxes (the plant card keeps its scroll shadows and gets the texture as one more layer). */
-html[data-lofi='on'] :is(#panel, #timeBar, #statusChip, #keepChip, #sharedChip, #mapStatus, #spotPopover, #suitPopover, #heightPopover, #hoverTip, #results,
+html[data-lofi='on'] :is(#panel, #timeBar, #statusChip, #keepChip, #sharedChip, #mapStatus, #spotPopover, #suitPopover, #heightPopover, .ctxMenu, #hoverTip, #results,
   .editor-box, .editor-status span, .maplibregl-popup-content, #heightRuler .hrLabel) { background-image: var(--paper); }
 html[data-lofi='on'] .plantCard {
   background:
