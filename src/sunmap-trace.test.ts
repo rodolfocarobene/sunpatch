@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { apartmentGeometry, facadeWall } from './apartment'
 import type { Building, Point } from './osm'
 import { floorBase, type Plan, type Window } from './plan'
-import { floorGrid, sunSlots } from './sunmap'
-import { buildBvh, collectOccluders, countSparse, seesSun, traceSun } from './sunmap-trace'
+import { STEP } from './daylight'
+import { dayStats, floorGrid, sunSlots } from './sunmap'
+import { buildBvh, collectOccluders, countSparse, facesSun, seesSun, traceSun, traceSurfaceSun } from './sunmap-trace'
 
 const unit = (x: number, y: number, z: number) => {
   const l = Math.hypot(x, y, z)
@@ -133,5 +134,59 @@ describe('countSparse', () => {
   })
   it('handles no slots', () => {
     expect(countSparse(0, 3, () => true)).toBe(0)
+  })
+})
+
+describe('the sun on a wall point', () => {
+  // Milan; z is south, so a south-facing wall's normal is +z and a north-facing one's is -z.
+  const MILAN = { lat: 45.4642, lon: 9.19 }
+  const south = { x: 0, y: 0, z: 1 }
+  const north = { x: 0, y: 0, z: -1 }
+  // A single far-away triangle: nothing in the way.
+  const open = buildBvh(Float32Array.from([900, 900, 900, 901, 900, 900, 900, 901, 900]))
+  const noonSlot = (dirs: Float32Array) => {
+    let best = 0
+    for (let i = 1; i < dirs.length / 3; i++) if (dirs[i * 3 + 1] > dirs[best * 3 + 1]) best = i
+    return best
+  }
+
+  it('counts the sun only in front of the surface', () => {
+    expect(facesSun(south, [0, 0.5, 0.8])).toBe(true)
+    expect(facesSun(north, [0, 0.5, 0.8])).toBe(false)
+    expect(facesSun({ x: 1, y: 0, z: 0 }, [0, 1, 0])).toBe(false) // a sun straight up grazes a wall: not in front
+    expect(facesSun({ x: 0, y: 1, z: 0 }, [0, 0.1, -0.99])).toBe(true) // a sill faces every sun above the horizon
+  })
+
+  it('lights a south wall at noon in Milan in December, with nothing in the way', () => {
+    const slots = sunSlots(new Date(2026, 11, 21), MILAN.lat, MILAN.lon)
+    const lit = traceSurfaceSun(open, { x: 0, y: 1, z: 0 }, south, slots.dirs)
+    expect(lit[noonSlot(slots.dirs)]).toBe(1)
+    // In December the sun stays in the southern half of the sky all day: the whole day reaches the wall.
+    const day = dayStats(lit, slots.starts)
+    expect(day.minutes).toBe(slots.starts.length * STEP)
+    expect(day.share).toBe(1)
+    expect(day.intervals).toHaveLength(1)
+  })
+
+  it('never lights a north wall in winter', () => {
+    for (const [month, date] of [[10, 21], [11, 1], [11, 21], [0, 10], [1, 1]]) {
+      const slots = sunSlots(new Date(2026, month, date), MILAN.lat, MILAN.lon)
+      expect(slots.starts.length).toBeGreaterThan(0)
+      expect(Array.from(traceSurfaceSun(open, { x: 0, y: 1, z: 0 }, north, slots.dirs)).every((v) => v === 0)).toBe(true)
+    }
+  })
+
+  it('lights a north wall early and late in June, when the sun rises and sets north of east and west', () => {
+    const slots = sunSlots(new Date(2026, 5, 21), MILAN.lat, MILAN.lon)
+    const day = dayStats(traceSurfaceSun(open, { x: 0, y: 1, z: 0 }, north, slots.dirs), slots.starts)
+    expect(day.minutes).toBeGreaterThan(0)
+    expect(day.intervals).toHaveLength(2) // morning and evening, none at noon
+  })
+
+  it('is shaded by what stands between the wall and the sun', () => {
+    // A tall slab 2 m south of the wall point, wide enough to hide the winter sun all day.
+    const slab = buildBvh(collectOccluders([new Group().add(shadowBox(200, 40, 0.5, [0, 20, 2]))]))
+    const slots = sunSlots(new Date(2026, 11, 21), MILAN.lat, MILAN.lon)
+    expect(Array.from(traceSurfaceSun(slab, { x: 0, y: 1, z: 0 }, south, slots.dirs)).every((v) => v === 0)).toBe(true)
   })
 })

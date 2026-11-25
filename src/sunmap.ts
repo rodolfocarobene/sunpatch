@@ -159,11 +159,15 @@ export interface SpotStats {
 
 export function spotStats(result: SunMapResult, sample: number): SpotStats {
   const n = result.starts.length
-  const row = result.lit.subarray(sample * n, (sample + 1) * n)
+  return dayStats(result.lit.subarray(sample * n, (sample + 1) * n), result.starts, result.daylightMinutes)
+}
+
+/** One point's day from its lit flags (one per slot of `starts`): the sun minutes, their share of the daylight, the runs. */
+export function dayStats(lit: ArrayLike<number>, starts: number[], daylightMinutes = starts.length * STEP): SpotStats {
   let count = 0
-  for (let i = 0; i < n; i++) count += row[i]
+  for (let i = 0; i < starts.length; i++) count += lit[i]
   const minutes = count * STEP
-  return { minutes, share: sunShare(minutes, result.daylightMinutes), intervals: litIntervals(row, result.starts) }
+  return { minutes, share: sunShare(minutes, daylightMinutes), intervals: litIntervals(lit, starts) }
 }
 
 /** Direct-sun minutes of every sample. */

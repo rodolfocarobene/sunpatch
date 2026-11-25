@@ -78,6 +78,32 @@ export function seesSun(bvh: MeshBVH, ray: Ray, x: number, y: number, z: number,
   return !bvh.raycastFirst(ray, DoubleSide)
 }
 
+/** True when the sun along the unit vector at `dir[at..]` is in front of a surface with unit normal `n`: a wall is lit from its own side only. */
+export function facesSun(n: { x: number; y: number; z: number }, dir: ArrayLike<number>, at = 0): boolean {
+  return n.x * dir[at] + n.y * dir[at + 1] + n.z * dir[at + 2] > 0
+}
+
+/** A surface point's rays start this far off it, along its normal, clear of its own face. */
+export const SURFACE_LIFT = 0.02
+
+/**
+ * Lit flags, one per slot of `dirs`, for one point of a surface with unit normal `normal` (a wall, a sill, a window reveal):
+ * a slot counts when the sun is in front of the surface and the ray toward it from just off the surface hits nothing.
+ */
+export function traceSurfaceSun(
+  bvh: MeshBVH,
+  point: { x: number; y: number; z: number },
+  normal: { x: number; y: number; z: number },
+  dirs: Float32Array,
+): Uint8Array {
+  const slots = dirs.length / 3
+  const lit = new Uint8Array(slots)
+  const ray = new Ray()
+  const [x, y, z] = [point.x + normal.x * SURFACE_LIFT, point.y + normal.y * SURFACE_LIFT, point.z + normal.z * SURFACE_LIFT]
+  for (let i = 0; i < slots; i++) lit[i] = facesSun(normal, dirs, i * 3) && seesSun(bvh, ray, x, y, z, dirs, i * 3) ? 1 : 0
+  return lit
+}
+
 /**
  * Lit flags for every sample and slot: `points` holds x, z per sample on a floor at height `floorY`, `dirs` three
  * numbers per slot. Result index is sample * slots + slot. `progress` is called after every few samples with 0..1.
