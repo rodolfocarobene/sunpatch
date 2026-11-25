@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { FURNITURE, furnitureFootprint, type Furniture } from './furniture'
 import { furnitureMesh, potLook } from './furniture-mesh'
 import { PLANTS, plantById } from './plants'
+import { MOUNT_GAP } from './wall-mount'
 import { collectOccluders, occluderRoots, sceneKey } from './sunmap-trace'
 
 const at = (kind: Furniture['kind'], rot = 0): Furniture => ({ kind, x: 0, z: 0, rot })
 
 describe('furnitureMesh', () => {
   it('builds every kind within its footprint and height, standing on the floor', () => {
-    for (const spec of FURNITURE) {
+    for (const spec of FURNITURE.filter((s) => !s.mounted)) {
       const piece = furnitureMesh(at(spec.kind), 7)
       piece.updateMatrixWorld(true)
       const box = new Box3().setFromObject(piece)
@@ -113,6 +114,38 @@ describe('potted plants', () => {
     expect((a.children[0] as Mesh).geometry).toBe((b.children[0] as Mesh).geometry)
     expect(size(pot('no-such-plant')).height).toBeCloseTo(size(at('plant')).height, 5)
     expect(furnitureMesh(pot('basil'), 0).userData.furnitureKind).toBe('plant')
+  })
+})
+
+describe('window boxes and wall planters', () => {
+  const hung = (kind: 'windowbox' | 'wallpot', plant: string, w?: number): Box3 => {
+    const piece = furnitureMesh({ kind, x: 0, z: 0, rot: 0, plant, y: 10, ...(w !== undefined && { w }) }, 0)
+    piece.updateMatrixWorld(true)
+    return new Box3().setFromObject(piece)
+  }
+
+  it('hang at their own height, within their width and clear of the wall behind them, whatever the plant', () => {
+    for (const { id } of PLANTS) {
+      for (const w of [0.4, 1.2, 1.6]) {
+        const box = hung('windowbox', id, w)
+        expect(box.min.y, id).toBeGreaterThan(10 - 0.15)
+        expect(box.max.y, id).toBeLessThan(10 + 0.7)
+        expect(box.max.x - box.min.x, id).toBeLessThan(w + 0.05)
+        expect(box.min.z, id).toBeGreaterThan(-0.1 - MOUNT_GAP)
+      }
+      const pot = hung('wallpot', id)
+      expect(pot.min.y, id).toBeGreaterThan(10 - 0.2)
+      expect(pot.max.y, id).toBeLessThan(10 + 0.9)
+      expect(pot.max.x - pot.min.x, id).toBeLessThan(0.4)
+      expect(pot.min.z, id).toBeGreaterThan(-0.125 - MOUNT_GAP)
+    }
+  })
+
+  it('are as wide as they are told, and show the plant (more of it in a wider box)', () => {
+    const count = (w: number) => furnitureMesh({ kind: 'windowbox', x: 0, z: 0, rot: 0, plant: 'basil', y: 0, w }, 0).children.length
+    expect(hung('windowbox', 'basil', 1.4).max.x - hung('windowbox', 'basil', 1.4).min.x).toBeCloseTo(1.4, 1)
+    expect(count(1.6)).toBeGreaterThan(count(0.4))
+    expect(furnitureMesh({ kind: 'wallpot', x: 0, z: 0, rot: 0, y: 0 }, 0).children.length).toBeGreaterThan(2)
   })
 })
 
