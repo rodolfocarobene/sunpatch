@@ -297,7 +297,7 @@ input::placeholder { color: var(--muted); opacity: 1; }
    Panels and Garden keep their whole panel: the walk picks for them. */
 #panel.walking[data-view='3d'] > :not(#views, #camera, #panelTop, #lofiBar, section[data-views~='3d']) { display: none; }
 #panel.walking[data-view='3d'] section[data-views~='3d'] > :not(#aptTools) { display: none; }
-#panel.walking #walk, #panel.walking .legendMore { display: none; }
+#panel.walking .legendMore { display: none; }
 #panel .walkKey { display: none; margin-left: auto; padding: 0 5px; font: inherit; font-size: var(--text-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
 #panel.walking .walkKey { display: inline-block; }
 #tips summary { cursor: pointer; color: var(--muted); }
@@ -800,10 +800,6 @@ input::placeholder { color: var(--muted); opacity: 1; }
 @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
   #panel[data-sheet] > :not(#sheetGrip, #views, #camera) { animation: sheetIn 160ms ease-out; }
   @keyframes sheetIn { from { opacity: 0; } }
-}
-/* A phone has no keyboard for WASD: the Walk button is for devices with a mouse or trackpad. */
-@media (pointer: coarse) and (not (any-pointer: fine)) {
-  #panel #walk { display: none; }
 }
 #suitPopover .spotMore { font-size: 12px; color: var(--muted); }
 #suitPopover .spotMore summary { cursor: pointer; }

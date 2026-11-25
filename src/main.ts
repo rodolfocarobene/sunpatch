@@ -92,7 +92,7 @@ const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 const app = document.querySelector<HTMLDivElement>('#app')!
 const sunScene = createScene(app)
 onLofiChange((on) => sunScene.setLofiPixelRatio(on))
-const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on), walkInside)
+const ui = createUI((sun) => sunScene.update(sun), setView, (on) => sunScene.setCutaway(on))
 const hud = createWalkHud(app, ui.dock, { exit: () => sunScene.stopWalk(), hold: (move, on) => sunScene.holdWalk(move, on) })
 // Sun map: computed in a worker for the shown date, painted on the floor, and read by clicking the floor.
 const sunJob = createSunMapJob()
@@ -1405,10 +1405,6 @@ async function openExample(over?: Plan, shared?: { date: string; minutes: number
     ui.setWhen(restored.date, restored.minutes)
     setView(restored.view)
   }
-}
-
-function walkInside() {
-  chooseCamera('inside')
 }
 
 /** Puts the scene camera in the chosen mode; `asked` is the user's own pick (Inside then gets the whole floor when there is no plan). */
