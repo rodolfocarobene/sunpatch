@@ -25,7 +25,8 @@ import { isClick } from './click'
 import { fmt1Fixed, t, upFirst, type Key } from './i18n'
 import type { ContextMenu, MenuEntry } from './context-menu'
 import { plantById, plantName } from './plants'
-import { MENU_FURNITURE, MENU_PLANTS } from './scene-menu'
+import { MENU_FURNITURE, MENU_PLANTS, MOUNT_PLANTS } from './scene-menu'
+import { wallFaceAt, wallPotAt, windowBoxAt } from './wall-mount'
 import { touchOnly } from './touch'
 import { clearsNote, FIT_KEY, shortcutFor, TOOL_KEYS, windowCount } from './editor-keys'
 import type { Tool } from './editor-keys'
@@ -33,7 +34,7 @@ import { insideOutline, isWalkable, yawOf } from './walk-geom'
 import { azimuthOf, exteriorEdge, hitsPanel, newPanel, panelTip, presetPatch, snapPanel } from './panel'
 import type { PanelPreset } from './panel'
 import {
-  FINE_STEP, FURNITURE, ROTATE_STEP, furnitureName, furnitureTip, hitsFurniture, isFurnitureKind, newFurniture, rotationToward, snapMetres, specOf,
+  FINE_STEP, FURNITURE, ROTATE_STEP, furnitureName, furnitureTip, hitsFurniture, isFurnitureKind, newFurniture, rotationToward, sizeOf, snapMetres, specOf,
 } from './furniture'
 import type { Furniture, FurnitureKind } from './furniture'
 import { effectiveViewpoint, drawScene, metres2, viewTip, windowSegment } from './editor-draw'
@@ -294,7 +295,7 @@ export function createPlanEditor(
   // Furniture tool: the kind a click places.
   const furnitureSelect = document.createElement('select')
   furnitureSelect.setAttribute('aria-label', t('editor.kind'))
-  for (const spec of FURNITURE) furnitureSelect.append(new Option(t(spec.name), spec.kind))
+  for (const spec of FURNITURE.filter((s) => !s.mounted)) furnitureSelect.append(new Option(t(spec.name), spec.kind))
   furnitureSelect.value = furnitureKind
   furnitureSelect.addEventListener('change', () => {
     if (isFurnitureKind(furnitureSelect.value)) furnitureKind = furnitureSelect.value
@@ -915,7 +916,7 @@ export function createPlanEditor(
 
   function furnitureProps(p: Plan, index: number): HTMLElement[] {
     const f = p.furniture![index]
-    const spec = specOf(f.kind)
+    const spec = sizeOf(f)
     const patch = (change: Partial<Furniture>): void => {
       const next = clone(p)
       Object.assign(next.furniture![index], change)
@@ -923,11 +924,12 @@ export function createPlanEditor(
       updateProps(true)
     }
     const kind = document.createElement('select')
-    for (const s of FURNITURE) kind.append(new Option(t(s.name), s.kind))
+    // What hangs on a window or a wall is placed from there: the list offers it only to the piece that is one.
+    for (const s of FURNITURE.filter((s) => !s.mounted || s.kind === f.kind)) kind.append(new Option(t(s.name), s.kind))
     kind.value = f.kind
     kind.addEventListener('change', () => {
       // Another kind is no longer a pot of that plant, and stands on the apartment floor.
-      if (isFurnitureKind(kind.value)) patch({ kind: kind.value, plant: undefined, y: undefined })
+      if (isFurnitureKind(kind.value)) patch({ kind: kind.value, plant: undefined, y: undefined, w: undefined })
     })
     const size = document.createElement('output')
     size.textContent = `${fmt1Fixed(spec.w)} x ${fmt1Fixed(spec.d)} m`
@@ -938,7 +940,7 @@ export function createPlanEditor(
       field(t('editor.furnSize'), size),
     ]
     if (f.plant) out.splice(2, 0, field(t('editor.furnPlantOf'), Object.assign(document.createElement('output'), { textContent: furnitureName(f) })))
-    if (f.y !== undefined) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnPotElsewhere', { y: fmt1Fixed(f.y) }) }))
+    if (f.y !== undefined) out.push(Object.assign(document.createElement('small'), { textContent: t(spec.mounted ? 'editor.furnHung' : 'editor.furnPotElsewhere', { y: fmt1Fixed(f.y) }) }))
     else if (!insideOutline(p, f)) out.push(Object.assign(document.createElement('small'), { textContent: t('editor.furnOutside') }))
     return out
   }
@@ -1176,13 +1178,25 @@ export function createPlanEditor(
         { label: t('menu.remove'), run: edit((next) => void next.furniture!.splice(i, 1), null) },
       ])
     }
+    const add: MenuEntry[] = []
     if (insideOutline(plan, p)) {
       const at = { x: snapMetres(p.x), z: snapMetres(p.z) }
-      groups.push([
+      add.push(
         { label: t('menu.addPlant'), items: MENU_PLANTS.indoor.map((id) => ({ label: upFirst(plantName(plantById(id)!)), run: place({ ...newFurniture('plant', at), plant: id }) })) },
         { label: t('menu.addFurniture'), items: MENU_FURNITURE.map((kind) => ({ label: t(specOf(kind).name), run: place(newFurniture(kind, at)) })) },
-      ])
+      )
     }
+    // On a window a window box hangs outside it; on a wall a planter hangs on the face the click is on, at the default height.
+    const hang = (label: Key, plants: readonly string[], make: (plant: string) => Furniture | undefined): MenuEntry => ({
+      label: t(label),
+      items: plants.map((id) => ({ label: upFirst(plantName(plantById(id)!)), run: () => { const piece = make(id); if (piece) place(piece)() } })),
+    })
+    const base = building ? floorBase(building, plan) : 0
+    const win = hitWindow(p)
+    const wall = win < 0 ? wallFaceAt(plan, p, p, Math.max(tol(HIT_PX), 0.2)) : undefined
+    if (win >= 0) add.push(hang('menu.addWindowBox', MOUNT_PLANTS.windowbox, (id) => windowBoxAt(plan!, base, win, id)))
+    else if (wall) add.push(hang('menu.addWallPot', MOUNT_PLANTS.wallpot, (id) => wallPotAt(wall, base, plan!.floorHeight, id)))
+    if (add.length) groups.push(add)
     contextMenu.open(groups, { x: e.clientX, y: e.clientY })
   })
   svg.addEventListener('pointerdown', (e) => {

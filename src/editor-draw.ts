@@ -6,7 +6,7 @@ import type { Snap } from './editor-geom'
 import { startPosition, windowYaw } from './walk-geom'
 import { fmt1Fixed, fmtNumber, t } from './i18n'
 import { panelFootprint, panelTip, facing, footprintDepth } from './panel'
-import { furnitureFootprint, furnitureName, furnitureTip, specOf, type Furniture } from './furniture'
+import { furnitureFootprint, furnitureName, furnitureTip, sizeOf, type Furniture } from './furniture'
 
 export interface View {
   /** Scene point shown at the centre of the SVG. */
@@ -285,7 +285,7 @@ const FURNITURE_STROKE = '#8a7f6a'
 
 /** The piece's outlined footprint (a circle for a plant) with its name when it fits, a tick on the front and, selected, a rotate handle. */
 function drawFurniture(root: SVGElement, f: Furniture, px: number, selected: boolean, opacity = 1): void {
-  const spec = specOf(f.kind)
+  const spec = sizeOf(f)
   const g = svgEl(root, 'g', { 'data-role': 'furniture', opacity })
   const name = furnitureName(f)
   svgEl(g, 'title', {}).textContent = name
