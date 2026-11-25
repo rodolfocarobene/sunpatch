@@ -218,7 +218,8 @@ narrow.addEventListener('change', placePlantCard)
 function renderPlantCard() {
   const plant = plantCardId ? plantById(plantCardId) : undefined
   const result = plant && gardenSpot ? spotRanked?.find((r) => r.plant.id === plant.id) : undefined
-  const pot = plant && gardenSpot && plan ? { placed: hasPot(plan.furniture, spotPot(plant.id, gardenSpot)) } : undefined
+  const piece = plant && gardenSpot && plan ? spotPot(plant.id, gardenSpot) : undefined
+  const pot = piece && plan ? { placed: hasPot(plan.furniture, piece), kind: piece.kind === 'windowbox' || piece.kind === 'wallpot' ? piece.kind : ('pot' as const) } : undefined
   plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined, pot } : null)
 }
 
