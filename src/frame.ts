@@ -37,3 +37,23 @@ export function gardenRadius(apartmentRadius: number, buildingReach: number, roo
 export function inFreeArea(x: number, y: number, width: number, height: number, insetLeft: number, pad = 48): boolean {
   return x >= insetLeft + pad && x <= width - pad && y >= pad && y <= height - pad
 }
+
+/** How far south of straight above the top view stands, as a share of its height: enough for the orbit controls to keep north up. */
+export const TOP_TILT = 1e-4
+
+/**
+ * The top view of a target whose bounding circle (radius in metres, centred on `centre`) should fill the free area: straight
+ * above it, north at the top of the screen, slid west so the centre lands in the middle of what the left panel leaves free.
+ */
+export function topFrame(
+  centre: { x: number; y: number; z: number },
+  radius: number,
+  fovDeg: number,
+  width: number,
+  height: number,
+  insetLeft: number,
+): { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } } {
+  const dist = fitDistance(radius, fovDeg, freeAspect(width, height, insetLeft))
+  const target = { x: centre.x - (insetLeft / 2) * metresPerPixel(dist, fovDeg, height), y: centre.y, z: centre.z }
+  return { position: { x: target.x, y: target.y + dist, z: target.z + dist * TOP_TILT }, target }
+}
