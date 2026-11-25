@@ -57,7 +57,7 @@ import { bestSpot, findDeadEnd, roofNoteVisible, spotPlace, findSummary, monthCo
 import { createFindPanel } from './garden-find-panel'
 import type { DeadEnd } from './garden-text'
 import { scoreSpots, type PlantResult } from './garden'
-import { hasPot, potAt } from './furniture'
+import { furnitureName, hasPot, newFurniture, potAt, snapMetres, specOf, type Furniture } from './furniture'
 import { plantById, plantName, type Plant } from './plants'
 import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
 import { bestOfKind, getKindFilter } from './garden-kind'
@@ -78,6 +78,8 @@ import { createDaylightJob, type DaylightResult } from './dayfactor-job'
 import { bandWord } from './ui'
 import { touchOnly } from './touch'
 import { cameraAfterWalk, cameraForKey, pickCamera, shownCamera, type CameraMode } from './camera-mode'
+import { createContextMenu, type MenuEntry } from './context-menu'
+import { MENU_FURNITURE, MENU_PLANTS, sceneMenuItems, type SceneMenuItem } from './scene-menu'
 import { saveSession, takeSession } from './session'
 import { decodeShare, encodeShare, shareUrl } from './share'
 import { createSharedChip } from './shared-chip'
@@ -141,6 +143,7 @@ sceneCanvas.addEventListener('keydown', (e) => {
   cycleRuler()
 })
 const heightPopover = createHeightPopover(document.body, { onApply: setHeight, onReset: (id) => setHeight(id, null) })
+const sceneMenu = createContextMenu(document.body)
 let sunMapOn = false
 let daylightOn = false
 let daylightResult: DaylightResult | undefined
@@ -224,14 +227,22 @@ function putPotHere() {
   if (!plant || !gardenSpot || !plan) return
   const pot = potAt(plant.id, gardenSpot, gardenSpot.kind === 'indoor')
   if (hasPot(plan.furniture, pot)) return
+  // Undo takes this pot away again, whatever else was edited since.
+  editFurniture((list) => [...list, pot], (list) => list.filter((f) => !hasPot([f], pot)), t('plant.potChip'))
+}
+/**
+ * A furniture change made in the scene ("Put a pot here", the context menu): saved with the plan like an editor edit, and
+ * the chip's Undo applies `undo` to the list as it is then.
+ */
+function editFurniture(change: (list: Furniture[]) => Furniture[], undo: (list: Furniture[]) => Furniture[], done: string) {
+  if (!plan) return
   const apply = (next: Plan) => {
     keepingSpot(() => setPlan(next, true))
-    if (!ephemeral()) savePlan(next) // the built-in example is never saved: the pot lives until the page is reloaded
+    if (!ephemeral()) savePlan(next) // the built-in example is never saved: the change lives until the page is reloaded
     renderPlantCard()
   }
-  apply({ ...plan, furniture: [...(plan.furniture ?? []), pot] })
-  // Undo takes this pot away again, whatever else was edited since.
-  chip.done(t('plant.potChip'), { label: t('shell.undo'), run: () => plan && apply({ ...plan, furniture: (plan.furniture ?? []).filter((f) => !hasPot([f], pot)) }) })
+  apply({ ...plan, furniture: change(plan.furniture ?? []) })
+  chip.done(done, { label: t('shell.undo'), run: () => plan && apply({ ...plan, furniture: undo(plan.furniture ?? []) }) })
 }
 function closePlantCard() {
   plantCardId = undefined
@@ -1009,6 +1020,10 @@ sunScene.onSceneChange(() => {
 sunScene.onFloorClick((at) => {
   if (walking && view !== '3d') return // in Panels and Garden a click while walking picks for that view
   if (!at) return closeProbe()
+  probeAt(at)
+})
+/** Marks a floor point and answers it: with the daylight estimate when that layer is on, else with the sun map. */
+function probeAt(at: Point) {
   probePoint = at
   sunScene.setProbe(at)
   if (daylightOn) {
@@ -1021,7 +1036,7 @@ sunScene.onFloorClick((at) => {
   const outcome = probeOutcome(sunResult !== undefined, inGrid)
   if (outcome === 'show') showProbe()
   else if (outcome === 'close') closeProbe()
-})
+}
 let walking = false
 /** The camera of the scene views (Top, Outside, Inside), kept across tabs for the session. */
 let camera: CameraMode = 'outside'
@@ -1117,6 +1132,7 @@ const editor = createPlanEditor(document.body, setPlan, {
   onSwitch: (id, at) => switchTo(id, at),
   panelSummary: planSummary,
   onPanelSelect: selectPanel,
+  contextMenu: sceneMenu,
 })
 sunScene.onPanelClick((id) => {
   if (view === 'panels') selectPanel(id) // in 3D a panel is just part of the scene
@@ -1131,7 +1147,76 @@ sunScene.onBuildingHover((b, at) => {
   if (b && note === 'ruler') heightRuler.follow(b, at)
   else heightRuler.release()
 })
-sunScene.onBuildingMenu((id, at) => openHeight(site?.buildings.find((b) => b.id === id), at))
+// The context menu (right-click, or a long press on a touch screen): what can be done where it was opened.
+sunScene.onSceneMenu((hit, at) => {
+  hoverTip.hide()
+  heightRuler.hide()
+  const kind = hit.surface ? classifyHit(hit.surface) : null
+  const spot = hit.surface && kind && kind !== 'cut' ? { kind, x: hit.surface.x, y: hit.surface.y, z: hit.surface.z } : undefined
+  const piece = hit.furniture !== undefined ? plan?.furniture?.[hit.furniture] : undefined
+  const floor = hit.floor
+  const groups = sceneMenuItems({ floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece }, { hasPlan: !!plan, walking })
+  const entry = (item: SceneMenuItem): MenuEntry => {
+    switch (item) {
+      case 'rotate': {
+        const turned = { ...piece!, rot: (piece!.rot + 90) % 360 }
+        const swap = (from: Furniture, to: Furniture) => (list: Furniture[]) => list.map((f) => (f === from ? to : f))
+        return { label: t('menu.rotate'), run: () => editFurniture(swap(piece!, turned), swap(turned, piece!), t('menu.rotated', { name: upFirst(furnitureName(piece!)) })) }
+      }
+      case 'remove':
+        return { label: t('menu.remove'), run: () => editFurniture((list) => list.filter((f) => f !== piece), (list) => [...list, piece!], t('menu.removed', { name: upFirst(furnitureName(piece!)) })) }
+      case 'sun':
+        return { label: t('menu.sun'), run: () => lightHere(floor!, false) }
+      case 'daylight':
+        return { label: t('menu.daylight'), run: () => lightHere(floor!, true) }
+      case 'plants':
+        return { label: t('menu.plants'), run: () => plantsHere(spot!) }
+      case 'addPlant': {
+        // Inside the apartment (a sill too) the list is of house plants; the pot stands where the click was.
+        const plants = MENU_PLANTS[floor ? 'indoor' : 'outdoor'].map((id) => plantById(id)!)
+        return {
+          label: t('menu.addPlant'),
+          items: [
+            ...plants.map((p) => ({ label: upFirst(plantName(p)), run: () => addPot(p, spot!) })),
+            { label: t('menu.choosePlant'), run: () => {
+              plantsHere(spot!)
+              findPanel.el.querySelector<HTMLInputElement>('input')?.focus()
+            } },
+          ],
+        }
+      }
+      case 'addFurniture':
+        return {
+          label: t('menu.addFurniture'),
+          items: MENU_FURNITURE.map((kind) => ({ label: t(specOf(kind).name), run: () => {
+            const added = newFurniture(kind, { x: snapMetres(floor!.x), z: snapMetres(floor!.z) })
+            editFurniture((list) => [...list, added], (list) => list.filter((f) => f !== added), t('menu.added', { name: t(specOf(kind).name) }))
+          } })),
+        }
+      case 'height':
+        return { label: t('menu.height'), run: () => openHeight(site?.buildings.find((b) => b.id === hit.building), at) }
+    }
+  }
+  // A facade offers nothing but the height: its box opens straight away, as a right-click on a building always did.
+  if (groups.length === 1 && groups[0].length === 1 && groups[0][0] === 'height') return entry('height').run?.()
+  sceneMenu.open(groups.map((g) => g.map(entry)), at)
+})
+/** "Sun here" and "Indirect light here": the 3D view's probe at a floor point, with the layer it needs. */
+function lightHere(at: Point, daylight: boolean) {
+  if (view !== '3d') setView('3d')
+  if (daylight !== daylightOn) ui.setDaylight(daylight)
+  probeAt(at)
+}
+/** "Plants for this spot": the Garden view with the spot picked. */
+function plantsHere(spot: { kind: PickedKind; x: number; y: number; z: number }) {
+  if (view !== 'garden') setView('garden')
+  if (view === 'garden') selectGardenSpot(spot.kind, spot.x, spot.y, spot.z)
+}
+function addPot(plant: Plant, spot: { kind: PickedKind; x: number; y: number; z: number }) {
+  const pot = potAt(plant.id, spot, spot.kind === 'indoor')
+  if (!plan || hasPot(plan.furniture, pot)) return
+  editFurniture((list) => [...list, pot], (list) => list.filter((f) => !hasPot([f], pot)), t('menu.added', { name: upFirst(plantName(plant)) }))
+}
 ui.onEditHeight((at) => {
   const mine = site?.selected
   // A merged selection edits the part that sets its height: the tallest.
@@ -1279,6 +1364,7 @@ function applyCamera(asked = false) {
 }
 
 function chooseCamera(mode: CameraMode) {
+  sceneMenu.close()
   const next = pickCamera(view, mode)
   camera = next.mode
   if (next.view !== view) setView(next.view, true)
@@ -1318,6 +1404,7 @@ function setView(next: View, askedCamera = false) {
   }
   view = next
   heightPopover.hide()
+  sceneMenu.close()
   hoverTip.hide()
   heightRuler.hide()
   const scene3d = inScene(next)

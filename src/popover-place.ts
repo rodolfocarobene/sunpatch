@@ -21,3 +21,13 @@ export function freeBand(): { minTop: number; maxBottom: number } {
     maxBottom: (dock ? dock.top : window.innerHeight) - 8,
   }
 }
+
+/**
+ * One coordinate of a menu's corner opened at `at`: the menu starts there (right of or below the pointer) when it ends
+ * before `max`, else it ends there (flipped to the other side) when that starts after `min`, else it is pushed inside.
+ */
+export function menuCorner(at: number, size: number, min: number, max: number): number {
+  if (at + size <= max) return at
+  if (at - size >= min) return at - size
+  return Math.max(min, max - size)
+}

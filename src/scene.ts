@@ -47,6 +47,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import { createPressTracker, isClick } from './click'
+import { createLongPress } from './long-press'
 import { touchOnly } from './touch'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel, topFrame } from './frame'
@@ -172,6 +173,18 @@ export interface GardenHit {
   cut?: boolean
 }
 
+/** What the context menu is about: any of a floor point of the apartment, a surface, a building and a piece of furniture. */
+export interface MenuHit {
+  /** The apartment floor here, or under the sill, wall or piece of furniture hit inside the apartment. */
+  floor?: { x: number; z: number }
+  /** The surface the camera sees, as a Garden click names it. */
+  surface?: GardenHit
+  /** The building polygon hit (not for the ground or a piece of furniture). */
+  building?: string
+  /** The index of the piece of furniture hit, in the plan's list. */
+  furniture?: number
+}
+
 export interface SunScene {
   update(sun: SunDirection): void
   /** Replaces the scene content; the selected building should be centred on the origin. keepCamera leaves the view as is. */
@@ -204,8 +217,8 @@ export interface SunScene {
   setMarkGuessed(on: boolean): void
   /** Called as the pointer moves over a building polygon (selected or not) with where it is on screen, and with null when it leaves. */
   onBuildingHover(handler: (polygon: Building | null, at: { x: number; y: number }) => void): void
-  /** Called with the polygon under a right-click (not a drag): its id and where it is on screen. */
-  onBuildingMenu(handler: (polygonId: string, at: { x: number; y: number }) => void): void
+  /** Called with what is under a right-click (not a drag) or a long press on a touch screen, and where it is on screen. */
+  onSceneMenu(handler: (hit: MenuHit, at: { x: number; y: number }) => void): void
   /** Where the height ruler stands for a polygon (the on-screen roof corner nearest the screen point `near`, in screen pixels); null when it would be hidden, behind the camera or too small to use. */
   rulerAnchor(polygon: Building, near: { x: number; y: number }): RulerAnchor | null
   /** What the ruler may do on this building now (selected, floors hidden, floor overlay, walking). */
@@ -999,8 +1012,9 @@ export function createScene(container: HTMLElement): SunScene {
     if (plan) {
       addApartment(selected, plan)
       for (const o of panelMeshes(plan.panels)) world.add(o)
-      for (const f of plan.furniture ?? []) {
+      for (const [i, f] of (plan.furniture ?? []).entries()) {
         const piece = furnitureMesh(f, floorBase(selected, plan))
+        piece.userData.furnitureIndex = i // the context menu's Remove and Rotate name the piece by it
         // Apartment meshes: the second render pass repaints them under the narrow sun light, like the walls.
         piece.traverse((o) => o instanceof Mesh && apartmentMeshes.add(o))
         furnitureGroup.add(piece)
@@ -1298,15 +1312,16 @@ export function createScene(container: HTMLElement): SunScene {
     floorClick(at)
   })
 
-  // The Garden view: a plain click names the surface the camera sees (not glass, not an overlay, not a hidden block), from
-  // outside or walking.
-  renderer.domElement.addEventListener('click', (e) => {
-    if (!gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
-    const built = seenHit(e.clientX, e.clientY) // also aims the raycaster at the pointer
+  // The surface the camera sees under the pointer (not glass, not an overlay, not a hidden block), from outside or walking,
+  // and whether it is the ground plane; null for the sky.
+  function surfaceAt(clientX: number, clientY: number): { hit: GardenHit; ground: boolean; distance: number } | null {
+    const built = seenHit(clientX, clientY) // also aims the raycaster at the pointer
     // The ground plane is not part of the world group: it is the nearer hit when nothing built is in front of it.
     const flatGround = raycaster.intersectObject(ground, false)[0]
-    if (flatGround && (!built || flatGround.distance < built.distance)) return gardenClick({ x: flatGround.point.x, y: 0, z: flatGround.point.z, normalY: 1, apartmentFloor: false })
-    if (!built) return gardenClick(null)
+    if (flatGround && (!built || flatGround.distance < built.distance)) {
+      return { hit: { x: flatGround.point.x, y: 0, z: flatGround.point.z, normalY: 1, apartmentFloor: false }, ground: true, distance: flatGround.distance }
+    }
+    if (!built) return null
     const normalY = built.face ? built.face.normal.clone().transformDirection(built.object.matrixWorld).y : 0
     const { x, y, z } = built.point
     const onFloor = built.object === floorMesh && plan !== null && insideOutline(plan, { x, z })
@@ -1315,9 +1330,15 @@ export function createScene(container: HTMLElement): SunScene {
     const cut = !onFloor && cutawayNow() && normalY > 0.7 && apartmentMeshes.has(built.object as Mesh)
     if (cut && floorMesh && plan && insideOutline(plan, { x, z })) {
       const down = new Raycaster(new Vector3(x, y, z), new Vector3(0, -1, 0)).intersectObject(floorMesh, false)[0]
-      if (down) return gardenClick({ x, y: down.point.y, z, normalY: 1, apartmentFloor: true })
+      if (down) return { hit: { x, y: down.point.y, z, normalY: 1, apartmentFloor: true }, ground: false, distance: built.distance }
     }
-    gardenClick({ x, y, z, normalY, apartmentFloor: onFloor, cut })
+    return { hit: { x, y, z, normalY, apartmentFloor: onFloor, cut }, ground: false, distance: built.distance }
+  }
+
+  // The Garden view: a plain click names the surface the camera sees.
+  renderer.domElement.addEventListener('click', (e) => {
+    if (!gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    gardenClick(surfaceAt(e.clientX, e.clientY)?.hit ?? null)
   })
 
   // A click on a quad of the suitability map names its sample (the nearer of the quad and whatever the camera sees
@@ -1405,14 +1426,55 @@ export function createScene(container: HTMLElement): SunScene {
     hoverEvent = { x: e.clientX, y: e.clientY }
     if (!hoverFrame) hoverFrame = requestAnimationFrame(updateHover)
   })
-  // A right-click (without dragging, which pans) on a building asks for its height; the browser menu stays away.
-  let menuClick: ((polygonId: string, at: { x: number; y: number }) => void) | undefined
+  // A right-click (without dragging, which pans) or a long press of one finger opens the context menu for what is there; the
+  // browser menu stays away. The click a long press ends with is no click on the scene.
+  let sceneMenu: ((hit: MenuHit, at: { x: number; y: number }) => void) | undefined
+  function openMenu(clientX: number, clientY: number) {
+    if (!sceneMenu) return
+    const found = surfaceAt(clientX, clientY)
+    const hit: MenuHit = {}
+    if (found) hit.surface = found.hit
+    // Furniture is outside the world group: it counts when it is in front of the surface.
+    const piece = raycaster.intersectObject(furnitureGroup, true)[0]
+    if (piece && (!found || piece.distance <= found.distance)) {
+      let o: Object3D | null = piece.object
+      while (o && o.userData.furnitureIndex === undefined) o = o.parent
+      if (o) {
+        hit.furniture = o.userData.furnitureIndex as number
+        delete hit.surface
+      }
+    }
+    if (hit.furniture !== undefined) hit.floor = floorUnder(piece.point, 0)
+    else if (found?.hit.apartmentFloor) hit.floor = { x: found.hit.x, z: found.hit.z }
+    else if (found) hit.floor = floorUnder(found.hit, found.hit.normalY)
+    if (found && !found.ground && hit.furniture === undefined) hit.building = polygonAt(clientX, clientY)?.polygon.id
+    sceneMenu(hit, { x: clientX, y: clientY })
+  }
+  // The floor point of the apartment under a point inside it (a sill, a wall seen from inside, a piece of furniture): a wall
+  // hit lies on the outline, so the point steps back toward the camera, into the room. None outside the apartment's storey,
+  // and none for a roof over it (a surface facing up near the ceiling's height).
+  function floorUnder(at: { x: number; y: number; z: number }, normalY: number): { x: number; z: number } | undefined {
+    if (!plan || !floorMesh || !selectedBuilding) return undefined
+    const base = floorBase(selectedBuilding, plan)
+    if (at.y < base - 0.05 || at.y > base + plan.floorHeight + 0.05) return undefined
+    if (normalY > 0.7 && at.y > base + plan.floorHeight - 0.3) return undefined
+    const dir = raycaster.ray.direction
+    const flat = Math.hypot(dir.x, dir.z) || 1
+    const p = { x: at.x - (dir.x / flat) * 0.15, z: at.z - (dir.z / flat) * 0.15 }
+    if (!insideOutline(plan, p)) return undefined
+    const down = new Raycaster(new Vector3(p.x, at.y + 0.01, p.z), new Vector3(0, -1, 0)).intersectObject(floorMesh, false)[0]
+    return down ? p : undefined
+  }
+  const longPress = createLongPress((at) => openMenu(at.x, at.y))
+  renderer.domElement.addEventListener('pointerdown', (e) => longPress.down(e))
+  renderer.domElement.addEventListener('pointermove', (e) => longPress.move(e))
+  for (const type of ['pointerup', 'pointercancel'] as const) renderer.domElement.addEventListener(type, (e) => longPress.up(e))
+  renderer.domElement.addEventListener('click', (e) => longPress.takeClick() && e.stopImmediatePropagation(), true)
   renderer.domElement.addEventListener('contextmenu', (e) => {
-    if (walking || !menuClick) return
     e.preventDefault()
-    if (!isClick(downAt, { x: e.clientX, y: e.clientY })) return
-    const found = polygonAt(e.clientX, e.clientY)
-    if (found) menuClick(found.polygon.id, { x: e.clientX, y: e.clientY })
+    // A touch screen's own long-press event: the long press above answers it.
+    if (longPress.touching || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    openMenu(e.clientX, e.clientY)
   })
   // The height ruler's helpers: where it stands, and a cheap preview of a new height while its handle moves.
   const MIN_RULER_PX_PER_M = 0.8
@@ -1605,8 +1667,8 @@ export function createScene(container: HTMLElement): SunScene {
     onBuildingHover(handler) {
       hoverHandler = handler
     },
-    onBuildingMenu(handler) {
-      menuClick = handler
+    onSceneMenu(handler) {
+      sceneMenu = handler
     },
     rulerAnchor,
     rulerContext,
