@@ -1,6 +1,7 @@
 import { BoxGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial, type BufferGeometry } from 'three'
-import type { Furniture, FurnitureKind } from './furniture'
+import { sizeOf, type Furniture, type FurnitureKind } from './furniture'
 import { plantById, type Plant, type PlantForm } from './plants'
+import { TROUGH_HEIGHT } from './wall-mount'
 
 // Muted, warm colours that sit with the scene palette (scene.ts): oak and walnut, linen, sage, clay.
 const OAK = 0xb98f63
@@ -85,7 +86,7 @@ const chair = (): Part[] => [
   box(0, 0.47, -0.205, 0.45, 0.43, 0.04, OAK),
 ]
 
-const RECIPES: Record<FurnitureKind, () => Part[]> = {
+const RECIPES: Record<Exclude<FurnitureKind, 'windowbox' | 'wallpot'>, () => Part[]> = {
   bed2: () => bed(1.6, 2, 2),
   bed1: () => bed(0.9, 2, 1),
   sofa: () => sofa(2, 0.9, 3),
@@ -265,14 +266,41 @@ export function potLook(plant: Plant): { form: PlantForm; accent?: number; key: 
   return { form: plant.form, accent, key: `pot-${plant.form}-${accent?.toString(16) ?? 'leaf'}` }
 }
 
+/** Parts scaled by `s` about their origin, then moved by (dx, dy, dz). */
+const placed = (parts: Part[], s: number, dx: number, dy: number, dz: number): Part[] =>
+  parts.map((p) => ({ ...p, at: [p.at[0] * s + dx, p.at[1] * s + dy, p.at[2] * s + dz], size: [p.size[0] * s, p.size[1] * s, p.size[2] * s] }))
+
+/** The plant of a potted look without its pot (every look starts with the pot and its soil), its bottom at 0. */
+const foliage = (potted: Part[]): Part[] => placed(potted.slice(2), 1, 0, -potted[0].size[1], 0)
+
+/** A terracotta trough `w` wide on two brackets, with small plants of the look in a row. Front (+z) is away from the facade. */
+const windowBox = (w: number, potted: Part[]): Part[] => {
+  const n = Math.max(1, Math.min(6, Math.round(w / 0.3)))
+  return [
+    box(0, 0, 0, w, TROUGH_HEIGHT, 0.2, POT),
+    box(0, TROUGH_HEIGHT, 0, w - 0.04, 0.02, 0.16, SOIL),
+    ...[-1, 1].map((u) => box(u * (w / 2 - 0.12), -0.12, -0.08, 0.03, 0.14, 0.03, SLATE)),
+    ...Array.from({ length: n }, (_, i) => placed(foliage(potted), 0.55, (i - (n - 1) / 2) * (w / n), TROUGH_HEIGHT + 0.02, 0.02)).flat(),
+  ]
+}
+
+/** A small shelf on a bracket, its back on the wall (-z), with the potted look on it, smaller. */
+const wallPot = (potted: Part[]): Part[] => [
+  box(0, 0, 0, 0.36, 0.03, 0.24, OAK),
+  box(0, -0.16, -0.105, 0.04, 0.16, 0.03, WALNUT),
+  ...placed(potted, 0.7, 0, 0.03, 0.02),
+]
+
 const templates = new Map<string, Group>()
 
-/** The parts of a piece: a pot shaped after a known species' growth form, else the kind's own recipe. */
+/** The parts of a piece: a pot (or a window box, a wall planter) shaped after a known species' growth form, else the kind's own recipe. */
 function partsOf(f: Furniture): { key: string; parts: Part[] } {
   const plant = f.plant ? plantById(f.plant) : undefined
+  const look = plant ? potLook(plant) : { form: 'shrub' as const, accent: undefined, key: 'pot-leaf' }
+  if (f.kind === 'windowbox') return { key: `wb-${sizeOf(f).w}-${look.key}`, parts: windowBox(sizeOf(f).w, POTTED[look.form](look.accent)) }
+  if (f.kind === 'wallpot') return { key: `wp-${look.key}`, parts: wallPot(POTTED[look.form](look.accent)) }
   if (f.kind !== 'plant' || !plant) return { key: f.kind, parts: RECIPES[f.kind]() }
-  const { form, accent, key } = potLook(plant)
-  return { key, parts: POTTED[form](accent) }
+  return { key: look.key, parts: POTTED[look.form](look.accent) }
 }
 
 /** One template per kind (and per look of a potted plant): a group of boxes and cylinders sharing the unit geometries and the colour materials. */

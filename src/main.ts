@@ -59,7 +59,7 @@ import type { DeadEnd } from './garden-text'
 import { scoreSpots, type PlantResult } from './garden'
 import { furnitureName, hasPot, newFurniture, potAt, snapMetres, specOf, type Furniture } from './furniture'
 import { plantById, plantName, type Plant } from './plants'
-import { classifyHit, CUT_HINT, FACADE_HINT, type PickedKind } from './garden-pick'
+import { classifyHit, CUT_HINT, FACADE_HINT, GROUND_TOP, type PickedKind } from './garden-pick'
 import { bestOfKind, getKindFilter } from './garden-kind'
 import { createGardenCard, type GardenCardInput } from './garden-card'
 import { createPlantCard } from './plant-card'
@@ -70,7 +70,7 @@ import { CELL, sampleAt, sampleMinutes, spotStats, type SunMapResult } from './s
 import { createUI, type View } from './ui'
 import { escapeAction, probeOutcome } from './probe'
 import { createWalkHud } from './walk'
-import { fmt1Fixed, fmtMonth, onBeforeLangSwitch, t, upFirst } from './i18n'
+import { fmt1Fixed, fmtMonth, onBeforeLangSwitch, t, upFirst, type Key } from './i18n'
 import { facadeWalls } from './apartment'
 import { bandOf, daylightColor, summarize } from './dayfactor'
 import { glassTriangles } from './dayfactor-trace'
@@ -79,7 +79,8 @@ import { bandWord } from './ui'
 import { touchOnly } from './touch'
 import { cameraAfterWalk, cameraForKey, pickCamera, shownCamera, type CameraMode } from './camera-mode'
 import { createContextMenu, type MenuEntry } from './context-menu'
-import { MENU_FURNITURE, MENU_PLANTS, sceneMenuItems, type SceneMenuItem } from './scene-menu'
+import { MENU_FURNITURE, MENU_PLANTS, MOUNT_PLANTS, sceneMenuItems, type SceneMenuItem } from './scene-menu'
+import { mountSpot, outerSillAt, wallPotAt, windowBoxAt } from './wall-mount'
 import { saveSession, takeSession } from './session'
 import { decodeShare, encodeShare, shareUrl } from './share'
 import { createSharedChip } from './shared-chip'
@@ -217,7 +218,7 @@ narrow.addEventListener('change', placePlantCard)
 function renderPlantCard() {
   const plant = plantCardId ? plantById(plantCardId) : undefined
   const result = plant && gardenSpot ? spotRanked?.find((r) => r.plant.id === plant.id) : undefined
-  const pot = plant && gardenSpot && plan ? { placed: hasPot(plan.furniture, potAt(plant.id, gardenSpot, gardenSpot.kind === 'indoor')) } : undefined
+  const pot = plant && gardenSpot && plan ? { placed: hasPot(plan.furniture, spotPot(plant.id, gardenSpot)) } : undefined
   plantCard.set(plant ? { plant, here: result ? plantRow(result, gardenMonth) : undefined, pot } : null)
 }
 
@@ -225,7 +226,7 @@ function renderPlantCard() {
 function putPotHere() {
   const plant = plantCardId ? plantById(plantCardId) : undefined
   if (!plant || !gardenSpot || !plan) return
-  const pot = potAt(plant.id, gardenSpot, gardenSpot.kind === 'indoor')
+  const pot = spotPot(plant.id, gardenSpot)
   if (hasPot(plan.furniture, pot)) return
   // Undo takes this pot away again, whatever else was edited since.
   editFurniture((list) => [...list, pot], (list) => list.filter((f) => !hasPot([f], pot)), t('plant.potChip'))
@@ -250,6 +251,11 @@ function closePlantCard() {
   renderPlantCard()
 }
 let gardenSpot: { kind: PickedKind; x: number; y: number; z: number; neighbourRoof: boolean } | undefined
+/** The picked spot is in front of a window or a wall: "Put a pot here" hangs this (a window box, a wall planter) instead. */
+let spotMount: ((plant: string) => Furniture | undefined) | undefined
+/** What "Put a pot here" puts at the picked spot: a pot, or what hangs there. */
+const spotPot = (plant: string, spot: { kind: PickedKind; x: number; y: number; z: number }): Furniture =>
+  spotMount?.(plant) ?? potAt(plant, spot, spot.kind === 'indoor')
 /** A scene change that leaves the picked spot where it is (furniture counted or not, a pot placed): the spot is traced again in the new scene. */
 let keepSpot = false
 function keepingSpot(change: () => void) {
@@ -436,6 +442,7 @@ renderGarden() // the hint, until a spot is picked
 
 function clearGardenSpot() {
   gardenSpot = undefined
+  spotMount = undefined
   spotRanked = null
   if (plantCardAuto) closePlantCard()
   gardenHint = undefined
@@ -503,12 +510,17 @@ sunScene.onGardenClick((hit) => {
     renderGarden()
     return
   }
+  // A pot on the sill outside a window would sit in the wall: the spot is in front of the window, and the pot a window box.
+  const base = plan && site ? floorBase(site.selected, plan) : 0
+  const sill = plan ? outerSillAt(plan, base, hit) : undefined
+  if (sill !== undefined) return mountHere(windowBoxAt(plan!, base, sill, ''), (id) => plan && windowBoxAt(plan, base, sill, id))
   selectGardenSpot(kind, hit.x, hit.y, hit.z)
 })
 
 /** A spot of the Garden view becomes the picked one (by a click, or "Show the best spot"): its card traces and rates the plants. */
 function selectGardenSpot(kind: PickedKind, x: number, y: number, z: number, openCard = true) {
   gardenHint = undefined
+  spotMount = undefined
   if (openCard) gardenCardOpen = true
   // A roof outside the picked building's footprints belongs to a neighbour.
   const own = site ? (site.selected.members ?? [site.selected]).some((m) => buildingContains(m, { x, z })) : true
@@ -1155,7 +1167,11 @@ sunScene.onSceneMenu((hit, at) => {
   const spot = hit.surface && kind && kind !== 'cut' ? { kind, x: hit.surface.x, y: hit.surface.y, z: hit.surface.z } : undefined
   const piece = hit.furniture !== undefined ? plan?.furniture?.[hit.furniture] : undefined
   const floor = hit.floor
-  const groups = sceneMenuItems({ floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece }, { hasPlan: !!plan, walking })
+  const base = plan && site ? floorBase(site.selected, plan) : 0
+  // A window seen from outside, a window box or a wall planter: "Plants for this spot" traces the point in front of it.
+  const hung = piece && specOf(piece.kind).mounted ? piece : plan && hit.window?.outside ? windowBoxAt(plan, base, hit.window.index, '') : undefined
+  const target = { floor: !!floor, spot: spot?.kind, building: !!hit.building, furniture: !!piece, front: !!hung, window: !!hit.window, wall: !!hit.wall }
+  const groups = sceneMenuItems(target, { hasPlan: !!plan, walking })
   const entry = (item: SceneMenuItem): MenuEntry => {
     switch (item) {
       case 'rotate': {
@@ -1170,7 +1186,7 @@ sunScene.onSceneMenu((hit, at) => {
       case 'daylight':
         return { label: t('menu.daylight'), run: () => lightHere(floor!, true) }
       case 'plants':
-        return { label: t('menu.plants'), run: () => plantsHere(spot!) }
+        return { label: t('menu.plants'), run: () => (hung ? mountHere(hung) : plantsHere(spot!)) }
       case 'addPlant': {
         // Inside the apartment (a sill too) the list is of house plants; the pot stands where the click was.
         const plants = MENU_PLANTS[floor ? 'indoor' : 'outdoor'].map((id) => plantById(id)!)
@@ -1184,6 +1200,14 @@ sunScene.onSceneMenu((hit, at) => {
             } },
           ],
         }
+      }
+      case 'addWindowBox': {
+        const index = hit.window!.index
+        return mountEntry('menu.addWindowBox', MOUNT_PLANTS.windowbox, (id) => plan && windowBoxAt(plan, base, index, id))
+      }
+      case 'addWallPot': {
+        const { face, n, height } = hit.wall!
+        return mountEntry('menu.addWallPot', MOUNT_PLANTS.wallpot, (id) => plan && wallPotAt({ face, n }, base, plan.floorHeight, id, height))
       }
       case 'addFurniture':
         return {
@@ -1211,6 +1235,32 @@ function lightHere(at: Point, daylight: boolean) {
 function plantsHere(spot: { kind: PickedKind; x: number; y: number; z: number }) {
   if (view !== 'garden') setView('garden')
   if (view === 'garden') selectGardenSpot(spot.kind, spot.x, spot.y, spot.z)
+}
+/** A window box or a wall planter hung by `make(plant)`: a few plants to pick, or Choose… for the Garden in front of it. */
+function mountEntry(label: Key, plants: readonly string[], make: (plant: string) => Furniture | undefined): MenuEntry {
+  return {
+    label: t(label),
+    items: [
+      ...plants.map((id) => ({ label: upFirst(plantName(plantById(id)!)), run: () => addHung(make(id)) })),
+      { label: t('menu.choosePlant'), run: () => {
+        mountHere(make(''), make)
+        findPanel.el.querySelector<HTMLInputElement>('input')?.focus()
+      } },
+    ],
+  }
+}
+/** The Garden on the point in front of a hung piece (`at`, of any plant), where "Put a pot here" hangs `make(plant)`: by default another like it. */
+function mountHere(at: Furniture | undefined, make = (plant: string): Furniture | undefined => at && { ...at, plant }) {
+  if (!at) return
+  const p = mountSpot(at)
+  plantsHere({ kind: at.kind === 'wallpot' ? 'indoor' : p.y <= GROUND_TOP ? 'ground' : 'roof', ...p })
+  if (gardenSpot?.x !== p.x || gardenSpot.z !== p.z) return // the Garden could not open
+  spotMount = make
+  renderPlantCard()
+}
+function addHung(piece: Furniture | undefined) {
+  if (!piece || !plan || hasPot(plan.furniture, piece)) return
+  editFurniture((list) => [...list, piece], (list) => list.filter((f) => f !== piece), t('menu.added', { name: upFirst(furnitureName(piece)) }))
 }
 function addPot(plant: Plant, spot: { kind: PickedKind; x: number; y: number; z: number }) {
   const pot = potAt(plant.id, spot, spot.kind === 'indoor')

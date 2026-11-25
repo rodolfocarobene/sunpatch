@@ -56,11 +56,12 @@ import { dataExtent } from './neighborhood'
 import { ribbonsData } from './ribbon'
 import { buildingGeometry } from './footprint'
 import { panelMeshes } from './panel-mesh'
-import { hiddenOutlines, partsOf, pickBuilding, ringCentroid, type Building } from './osm'
+import { hiddenOutlines, partsOf, pickBuilding, ringCentroid, type Building, type Point } from './osm'
 import { SLAB_THICKNESS, floorBase, type Plan } from './plan'
 import type { SunDirection } from './sun'
 import { createWalkControls, type WalkHandlers } from './walk'
 import { insideOutline, walkStart } from './walk-geom'
+import { wallFaceAt, windowOnRay } from './wall-mount'
 import { collectOccluders, occluderRoots, sceneKey } from './sunmap-trace'
 import { furnitureMesh } from './furniture-mesh'
 import { heatTexels, type Grid } from './sunmap'
@@ -183,6 +184,10 @@ export interface MenuHit {
   building?: string
   /** The index of the piece of furniture hit, in the plan's list. */
   furniture?: number
+  /** The apartment's window hit (or, from outside, the facade just under it), by index in the plan's list; `outside` when seen from outside. */
+  window?: { index: number; outside: boolean }
+  /** The inside face of an apartment wall hit, seen from the room: a point on it, its normal into the room, and the height above the floor. */
+  wall?: { face: Point; n: Point; height: number }
 }
 
 export interface SunScene {
@@ -1447,6 +1452,13 @@ export function createScene(container: HTMLElement): SunScene {
     if (hit.furniture !== undefined) hit.floor = floorUnder(piece.point, 0)
     else if (found?.hit.apartmentFloor) hit.floor = { x: found.hit.x, z: found.hit.z }
     else if (found) hit.floor = floorUnder(found.hit, found.hit.normalY)
+    if (plan && selectedBuilding && hit.furniture === undefined) {
+      const base = floorBase(selectedBuilding, plan)
+      hit.window = windowOnRay(plan, base, raycaster.ray.origin, raycaster.ray.direction, found?.distance ?? Infinity)
+      // A wall seen from the room: the floor point under it is on the room's side.
+      const wall = !hit.window && found && !found.ground && Math.abs(found.hit.normalY) < 0.3 && hit.floor ? wallFaceAt(plan, found.hit, hit.floor, 0.05) : undefined
+      if (wall) hit.wall = { ...wall, height: found!.hit.y - base }
+    }
     if (found && !found.ground && hit.furniture === undefined) hit.building = polygonAt(clientX, clientY)?.polygon.id
     sceneMenu(hit, { x: clientX, y: clientY })
   }

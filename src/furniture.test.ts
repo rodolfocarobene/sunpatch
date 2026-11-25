@@ -152,6 +152,16 @@ describe('packed form (share links)', () => {
     expect(unpackFurniture([['pl', 20, 40, 0, 'Not An Id!', 'x']])).toEqual([{ kind: 'plant', x: 1, z: 2, rot: 0 }])
     expect(unpackFurniture([['pl', 20, 40, 0, '', 5]])).toEqual([{ kind: 'plant', x: 1, z: 2, rot: 0, y: 0.5 }])
   })
+
+  it('adds a window box'+"'"+'s own width in 5 cm units, after its plant and height', () => {
+    const box: Furniture = { kind: 'windowbox', x: 5, z: -0.15, rot: 180, plant: 'geranium', y: 3.6, w: 1.2 }
+    const wall: Furniture = { kind: 'wallpot', x: 1, z: 0.45, rot: 0, plant: 'pothos', y: 4.5 }
+    expect(packFurniture([box, wall])).toEqual([['wb', 100, -3, 36, 'geranium', 36, 24], ['wp', 20, 9, 0, 'pothos', 45]])
+    expect(unpackFurniture(packFurniture([box, wall]))).toEqual([box, wall])
+    expect(packFurniture([{ kind: 'shelf', x: 0, z: 0, rot: 0, w: 1 }])).toEqual([['bk', 0, 0, 0, '', '', 20]])
+    expect(unpackFurniture([['bk', 0, 0, 0, '', '', 20]])).toEqual([{ kind: 'shelf', x: 0, z: 0, rot: 0, w: 1 }])
+    expect(unpackFurniture([['wb', 0, 0, 0, 'basil', 30, -4]])).toEqual([{ kind: 'windowbox', x: 0, z: 0, rot: 0, plant: 'basil', y: 3 }])
+  })
 })
 
 describe('pots', () => {
@@ -177,6 +187,19 @@ describe('pots', () => {
     useLang('it')
     expect(furnitureName(pot)).toBe('pomodoro')
     expect(furnitureName({ ...pot, plant: 'no-such-plant' })).toBe(italian['editor.furnPlant'])
+    expect(furnitureName({ ...pot, kind: 'windowbox' })).toBe('Fioriera da davanzale con pomodoro')
+    useLang('en')
+    expect(furnitureName({ ...pot, kind: 'wallpot', plant: 'pothos' })).toBe('Wall planter with pothos')
+  })
+
+  it('keep a window box'+"'"+'s width through validation, and size it by that width', () => {
+    const box: Furniture = { kind: 'windowbox', x: 0, z: 0, rot: 0, plant: 'basil', y: 3, w: 1.4 }
+    expect(checkFurniture(JSON.parse(JSON.stringify([box])))).toEqual({ furniture: [box] })
+    expect(checkFurniture([{ ...box, w: -1 }])).toEqual({ furniture: [{ kind: 'windowbox', x: 0, z: 0, rot: 0, plant: 'basil', y: 3 }] })
+    const xs = furnitureFootprint(box).map((p) => p.x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.4)
+    expect(hitsFurniture(box, { x: 0.65, z: 0 }, 0)).toBe(true)
+    expect(hitsFurniture({ ...box, w: undefined }, { x: 0.65, z: 0 }, 0)).toBe(false)
   })
 
   it('keep their height when the plan is rebased (only x and z move)', () => {
