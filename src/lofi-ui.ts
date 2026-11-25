@@ -9,6 +9,8 @@ const KEY_NAMES: Record<Lang, string[]> = {
   en: ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'],
   it: ['Do', 'Re♭', 'Re', 'Mi♭', 'Mi', 'Fa', 'Sol♭', 'Sol', 'La♭', 'La', 'Si♭', 'Si'],
 }
+const NOTE_ICON =
+  '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M5 9.5V2.5l5-1v6.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="3.6" cy="9.6" r="1.6" fill="currentColor"/><circle cx="8.6" cy="8.1" r="1.6" fill="currentColor"/></svg>'
 const NEXT_ICON =
   '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 2l6 4-6 4zM10 2v8" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>'
 
@@ -50,7 +52,10 @@ export function createLofi(): { toggle: HTMLButtonElement; bar: HTMLElement } {
   } catch { /* storage blocked: defaults */ }
   player.setVolume(volume)
 
-  const toggle = Object.assign(document.createElement('button'), { type: 'button', id: 'lofiToggle', className: 'lofiToggle', textContent: t('lofi.toggle'), title: t('lofi.toggleTitle') })
+  // A music note and a full name, outlined like a switch: it must not read as a third language next to EN · IT.
+  const toggle = Object.assign(document.createElement('button'), { type: 'button', id: 'lofiToggle', className: 'lofiToggle', title: t('lofi.toggleTitle') })
+  toggle.innerHTML = NOTE_ICON
+  toggle.append(Object.assign(document.createElement('span'), { textContent: t('lofi.toggle') }))
   const bar = document.createElement('div')
   bar.id = 'lofiBar'
   bar.setAttribute('role', 'group')
