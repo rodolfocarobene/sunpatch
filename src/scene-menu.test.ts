@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { plantById } from './plants'
-import { MENU_FURNITURE, MENU_PLANTS, MOUNT_PLANTS, sceneMenuItems } from './scene-menu'
+import { MENU_FURNITURE, MENU_PLANTS, MOUNT_PLANTS, onInnerSurface, sceneMenuItems } from './scene-menu'
 
 const out = { hasPlan: true, walking: false }
 
@@ -60,5 +60,25 @@ describe('menu lists', () => {
     expect(MENU_FURNITURE).not.toContain('plant')
     expect(MENU_FURNITURE).not.toContain('windowbox')
     expect(MENU_FURNITURE).not.toContain('wallpot')
+  })
+})
+
+describe('onInnerSurface', () => {
+  const at = (y: number, ny: number) => ({ y, normal: { y: ny } })
+  // A storey 3 m high with its floor at y = 6.
+
+  it('answers on a wall or a reveal at any height of the storey', () => {
+    expect(onInnerSurface(at(7, 0), 6, 3)).toBe(true)
+    expect(onInnerSurface(at(8.9, 0.2), 6, 3)).toBe(true)
+  })
+
+  it('answers on a sill, but leaves the floor and the cut through the top of the storey to the floor', () => {
+    expect(onInnerSurface(at(6.9, 1), 6, 3)).toBe(true)
+    expect(onInnerSurface(at(6, 1), 6, 3)).toBe(false)
+    expect(onInnerSurface(at(8.95, 1), 6, 3)).toBe(false)
+  })
+
+  it('leaves the ceiling to the floor', () => {
+    expect(onInnerSurface(at(9, -1), 6, 3)).toBe(false)
   })
 })

@@ -73,6 +73,7 @@ import { hatchedMaterial, hatchStrength } from './hatch'
 import { isGuessed } from './heights'
 import { rulerOffered, type RulerAnchor, type RulerContext } from './height-ruler'
 import { buildTreeGroup, disposeTreeGroup, type Tree } from './trees'
+import { onInnerSurface } from './scene-menu'
 
 // Test scene: 200 m ground. Real data: the extent follows the neighbourhood radius (dataExtent in neighborhood.ts).
 const TEST_EXTENT = { ground: 200, shadow: 70, sunDistance: 150 }
@@ -188,6 +189,16 @@ export interface MenuHit {
   window?: { index: number; outside: boolean }
   /** The inside face of an apartment wall hit, seen from the room: a point on it, its normal into the room, and the height above the floor. */
   wall?: { face: Point; n: Point; height: number }
+  /** A surface of the apartment other than its floor or ceiling, seen from the room (a wall, a sill, a window reveal): the point hit and its unit normal toward the room. */
+  inner?: SurfacePoint
+}
+
+/** A point of a surface and its unit normal, scene metres. */
+export interface SurfacePoint {
+  x: number
+  y: number
+  z: number
+  normal: { x: number; y: number; z: number }
 }
 
 export interface SunScene {
@@ -268,8 +279,8 @@ export interface SunScene {
   revealPoint(at: { x: number; y: number; z: number }): void
   /** How many pixels at the left of the scene the panel covers: the apartment is centred in the rest. */
   setFrameInset(inset: () => number): void
-  /** Marks a floor point of the sun map (null removes the mark); the handler gets where it is on screen, or null when gone. */
-  setProbe(at: { x: number; z: number } | null): void
+  /** Marks a floor point of the sun map, or a point of a wall facing `normal` (null removes the mark); the handler gets where it is on screen, or null when gone. */
+  setProbe(at: { x: number; z: number } | SurfacePoint | null): void
   onProbeScreen(handler: (at: { x: number; y: number; visible: boolean } | null) => void): void
   /** Called with the floor point of a plain click (not a drag) while the sun map shows or while walking, or null for a click anywhere else. */
   onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
@@ -515,7 +526,7 @@ export function createScene(container: HTMLElement): SunScene {
   let cutaway = false
   let apartmentMeshes = new Set<Mesh>()
   let glassMeshes: Mesh[] = []
-  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'suit' | 'garden' | 'gardenmap' | 'gardenroof' }[] = []
+  let aptLines: { line: Object3D; kind: 'edge' | 'ceiling' | 'outline' | 'ghost' | 'sunmap' | 'probe' | 'suit' | 'garden' | 'gardenmap' | 'gardenroof' }[] = []
   let ceilingMaterial: MeshStandardMaterial | undefined
   let addedAboveMaterial: MeshStandardMaterial | undefined
   let glowMaterials: MeshStandardMaterial[] = []
@@ -529,7 +540,7 @@ export function createScene(container: HTMLElement): SunScene {
   let sunMapOn = false
   let sunMapData: SunMapPaint | null = null
   let overlay: Mesh | undefined
-  let probe: { x: number; z: number } | null = null
+  let probe: { x: number; z: number } | SurfacePoint | null = null
   let probeMark: Group | undefined
   let probeHandler: ((at: { x: number; y: number; visible: boolean } | null) => void) | undefined
   let probeShown = ''
@@ -739,12 +750,17 @@ export function createScene(container: HTMLElement): SunScene {
     const flatRing = (inner: number, outer: number, color: number) => flat(color, new RingGeometry(inner, outer, 32).rotateX(-Math.PI / 2))
     probeMark = new Group()
     probeMark.add(flatRing(0.17, 0.25, PROBE_RING), flatRing(0.1, 0.17, PROBE_COLOR), flat(PROBE_COLOR, new CircleGeometry(0.045, 16).rotateX(-Math.PI / 2)))
-    probeMark.position.set(probe.x, floorBase(selectedBuilding, plan) + SUNMAP_LIFT + 0.004, probe.z)
+    if ('normal' in probe) {
+      // Flat on the wall (or sill), a hair off it; shown with or without a floor layer.
+      const n = new Vector3(probe.normal.x, probe.normal.y, probe.normal.z)
+      probeMark.position.set(probe.x, probe.y, probe.z).addScaledVector(n, 0.004)
+      probeMark.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), n)
+    } else probeMark.position.set(probe.x, floorBase(selectedBuilding, plan) + SUNMAP_LIFT + 0.004, probe.z)
     probeMark.renderOrder = 1
     for (const child of probeMark.children) child.renderOrder = 1
     world.add(probeMark)
     // Each ring is itself an apartment line: the second pass leaves those meshes drawn, not the group around them.
-    for (const child of probeMark.children) aptLines.push({ line: child, kind: 'sunmap' })
+    for (const child of probeMark.children) aptLines.push({ line: child, kind: 'normal' in probe ? 'probe' : 'sunmap' })
   }
 
   function removeGardenMap() {
@@ -1328,7 +1344,7 @@ export function createScene(container: HTMLElement): SunScene {
 
   // The surface the camera sees under the pointer (not glass, not an overlay, not a hidden block), from outside or walking,
   // and whether it is the ground plane; null for the sky.
-  function surfaceAt(clientX: number, clientY: number): { hit: GardenHit; ground: boolean; distance: number } | null {
+  function surfaceAt(clientX: number, clientY: number): { hit: GardenHit; ground: boolean; distance: number; face?: SurfacePoint } | null {
     const built = seenHit(clientX, clientY) // also aims the raycaster at the pointer
     // The ground plane is not part of the world group: it is the nearer hit when nothing built is in front of it.
     const flatGround = raycaster.intersectObject(ground, false)[0]
@@ -1342,11 +1358,15 @@ export function createScene(container: HTMLElement): SunScene {
     // With the floors above hidden, the top of the visible storey is the cut through the building, not a roof. Inside the
     // apartment's outline the click means the floor under it.
     const cut = !onFloor && cutawayNow() && normalY > 0.7 && apartmentMeshes.has(built.object as Mesh)
+    // The point itself and its face's normal toward the camera (a face seen from behind is the other side of a wall).
+    const n = built.face?.normal.clone().transformDirection(built.object.matrixWorld)
+    if (n && n.dot(raycaster.ray.direction) > 0) n.negate()
+    const face = n && { x, y, z, normal: { x: n.x, y: n.y, z: n.z } }
     if (cut && floorMesh && plan && insideOutline(plan, { x, z })) {
       const down = new Raycaster(new Vector3(x, y, z), new Vector3(0, -1, 0)).intersectObject(floorMesh, false)[0]
-      if (down) return { hit: { x, y: down.point.y, z, normalY: 1, apartmentFloor: true }, ground: false, distance: built.distance }
+      if (down) return { hit: { x, y: down.point.y, z, normalY: 1, apartmentFloor: true }, ground: false, distance: built.distance, face }
     }
-    return { hit: { x, y, z, normalY, apartmentFloor: onFloor, cut }, ground: false, distance: built.distance }
+    return { hit: { x, y, z, normalY, apartmentFloor: onFloor, cut }, ground: false, distance: built.distance, face }
   }
 
   // The Garden view: a plain click names the surface the camera sees.
@@ -1468,6 +1488,9 @@ export function createScene(container: HTMLElement): SunScene {
       const wall = !hit.window && found && !found.ground && Math.abs(found.hit.normalY) < 0.3 && hit.floor ? wallFaceAt(plan, found.hit, hit.floor, 0.05) : undefined
       if (wall) hit.wall = { ...wall, height: found!.hit.y - base }
     }
+    // A wall, a sill or a window reveal seen from the room: its light is asked there, not on the floor beside it.
+    const face = found?.face
+    if (face && plan && selectedBuilding && hit.floor && hit.furniture === undefined && onInnerSurface(face, floorBase(selectedBuilding, plan), plan.floorHeight)) hit.inner = face
     if (found && !found.ground && hit.furniture === undefined) hit.building = polygonAt(clientX, clientY)?.polygon.id
     sceneMenu(hit, { x: clientX, y: clientY })
   }

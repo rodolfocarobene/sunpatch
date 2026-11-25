@@ -26,8 +26,8 @@ export interface SceneMenuTarget {
 
 /**
  * The menu's groups, separated on screen: the piece under the pointer, the light at the point, what to put there, the
- * building. Sun and indirect light are the apartment floor's (the sun map and the daylight estimate cover only it); a pot
- * or a piece of furniture needs a plan to be saved in. A building's height is not offered from inside the apartment or
+ * building. Sun and indirect light are offered inside the apartment (on its floor, or on a wall, a sill or a reveal: see
+ * `onInnerSurface`); a pot or a piece of furniture needs a plan to be saved in. A building's height is not offered from inside the apartment or
  * while walking (the height box needs the outside view).
  */
 export function sceneMenuItems(target: SceneMenuTarget, state: { hasPlan: boolean; walking: boolean }): SceneMenuItem[][] {
@@ -45,6 +45,17 @@ export function sceneMenuItems(target: SceneMenuTarget, state: { hasPlan: boolea
     target.building && !target.floor && !target.furniture && !state.walking ? ['height'] : [],
   ]
   return groups.filter((g) => g.length > 0)
+}
+
+/**
+ * Whether "Sun here" and "Indirect light here" answer at a surface point of the apartment (seen from the room, with the
+ * floor at `base`) rather than on the floor beside it: a wall, a window reveal or a sill, but not the floor, the ceiling
+ * (or a lintel's underside) or the cut through the storey's top with the floors above hidden.
+ */
+export function onInnerSurface(face: { y: number; normal: { y: number } }, base: number, floorHeight: number): boolean {
+  if (face.normal.y < -0.7) return false
+  if (face.normal.y > 0.7) return face.y > base + 0.05 && face.y < base + floorHeight - 0.3
+  return true
 }
 
 /** A few common plants for the "Add a plant here" list, by where the pot stands (all of them grow there: see plants.ts). */
