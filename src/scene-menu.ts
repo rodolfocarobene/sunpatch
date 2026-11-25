@@ -3,7 +3,7 @@ import type { PickedKind } from './garden-pick'
 
 // What the scene's context menu (right-click, or a long press on a touch screen) offers for the thing under the pointer.
 
-export type SceneMenuItem = 'rotate' | 'remove' | 'sun' | 'daylight' | 'plants' | 'addPlant' | 'addFurniture' | 'height'
+export type SceneMenuItem = 'rotate' | 'remove' | 'sun' | 'daylight' | 'plants' | 'addPlant' | 'addWindowBox' | 'addWallPot' | 'addFurniture' | 'height'
 
 export interface SceneMenuTarget {
   /** A point of the apartment floor: the floor itself, or the floor under a sill, a wall or a piece of furniture inside. */
@@ -14,6 +14,12 @@ export interface SceneMenuTarget {
   building?: boolean
   /** A piece of furniture or a pot. */
   furniture?: boolean
+  /** The point in front of a window seen from outside, or of a window box or a wall planter: the Garden traces it, though no pot stands there. */
+  front?: boolean
+  /** A window of the apartment, from outside or inside: a window box can hang under it. */
+  window?: boolean
+  /** The inside face of a wall of the apartment: a planter can hang on it. */
+  wall?: boolean
 }
 
 /**
@@ -28,8 +34,10 @@ export function sceneMenuItems(target: SceneMenuTarget, state: { hasPlan: boolea
     target.furniture && state.hasPlan ? ['rotate', 'remove'] : [],
     floor ? ['sun', 'daylight'] : [],
     [
-      ...(target.spot ? (['plants'] as const) : []),
+      ...(target.spot || target.front ? (['plants'] as const) : []),
       ...(target.spot && state.hasPlan ? (['addPlant'] as const) : []),
+      ...(target.window && state.hasPlan ? (['addWindowBox'] as const) : []),
+      ...(target.wall && state.hasPlan ? (['addWallPot'] as const) : []),
       ...(floor ? (['addFurniture'] as const) : []),
     ],
     target.building && !target.floor && !target.furniture && !state.walking ? ['height'] : [],
@@ -43,5 +51,11 @@ export const MENU_PLANTS: Record<'indoor' | 'outdoor', readonly string[]> = {
   outdoor: ['tomato', 'basil', 'rosemary', 'lavender', 'geranium'],
 }
 
-/** The furniture the menu can place: every kind but the plain plant (pots come from the plant list, named after their plant). */
-export const MENU_FURNITURE: readonly FurnitureKind[] = FURNITURE.map((s) => s.kind).filter((k) => k !== 'plant')
+/** The plants offered for a window box (outdoors, small enough for a trough) and for a wall planter (house plants, mostly trailing). */
+export const MOUNT_PLANTS: Record<'windowbox' | 'wallpot', readonly string[]> = {
+  windowbox: ['geranium', 'petunia', 'basil', 'strawberry', 'lavender'],
+  wallpot: ['pothos', 'philodendron', 'english-ivy', 'spider-plant', 'fern'],
+}
+
+/** The furniture the menu can place: every kind but the plain plant (pots come from the plant list, named after their plant) and what hangs on a window or a wall. */
+export const MENU_FURNITURE: readonly FurnitureKind[] = FURNITURE.filter((s) => s.kind !== 'plant' && !s.mounted).map((s) => s.kind)
