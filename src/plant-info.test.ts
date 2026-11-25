@@ -31,6 +31,18 @@ describe('catalogue', () => {
       expect(p.wiki.it, p.id).toBe(p.wiki.it.trim())
     }
   })
+
+  it('gives every plant a growth form, and a few the expected one', () => {
+    const forms = ['tree', 'shrub', 'upright', 'trailing', 'succulent', 'sword', 'fern', 'grass', 'climber', 'leafy', 'mound', 'bulb']
+    for (const p of PLANTS) expect(forms, p.id).toContain(p.form)
+    expect(new Set(PLANTS.map((p) => p.form)).size).toBe(forms.length)
+    const formOf = (id: string) => plantById(id)?.form
+    expect(['lemon', 'olive', 'fig', 'dwarf-apple'].map(formOf)).toEqual(['tree', 'tree', 'tree', 'tree'])
+    expect(['rosemary', 'lavender', 'hydrangea'].map(formOf)).toEqual(['shrub', 'shrub', 'shrub'])
+    expect(['pothos', 'english-ivy'].map(formOf)).toEqual(['trailing', 'trailing'])
+    expect(['tomato', 'pea', 'jasmine'].map(formOf)).toEqual(['climber', 'climber', 'climber'])
+    expect([formOf('snake-plant'), formOf('chives'), formOf('lettuce'), formOf('tulip')]).toEqual(['sword', 'grass', 'leafy', 'bulb'])
+  })
 })
 
 describe('urls', () => {
