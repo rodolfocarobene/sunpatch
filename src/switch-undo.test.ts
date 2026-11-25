@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { buildingClickAction, createUndoSlot } from './switch-undo'
 
 describe('buildingClickAction', () => {
+  it('asks first on a touch screen, but still ignores or explains where a click does', () => {
+    expect(buildingClickAction('3d', false, true)).toBe('confirm')
+    expect(buildingClickAction('panels', false, true)).toBe('confirm')
+    expect(buildingClickAction('garden', false, true)).toBe('ignore')
+    expect(buildingClickAction('panels', true, true)).toBe('explain')
+  })
+
   it('switches in 3D and in Panels without the suitability map', () => {
     expect(buildingClickAction('3d', false)).toBe('switch')
     expect(buildingClickAction('panels', false)).toBe('switch')
