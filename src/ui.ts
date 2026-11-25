@@ -16,6 +16,7 @@ import { BANDS, bandOf, daylightGradient, type Band } from './dayfactor'
 import { panelTicks, rangeText, suitabilityGradient } from './suitability'
 import { buildingLine } from './building-line'
 import { NEIGHBORHOODS, parseNeighborhood, type NeighborhoodId } from './neighborhood'
+import { CAMERA_KEYS, CAMERA_MODES, type CameraMode } from './camera-mode'
 
 const GUIDE_KEY = 'sunpatch.guide'
 const SWITCH_HINT_KEY = 'sunpatch.switchHint'
@@ -139,6 +140,10 @@ export interface UI {
   setRoofHint(show: boolean): void
   /** Disables the Walk button while walking. */
   setWalking(walking: boolean): void
+  /** Marks the camera the switcher shows as chosen. */
+  setCamera(mode: CameraMode): void
+  /** Called with the camera picked on the switcher. */
+  onCamera(listener: (mode: CameraMode) => void): void
   /** Time controls for the walk-mode keys; the UI keeps the time state. */
   stepTime(minutes: number): void
   togglePlay(): void
@@ -171,6 +176,11 @@ export function createUI(
       <button type="button" data-view="panels" disabled title="${t('shell.pickFirst')}">${t('shell.tabPanels')}</button>
       <button type="button" data-view="garden" disabled title="${t('shell.pickFirst')}">${t('shell.tabGarden')}</button>
     </nav>
+    <div id="camera" role="group" aria-label="${t('shell.camera')}" data-views="plan 3d panels garden">${CAMERA_MODES.map((m) => {
+      const name = m === 'top' ? 'Top' : m === 'outside' ? 'Outside' : 'Inside'
+      const title = t(`shell.cam${name}Title` as Key) + (touchOnly() ? '' : ` (${CAMERA_KEYS[m]})`)
+      return `<button type="button" data-camera="${m}" aria-pressed="${m === 'outside'}" title="${title}">${t(`shell.cam${name}` as Key)}</button>`
+    }).join('')}</div>
     <section data-views="map">
       <h2>${t('shell.findBuilding')}</h2>
       <div id="searchSlot"></div>
@@ -349,6 +359,9 @@ export function createUI(
   // The dock and the floating buttons sit above the sheet, whatever its height.
   new ResizeObserver(() => document.documentElement.style.setProperty('--sheet-h', `${panel.offsetHeight}px`)).observe(panel)
   const viewButtons = [...panel.querySelectorAll<HTMLButtonElement>('#views button')]
+  const cameraButtons = [...panel.querySelectorAll<HTMLButtonElement>('#camera button')]
+  let cameraListener: ((mode: CameraMode) => void) | undefined
+  for (const b of cameraButtons) b.addEventListener('click', () => cameraListener?.(b.dataset.camera as CameraMode))
   for (const b of viewButtons) b.addEventListener('click', () => onView(b.dataset.view as View))
   const hood = $<HTMLSelectElement>('hood')
   let hoodListener: ((size: NeighborhoodId) => void) | undefined
@@ -904,6 +917,12 @@ export function createUI(
     setWalking(walking) {
       walk.disabled = walking
       panel.classList.toggle('walking', walking)
+    },
+    setCamera(mode) {
+      for (const b of cameraButtons) b.setAttribute('aria-pressed', String(b.dataset.camera === mode))
+    },
+    onCamera(listener) {
+      cameraListener = listener
     },
     stepTime(minutes) {
       time.value = String((((Number(time.value) + minutes) % 1440) + 1440) % 1440)
