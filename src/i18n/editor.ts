@@ -184,6 +184,10 @@ export const editor = defineStrings({
     'editor.furnCounter': 'Kitchen counter',
     'editor.furnRug': 'Rug',
     'editor.furnPlant': 'Floor plant',
+    'editor.furnWindowBox': 'Window box',
+    'editor.furnWallPot': 'Wall planter',
+    'editor.furnWith': '{kind} with {plant}',
+    'editor.furnHung': 'Hung at {y} m above the ground. Moving it keeps its height; it does not follow its window or wall when they change.',
     'editor.openInPanels': 'Open in Panels',
   },
   it: {
@@ -368,6 +372,10 @@ export const editor = defineStrings({
     'editor.furnCounter': 'Piano cucina',
     'editor.furnRug': 'Tappeto',
     'editor.furnPlant': 'Pianta da terra',
+    'editor.furnWindowBox': 'Fioriera da davanzale',
+    'editor.furnWallPot': 'Vaso da parete',
+    'editor.furnWith': '{kind} con {plant}',
+    'editor.furnHung': 'Appeso a {y} m dal suolo. Spostandolo mantiene la quota; non segue la finestra o la parete se cambiano.',
     'editor.openInPanels': 'Apri in Pannelli',
   },
 })

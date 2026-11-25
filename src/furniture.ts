@@ -9,6 +9,7 @@ import { plantById, plantName } from './plants'
  */
 export type FurnitureKind =
   | 'bed2' | 'bed1' | 'sofa' | 'armchair' | 'table' | 'chair' | 'desk' | 'wardrobe' | 'shelf' | 'counter' | 'rug' | 'plant'
+  | 'windowbox' | 'wallpot'
 
 export interface Furniture {
   kind: FurnitureKind
@@ -20,6 +21,8 @@ export interface Furniture {
   plant?: string
   /** Height of the floor it stands on, scene metres. Only for what is not on the apartment floor (ground, roof, terrace): absent means that floor. */
   y?: number
+  /** Width, metres, when it is not the kind's own: a window box takes its window's (see wall-mount.ts). */
+  w?: number
 }
 
 export interface FurnitureSpec {
@@ -31,6 +34,8 @@ export interface FurnitureSpec {
   d: number
   h: number
   name: Key
+  /** Hung on a wall or under a window (wall-mount.ts) rather than standing on a floor: placed from a window or a wall, not as a piece. */
+  mounted?: boolean
 }
 
 export const FURNITURE: readonly FurnitureSpec[] = [
@@ -46,6 +51,8 @@ export const FURNITURE: readonly FurnitureSpec[] = [
   { kind: 'counter', code: 'kc', w: 2.4, d: 0.6, h: 0.9, name: 'editor.furnCounter' },
   { kind: 'rug', code: 'rg', w: 2.0, d: 1.4, h: 0.01, name: 'editor.furnRug' },
   { kind: 'plant', code: 'pl', w: 0.4, d: 0.4, h: 1.2, name: 'editor.furnPlant' },
+  { kind: 'windowbox', code: 'wb', w: 1.0, d: 0.2, h: 0.5, name: 'editor.furnWindowBox', mounted: true },
+  { kind: 'wallpot', code: 'wp', w: 0.4, d: 0.25, h: 0.9, name: 'editor.furnWallPot', mounted: true },
 ]
 
 const BY_KIND = new Map<string, FurnitureSpec>(FURNITURE.map((s) => [s.kind, s]))
@@ -53,6 +60,8 @@ const BY_CODE = new Map<string, FurnitureSpec>(FURNITURE.map((s) => [s.code, s])
 
 export const isFurnitureKind = (v: unknown): v is FurnitureKind => typeof v === 'string' && BY_KIND.has(v)
 export const specOf = (kind: FurnitureKind): FurnitureSpec => BY_KIND.get(kind)!
+/** The piece's own size: its kind's, with its own width when it has one. */
+export const sizeOf = (f: Furniture): FurnitureSpec => (f.w === undefined ? specOf(f.kind) : { ...specOf(f.kind), w: f.w })
 
 /** The rotate handle sits this far beyond the front of the piece. */
 export const FURNITURE_TIP_DISTANCE = 0.5
@@ -74,7 +83,7 @@ const toPlan = (f: Furniture, u: number, v: number): Point => {
 
 /** The footprint's four corners in the plan, turned by `rot`. */
 export function furnitureFootprint(f: Furniture): Point[] {
-  const { w, d } = specOf(f.kind)
+  const { w, d } = sizeOf(f)
   return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => toPlan(f, (u * w) / 2, (v * d) / 2))
 }
 
@@ -92,7 +101,7 @@ export function rotationToward(from: Point, to: Point, step?: number): number {
 
 /** True when `at` is on the footprint or within `tol` metres of it (measured in the piece's own frame, so a turned piece is exact). */
 export function hitsFurniture(f: Furniture, at: Point, tol: number): boolean {
-  const { w, d } = specOf(f.kind)
+  const { w, d } = sizeOf(f)
   const c = Math.cos(rad(f.rot))
   const s = Math.sin(rad(f.rot))
   const dx = at.x - f.x
@@ -100,10 +109,12 @@ export function hitsFurniture(f: Furniture, at: Point, tol: number): boolean {
   return Math.abs(dx * c + dz * s) <= w / 2 + tol && Math.abs(-dx * s + dz * c) <= d / 2 + tol
 }
 
-/** What the plan editor calls a piece: the species of a potted plant, else its kind. */
+/** What the plan editor calls a piece: the species of a potted plant (with its window box or wall planter), else its kind. */
 export function furnitureName(f: Furniture): string {
   const plant = f.plant ? plantById(f.plant) : undefined
-  return plant ? plantName(plant) : t(specOf(f.kind).name)
+  const kind = t(specOf(f.kind).name)
+  if (!plant) return kind
+  return specOf(f.kind).mounted ? t('editor.furnWith', { kind, plant: plantName(plant) }) : plantName(plant)
 }
 
 /** A pot of `plant` at a picked spot: snapped to 5 cm, with its height (to 10 cm, what a share link keeps) only when the spot is not on the apartment floor. */
@@ -127,7 +138,10 @@ export function checkFurniture(raw: unknown): { furniture: Furniture[] } | { bad
     if (!f || typeof f !== 'object' || ![f.x, f.z, f.rot].every((n) => typeof n === 'number' && Number.isFinite(n))) return { bad: true }
     if (!isFurnitureKind(f.kind)) continue
     const y = typeof f.y === 'number' && Number.isFinite(f.y) ? f.y : undefined
-    furniture.push({ kind: f.kind, x: f.x!, z: f.z!, rot: f.rot!, ...(isPlantId(f.plant) && { plant: f.plant }), ...(y !== undefined && { y }) })
+    const w = typeof f.w === 'number' && f.w > 0 && f.w < 10 ? f.w : undefined
+    furniture.push({
+      kind: f.kind, x: f.x!, z: f.z!, rot: f.rot!, ...(isPlantId(f.plant) && { plant: f.plant }), ...(y !== undefined && { y }), ...(w !== undefined && { w }),
+    })
   }
   return { furniture }
 }
@@ -138,13 +152,15 @@ const ROT_UNIT = 5
 
 /**
  * `[code, x, z, rot]` per piece, in 5 cm and 5 degree units: the compact form in a share link. A potted plant adds its
- * plant id, and a piece off the apartment floor its height in decimetres (after an empty id when there is no plant).
+ * plant id, a piece off the apartment floor its height in decimetres, and a piece of its own width that width in 5 cm
+ * units (each after an empty entry for what comes before it and is missing).
  */
 export function packFurniture(list: readonly Furniture[]): (string | number)[][] {
   return list.map((f) => {
     const e: (string | number)[] = [specOf(f.kind).code, Math.round(f.x / POS_UNIT), Math.round(f.z / POS_UNIT), Math.round(f.rot / ROT_UNIT) % (360 / ROT_UNIT)]
-    if (f.plant || f.y !== undefined) e.push(f.plant ?? '')
-    if (f.y !== undefined) e.push(Math.round(f.y * 10))
+    if (f.plant || f.y !== undefined || f.w !== undefined) e.push(f.plant ?? '')
+    if (f.y !== undefined || f.w !== undefined) e.push(f.y !== undefined ? Math.round(f.y * 10) : '')
+    if (f.w !== undefined) e.push(Math.round(f.w / POS_UNIT))
     return e
   })
 }
@@ -155,12 +171,13 @@ export function unpackFurniture(raw: unknown): Furniture[] {
   const out: Furniture[] = []
   for (const e of raw) {
     if (!Array.isArray(e)) continue
-    const [code, x, z, rot, plant, dm] = e as unknown[]
+    const [code, x, z, rot, plant, dm, w] = e as unknown[]
     const spec = typeof code === 'string' ? BY_CODE.get(code) : undefined
     if (!spec || ![x, z, rot].every((n) => typeof n === 'number' && Number.isFinite(n))) continue
     out.push({
       kind: spec.kind, x: Math.round((x as number) * POS_UNIT * 100) / 100, z: Math.round((z as number) * POS_UNIT * 100) / 100, rot: ((rot as number) * ROT_UNIT + 360) % 360,
       ...(isPlantId(plant) && { plant }), ...(typeof dm === 'number' && Number.isFinite(dm) && { y: dm / 10 }),
+      ...(typeof w === 'number' && w > 0 && w < 200 && { w: Math.round(w * POS_UNIT * 100) / 100 }),
     })
   }
   return out
