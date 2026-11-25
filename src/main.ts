@@ -26,6 +26,7 @@ import { selectionGeoJSON } from './map-selection'
 import { defaultFloorHeight, defaultPlan, floorBase, levelCount, rebasePlan, type Plan } from './plan'
 import { createHeightStore, resolveHeights } from './height-store'
 import { createKeepChip } from './keep-chip'
+import { showHeightsNote } from './heights-note'
 import { applyHeights, keepKnown, reselect, type HeightOverride, type HeightOverrides } from './heights'
 import { createHeightPopover, createHoverTip } from './height-popover'
 import { createHeightRuler, cycleOrder, hoverNoteKind, nextInCycle } from './height-ruler'
@@ -1356,6 +1357,8 @@ sunScene.onBuildingClick((id, at) => {
 const chip = createStatusChip(app, () => last && void refine(last, current))
 /** The user's height changes, kept by polygon id (30 days, on this device or just this session): see height-store.ts. */
 const heightStore = createHeightStore()
+// On opening, a note that the heights (and so the shadows) are estimates the user can correct; shown until dismissed.
+showHeightsNote(document.body)
 const keepChip = createKeepChip(app, (mode) => {
   heightStore.setMode(mode)
   showHeightsLine()

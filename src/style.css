@@ -48,13 +48,13 @@ input[type='checkbox'], input[type='range'] { accent-color: var(--accent-strong)
 #mapView, #mapCanvas { position: fixed; inset: 0; }
 
 /* Controls, styled once for every box in the chrome. */
-#panel button, #timeBar button, #search button, #statusChip button, #keepChip button, #walkHud button, .editor-box button, .maplibregl-popup-content button {
+#panel button, #timeBar button, #search button, #statusChip button, #keepChip button, #heightsNote button, #walkHud button, .editor-box button, .maplibregl-popup-content button {
   font: inherit; padding: 5px 10px; cursor: pointer;
   color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
 }
-#panel button:hover:not(:disabled), #timeBar button:hover, #search button:hover, #statusChip button:hover, #keepChip button:hover, #walkHud button:hover,
+#panel button:hover:not(:disabled), #timeBar button:hover, #search button:hover, #statusChip button:hover, #keepChip button:hover, #heightsNote button:hover, #walkHud button:hover,
 .editor-box button:hover:not(:disabled):not([aria-pressed='true']), .maplibregl-popup-content button:hover { background: var(--bg-band); border-color: var(--accent-strong); }
-#panel button:active:not(:disabled), #timeBar button:active, #search button:active, #statusChip button:active, #keepChip button:active, #walkHud button:active,
+#panel button:active:not(:disabled), #timeBar button:active, #search button:active, #statusChip button:active, #keepChip button:active, #heightsNote button:active, #walkHud button:active,
 .editor-box button:active:not(:disabled), .maplibregl-popup-content button:active { background: var(--line); }
 #panel button:disabled, .editor-box button:disabled { color: var(--disabled); cursor: default; }
 #panel button.primary, .maplibregl-popup-content button {
@@ -366,6 +366,12 @@ input::placeholder { color: var(--muted); opacity: 1; }
 #keepChip[hidden] { display: none; }
 #keepChip button { padding: 2px 8px; }
 @keyframes chipSpin { to { transform: rotate(360deg); } }
+#heightsNote {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px;
+  width: max-content; max-width: min(560px, calc(100% - 32px)); padding: var(--box-pad); border-radius: var(--radius-box);
+  font-size: var(--text-sm); background: var(--surface); border: 1px solid var(--warn); box-shadow: var(--shadow);
+}
+#heightsNote button { flex: none; padding: 4px 12px; }
 
 /* Share links: the "viewing a shared plan" bar and the damaged-link notice, over every tab. */
 #sharedChip {
@@ -842,7 +848,7 @@ html[data-lofi='on'] {
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .13 0 0 0 0 .07 0 0 0 1.2 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 /* Paper texture on the boxes (the plant card keeps its scroll shadows and gets the texture as one more layer). */
-html[data-lofi='on'] :is(#panel, #timeBar, #statusChip, #keepChip, #sharedChip, #mapStatus, #spotPopover, #suitPopover, #heightPopover, .ctxMenu, #hoverTip, #results,
+html[data-lofi='on'] :is(#panel, #timeBar, #statusChip, #keepChip, #heightsNote, #sharedChip, #mapStatus, #spotPopover, #suitPopover, #heightPopover, .ctxMenu, #hoverTip, #results,
   .editor-box, .editor-status span, .maplibregl-popup-content, #heightRuler .hrLabel) { background-image: var(--paper); }
 html[data-lofi='on'] .plantCard {
   background:
