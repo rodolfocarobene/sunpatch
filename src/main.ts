@@ -1134,8 +1134,10 @@ ui.onMarkGuessed((on) => sunScene.setMarkGuessed(on))
 ui.onCountFurniture((on) => keepingSpot(() => sunScene.setCountFurniture(on)))
 sunScene.onBuildingClick((id, at) => {
   // In Garden a click is a spot, not a wish to change building; in Panels with the suitability map a stray click must not drop the pick.
-  const action = buildingClickAction(view, suitOn)
+  const action = buildingClickAction(view, suitOn, touchOnly())
   if (action === 'switch') switchTo(id, at, true)
+  // A tap is easy to make by accident (and starts orbits): it only offers the switch.
+  else if (action === 'confirm') chip.done(t('shell.switchAsk'), { label: t('shell.switchYes'), run: () => switchTo(id, at, true) })
   else if (action === 'explain') chip.done(NEIGHBOUR_NOTE)
 })
 const chip = createStatusChip(app, () => last && void refine(last, current))
