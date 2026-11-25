@@ -1,8 +1,8 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { GLAZING, hemisphereDirs, internalReflected, meanReflectance, REFLECTANCE, roomSurfaces } from './dayfactor'
+import { EXTERNAL_REFLECTANCE, GLAZING, hemisphereDirs, internalReflected, meanReflectance, REFLECTANCE, roomSurfaces } from './dayfactor'
 import {
-  calibrate, gatherFirstBounce, IrcRun, ircValue, patchCellFor, PatchField, IRC_GATHER_RAYS, IRC_MAX_PATCHES, reflectanceOf, type IrcInput,
+  calibrate, gatherFirstBounce, IrcRun, ircValue, patchCellFor, PatchField, IRC_GATHER_RAYS, IRC_MAX_PATCHES, reflectanceOf, surfaceDaylight, surfaceDirect, type IrcInput,
 } from './irc-gather'
 import type { Point } from './osm'
 import type { Plan } from './plan'
@@ -223,5 +223,47 @@ describe('single room regression', () => {
     expect(ircInput(rooms, 0, calib, Float32Array.from([2, 2]), 'k2', 7).known).toEqual(found)
     expect(ircInput(rooms, 0, calib, Float32Array.from([2, 2]), 'k2', 8).known).toBeUndefined()
     expect(ircInput(rooms, 0, calib, undefined, 'k2', 7).known).toBeUndefined() // the layer itself traces every point
+  })
+})
+
+describe('daylight on a surface of any tilt', () => {
+  const many = hemisphereDirs(4096)
+  const open = () => 'sky' as const
+  // The CIE overcast sky on a vertical plane, per unit of the horizontal illuminance: (pi / 6 + 4 / 9) / (7 pi / 9).
+  const VERTICAL = (Math.PI / 6 + 4 / 9) / ((7 * Math.PI) / 9)
+
+  it('gives a horizontal plane under the whole sky 100 % (before glazing), and a vertical one 39.6 %', () => {
+    expect(surfaceDaylight(new Vector3(0, 1, 0), many, open, 1)).toBeCloseTo(100, 0)
+    expect(VERTICAL).toBeCloseTo(0.396, 3)
+    for (const n of [new Vector3(0, 0, 1), new Vector3(-1, 0, 0), new Vector3(Math.SQRT1_2, 0, -Math.SQRT1_2)]) {
+      expect(surfaceDaylight(n, many, open, 1)).toBeCloseTo(100 * VERTICAL, 0)
+    }
+  })
+
+  it('counts no sky below the horizon, and every obstruction as ERC', () => {
+    // A ceiling sees only ground: no sky. Obstructions all round give the ERC share whatever the tilt.
+    expect(surfaceDaylight(new Vector3(0, -1, 0), many, open, 1)).toBe(0)
+    expect(surfaceDaylight(new Vector3(0, 0, 1), many, () => 'obstruction', 1)).toBeCloseTo(100 * EXTERNAL_REFLECTANCE, 6)
+    expect(surfaceDaylight(new Vector3(0, 0, 1), many, () => null, 1)).toBe(0)
+  })
+
+  it('traces a wall point behind a full-height pane: the vertical sky through the glass', () => {
+    // The point faces south (+z); a pane fills the plane z = 1 and nothing else is there.
+    const pane = buildBvh(Float32Array.from(quad([-1e4, -1e4, 1], [1e4, -1e4, 1], [1e4, 1e4, 1], [-1e4, 1e4, 1])))
+    const none = buildBvh(Float32Array.from([900, 900, 900, 901, 900, 900, 900, 901, 900]))
+    const df = surfaceDirect(none, pane, 0, 1, 0, { x: 0, y: 0, z: 1 }, hemisphereDirs(384))
+    expect(df).toBeCloseTo(100 * GLAZING * VERTICAL, 0)
+    // A neighbour's facade 5 m away, beyond the pane, hides the sky: only its reflected share is left.
+    const facade = buildBvh(Float32Array.from(quad([-1e4, -1e4, 5], [1e4, -1e4, 5], [1e4, 1e4, 5], [-1e4, 1e4, 5])))
+    expect(surfaceDirect(facade, pane, 0, 1, 0, { x: 0, y: 0, z: 1 }, hemisphereDirs(384))).toBeCloseTo(100 * GLAZING * EXTERNAL_REFLECTANCE, 6)
+  })
+
+  it('gathers the first bounce about a wall normal: an infinite wall facing it reflects rho_wall * E', () => {
+    const glassFar = buildBvh(Float32Array.from([900, 900, 900, 901, 900, 900, 900, 901, 900]))
+    const wall = buildBvh(Float32Array.from(quad([3, -1e4, -1e4], [3, 1e4, -1e4], [3, 1e4, 1e4], [3, -1e4, 1e4])))
+    const e1 = gatherFirstBounce(wall, glassFar, { at: () => 1 }, 0, 1, 0, dirs, 0, { x: 1, y: 0, z: 0 })
+    expect(e1).toBeCloseTo(REFLECTANCE.walls, 6)
+    // Facing away from the wall, every ray misses it.
+    expect(gatherFirstBounce(wall, glassFar, { at: () => 1 }, 0, 1, 0, dirs, 0, { x: -1, y: 0, z: 0 })).toBe(0)
   })
 })
