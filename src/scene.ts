@@ -44,7 +44,8 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
-import { isClick } from './click'
+import { createPressTracker, isClick } from './click'
+import { touchOnly } from './touch'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel } from './frame'
 import { apartmentGeometry } from './apartment'
@@ -351,6 +352,14 @@ export function createScene(container: HTMLElement): SunScene {
   const camera = new PerspectiveCamera(ORBIT_FOV, 1, ORBIT_NEAR, 3000)
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.maxPolarAngle = Math.PI / 2 - 0.02
+  // A finger is much coarser than a mouse: gentler rotate, pinch and pan, and a little inertia so it does not jerk.
+  if (touchOnly()) {
+    controls.rotateSpeed = 0.5
+    controls.zoomSpeed = 0.5
+    controls.panSpeed = 0.5
+    controls.enableDamping = true
+    controls.dampingFactor = 0.12
+  }
 
   // The camera has not been moved by the user since the last time the scene framed it.
   let userMoved = false
@@ -1180,8 +1189,15 @@ export function createScene(container: HTMLElement): SunScene {
   // selection, a plain click on another building switches to it.
   let partClick: ((polygonId: string) => void) | undefined
   let buildingClick: ((polygonId: string, at: { x: number; z: number }) => void) | undefined
+  // Where the press began; a second finger (pinch, two-finger pan) makes it never a click.
+  const press = createPressTracker()
   let downAt: { x: number; y: number } | undefined
-  renderer.domElement.addEventListener('pointerdown', (e) => (downAt = { x: e.clientX, y: e.clientY }))
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') press.reset()
+    press.down(e.pointerId, e.clientX, e.clientY)
+    downAt = press.start
+  })
+  for (const type of ['pointerup', 'pointercancel'] as const) renderer.domElement.addEventListener(type, (e) => press.up(e.pointerId))
   // The building polygon under the pointer and the scene point hit, or undefined (sky, ground, glass, hidden floors).
   // The first thing the camera sees under the pointer: not glass, not an overlay, not a hidden (cutaway) block.
   function seenHit(clientX: number, clientY: number) {
