@@ -2,7 +2,7 @@ import type { PerspectiveCamera } from 'three'
 import type { Point } from './osm'
 import type { Plan } from './plan'
 import type { SunDirection } from './sun'
-import { bandMarker, headingDeg, movePosition, relativeBearing } from './walk-geom'
+import { bandMarker, headingDeg, movePosition, relativeBearing, resolvePosition } from './walk-geom'
 import { t, type Key } from './i18n'
 
 export const EYE_HEIGHT = 1.6
@@ -31,6 +31,10 @@ export interface WalkControls {
   /** Stands at `at` (scene x, z) on a floor whose surface is at height `floorY`, looking along `yaw`. */
   start(plan: Plan, floorY: number, at: Point, yaw: number): void
   stop(): void
+  /** Stands at `at` (scene x, z), pushed clear of the walls, keeping the look direction: the double-click on the floor. */
+  goTo(at: Point): void
+  /** Holds or releases a step as if its key were held: the on-screen arrows of a touch screen. */
+  hold(move: 'forward' | 'back', on: boolean): void
   /** Applies held keys for `dt` seconds. */
   update(dt: number): void
 }
@@ -47,7 +51,9 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
   let pos: Point = { x: 0, z: 0 }
   let yaw = 0
   let pitch = 0
-  let dragging = false
+  // The pointer that looks around and where it was: one finger or the mouse, tracked by position because a touch has no movementX.
+  let dragId: number | undefined
+  let dragAt = { x: 0, y: 0 }
   let shiftHeld = false
   const held = new Set<string>()
 
@@ -85,19 +91,23 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) return
-    dragging = true
+    if (e.button !== 0 || dragId !== undefined) return
+    dragId = e.pointerId
+    dragAt = { x: e.clientX, y: e.clientY }
     dom.setPointerCapture?.(e.pointerId)
     // Leaves a focused panel input so the keys reach the walk controls.
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   }
   function onPointerMove(e: PointerEvent) {
-    if (!dragging) return
-    yaw -= e.movementX * LOOK_SENSITIVITY
-    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - e.movementY * LOOK_SENSITIVITY))
+    if (e.pointerId !== dragId) return
+    yaw -= (e.clientX - dragAt.x) * LOOK_SENSITIVITY
+    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - (e.clientY - dragAt.y) * LOOK_SENSITIVITY))
+    dragAt = { x: e.clientX, y: e.clientY }
     place()
   }
-  const onPointerUp = () => { dragging = false }
+  const onPointerUp = (e: PointerEvent) => {
+    if (e.pointerId === dragId) dragId = undefined
+  }
 
   return {
     get active() {
@@ -125,7 +135,7 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
     },
     stop() {
       active = false
-      dragging = false
+      dragId = undefined
       held.clear()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
@@ -134,6 +144,14 @@ export function createWalkControls(camera: PerspectiveCamera, dom: HTMLElement, 
       dom.removeEventListener('pointermove', onPointerMove)
       dom.removeEventListener('pointerup', onPointerUp)
       dom.removeEventListener('pointercancel', onPointerUp)
+    },
+    goTo(at) {
+      if (active) pos = resolvePosition(plan, at) ?? pos
+    },
+    hold(move, on) {
+      if (!active) return
+      if (on) held.add(move)
+      else held.delete(move)
     },
     update(dt) {
       if (!active) return

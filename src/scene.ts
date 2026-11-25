@@ -27,6 +27,8 @@ import {
   LineBasicMaterial,
   LineSegments,
   LineLoop,
+  MOUSE,
+  TOUCH,
   Group,
   type Intersection,
   DirectionalLight,
@@ -46,7 +48,7 @@ import {
 } from 'three'
 import { isClick } from './click'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel } from './frame'
+import { fitDistance, freeAspect, gardenRadius, inFreeArea, metresPerPixel, topFrame } from './frame'
 import { apartmentGeometry } from './apartment'
 import { dataExtent } from './neighborhood'
 import { ribbonsData } from './ribbon'
@@ -146,6 +148,8 @@ const INTERIOR_GLOW = 0.18
 const ORBIT_FOV = 50
 const ORBIT_NEAR = 0.5
 const WALK_FOV = 70
+// Narrower than the orbit view, so the top view stands higher and the walls lean out less: closer to a plan.
+const TOP_FOV = 30
 const WALK_NEAR = 0.05
 
 // Boxes: [centre x (east), centre z (south), width (x), depth (z), height]; metres.
@@ -183,6 +187,13 @@ export interface SunScene {
   stopWalk(): void
   /** Called when walk mode starts or stops (also by double-click on the floor, Esc, or a view change) and for its keys. */
   setWalkHandlers(handlers: WalkHandlers & { change(walking: boolean): void }): void
+  /** Holds or releases a walk step (the on-screen arrows of a touch screen). */
+  holdWalk(move: 'forward' | 'back', on: boolean): void
+  /**
+   * The top view: straight down on what `target` frames, north up, with a drag that pans instead of turning. Off puts back
+   * the orbit view it left (framed for `target` if the user had not moved it). Walking leaves it first.
+   */
+  setTopView(on: boolean, target: FrameTarget): void
   resize(): void
   /** Lofi mode: draws the 3D view at about half resolution (never below 0.5); off restores the pixel ratio it started with. */
   setLofiPixelRatio(on: boolean): void
@@ -245,7 +256,7 @@ export interface SunScene {
   onFloorClick(handler: (at: { x: number; z: number } | null) => void): void
   /** Turns the Garden view's picking on or off: while on, a plain click (not a drag) reports the surface the camera sees there. */
   setGardenPicking(on: boolean): void
-  /** Double-clicking the apartment floor starts walking only in the 3D view (Panels and Garden have no walk mode). */
+  /** Double-clicking the apartment floor starts walking only in the 3D view (in Panels and Garden a click picks); walking, it moves the walk in every view. */
   setWalkOnDoubleClick(on: boolean): void
   /** Called with the surface under a plain click while picking (null for the sky); `normalY` is the surface normal's height component. */
   onGardenClick(handler: (hit: GardenHit | null) => void): void
@@ -1005,6 +1016,11 @@ export function createScene(container: HTMLElement): SunScene {
 
   function frameBuilding(b: Building) {
     const { c, dist } = buildingFraming(b)
+    if (topView) {
+      let reach = 5
+      for (const p of b.outer) reach = Math.max(reach, Math.hypot(p.x - c.x, p.z - c.z))
+      return frameTop(new Vector3(c.x, b.height, c.z), reach)
+    }
     frame(
       new Vector3(c.x + dist * 0.6, b.height / 2 + dist * 0.5, c.z + dist * 0.8),
       new Vector3(c.x, b.height / 2, c.z),
@@ -1036,6 +1052,7 @@ export function createScene(container: HTMLElement): SunScene {
       aim = floorY + rise / 2
     }
     const target = new Vector3(c.x, aim, c.z)
+    if (topView) return frameTop(target, radius)
     const width = container.clientWidth || window.innerWidth
     const height = container.clientHeight || window.innerHeight
     const inset = Math.min(frameInset(), width / 2)
@@ -1051,6 +1068,37 @@ export function createScene(container: HTMLElement): SunScene {
     if (!selectedBuilding || walking) return
     if (target === 'building' || !plan) frameBuilding(selectedBuilding)
     else frameApartment(selectedBuilding, plan, target === 'garden')
+  }
+
+  // The top view: the orbit camera looking straight down, north up. A drag pans (one finger too) and the wheel or a pinch
+  // zooms; nothing turns it. The orbit view it left comes back as it was.
+  let topView = false
+  const orbit = { position: new Vector3(), target: new Vector3(), moved: false }
+  function frameTop(centre: Vector3, radius: number) {
+    const width = container.clientWidth || window.innerWidth
+    const height = container.clientHeight || window.innerHeight
+    const { position, target } = topFrame(centre, radius, TOP_FOV, width, height, Math.min(frameInset(), width / 2))
+    frame(new Vector3(position.x, position.y, position.z), new Vector3(target.x, target.y, target.z))
+  }
+  function setTopView(on: boolean, target: FrameTarget) {
+    if (on === topView || (on && walking)) return
+    topView = on
+    slideTo = undefined
+    controls.enableRotate = !on
+    controls.mouseButtons.LEFT = on ? MOUSE.PAN : MOUSE.ROTATE
+    controls.touches.ONE = on ? TOUCH.PAN : TOUCH.ROTATE
+    camera.fov = on ? TOP_FOV : ORBIT_FOV
+    camera.updateProjectionMatrix()
+    if (on) {
+      orbit.position.copy(camera.position)
+      orbit.target.copy(controls.target)
+      orbit.moved = userMoved
+      frameTarget(target)
+      return
+    }
+    frame(orbit.position, orbit.target)
+    userMoved = orbit.moved
+    if (!userMoved) frameTarget(target)
   }
 
   // A slide of the camera and its target together (so the view keeps its angle and distance) that puts a point in the
@@ -1069,7 +1117,7 @@ export function createScene(container: HTMLElement): SunScene {
     const offset = camera.position.clone().sub(controls.target)
     const dist = offset.length()
     const right = new Vector3().crossVectors(controls.target.clone().sub(camera.position), camera.up).setY(0).normalize()
-    const slide = right.multiplyScalar((inset / 2) * metresPerPixel(dist, ORBIT_FOV, height))
+    const slide = right.multiplyScalar((inset / 2) * metresPerPixel(dist, camera.fov, height))
     const target = new Vector3(at.x, at.y, at.z).sub(slide)
     slideTo = {
       from: { position: camera.position.clone(), target: controls.target.clone() },
@@ -1126,6 +1174,7 @@ export function createScene(container: HTMLElement): SunScene {
   function startWalk(at?: { x: number; z: number }): boolean {
     const selected = selectedBuilding
     if (!plan || !selected) return false
+    if (topView) setTopView(false, 'apartment')
     if (!walking) {
       saved.position.copy(camera.position)
       saved.target.copy(controls.target)
@@ -1164,16 +1213,17 @@ export function createScene(container: HTMLElement): SunScene {
     walkHandlers?.change(false)
   }
 
-  // Double-click on the apartment floor (not through a wall) stands there.
+  // Double-click on the apartment floor (not through a wall) stands there: it starts a walk (3D only) or moves the walk.
   const raycaster = new Raycaster()
   renderer.domElement.addEventListener('dblclick', (e) => {
-    if (walking || !walkOnDoubleClick || !plan || !floorMesh) return
+    if (!(walking || walkOnDoubleClick) || !plan || !floorMesh) return
     const rect = renderer.domElement.getBoundingClientRect()
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
     raycaster.setFromCamera(ndc, camera)
     const hit = raycaster.intersectObjects(solidMeshes, false)[0]
     if (hit?.object !== floorMesh || !insideOutline(plan, { x: hit.point.x, z: hit.point.z })) return
-    startWalk({ x: hit.point.x, z: hit.point.z })
+    if (walking) walk.goTo({ x: hit.point.x, z: hit.point.z })
+    else startWalk({ x: hit.point.x, z: hit.point.z })
   })
 
   // A click (without dragging) names the building polygon under the cursor: shift adds it to or removes it from the
@@ -1214,9 +1264,10 @@ export function createScene(container: HTMLElement): SunScene {
   })
 
   // A plain click on a solar panel names it (its card opens); a click on anything else reports null (it closes the card).
+  // Walking too: the walk has no pointer lock, so the point clicked is the one meant.
   let panelClick: ((id: string | null) => void) | undefined
   renderer.domElement.addEventListener('click', (e) => {
-    if (walking || !panelClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    if (!panelClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
     panelClick(seenHit(e.clientX, e.clientY)?.object.userData.panelId ?? null)
   })
 
@@ -1231,9 +1282,10 @@ export function createScene(container: HTMLElement): SunScene {
     floorClick(at)
   })
 
-  // The Garden view: a plain click names the surface the camera sees (not glass, not an overlay, not a hidden block).
+  // The Garden view: a plain click names the surface the camera sees (not glass, not an overlay, not a hidden block), from
+  // outside or walking.
   renderer.domElement.addEventListener('click', (e) => {
-    if (walking || !gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
+    if (!gardenPicking || !gardenClick || !isClick(downAt, { x: e.clientX, y: e.clientY })) return
     const built = seenHit(e.clientX, e.clientY) // also aims the raycaster at the pointer
     // The ground plane is not part of the world group: it is the nearer hit when nothing built is in front of it.
     const flatGround = raycaster.intersectObject(ground, false)[0]
@@ -1631,6 +1683,10 @@ export function createScene(container: HTMLElement): SunScene {
     setWalkHandlers(handlers) {
       walkHandlers = handlers
     },
+    holdWalk(move, on) {
+      walk.hold(move, on)
+    },
+    setTopView,
     resize,
     setLofiPixelRatio,
     setActive(active) {
